@@ -274,7 +274,8 @@ export function renderEhImageSequence({
   const summary = `<p class="eh-image-summary">已加载 ${renderedPages.length} / ${safeTotalPages} 页</p>`;
   const imageBlocks = renderedPages.map((page, index) => {
     const eager = index < eagerCount;
-    const srcset = mediaSrcset(page.media);
+    // Keep the first paint on the original image; a cold variant waits for source download and transcoding.
+    const srcset = eager ? '' : mediaSrcset(page.media);
     const deferred = eager ? '' : ' eh-image-deferred';
     const containment = eager ? '' : ' style="content-visibility:auto;contain-intrinsic-size:1000px 1400px"';
     return `<p class="eh-image-label">第 ${page.pageNumber} 页</p><p class="eh-image-content${deferred}"${containment}><img src="${escapeHtml(page.media)}"${srcset ? ` srcset="${escapeHtml(srcset)}" sizes="${IMAGE_SIZES}"` : ''} alt="${escapeHtml(page.alt || `第 ${page.pageNumber} 页`)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ' decoding="async"'}></p>`;
@@ -289,7 +290,7 @@ export function renderEhImageSequence({
   return renderDocument(
     title || readerTitle,
     `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`,
-    renderedPages.slice(0, eagerCount).map((page) => ({ url: page.media, srcset: mediaSrcset(page.media) })),
+    renderedPages.slice(0, eagerCount).map((page) => ({ url: page.media })),
   );
 }
 
