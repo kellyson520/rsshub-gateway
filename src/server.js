@@ -159,6 +159,7 @@ const DEFAULT_EH_MEDIA_PREFETCH_MAX_CONCURRENCY = 12;
 const DEFAULT_EH_MEDIA_PREFETCH_PER_ORIGIN = 2;
 const DEFAULT_EH_MEDIA_FOREGROUND_WARM_COUNT = 8;
 const DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY = 8;
+const DEFAULT_EH_FIRST_PAINT_COUNT = 1;
 const DEFAULT_EGRESS_LANE_COUNT = 12;
 const DEFAULT_EGRESS_SESSION_LANE_COUNT = 12;
 const DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT = 7921;
@@ -564,6 +565,12 @@ export function createGatewayServer(options = {}) {
   const ehMediaForegroundWarmConcurrency = boundedInteger(
     options.ehMediaForegroundWarmConcurrency ?? process.env.EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
     DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
+    1,
+    ehMediaForegroundWarmCount,
+  );
+  const ehFirstPaintCount = boundedInteger(
+    options.ehFirstPaintCount ?? process.env.EH_FIRST_PAINT_COUNT,
+    DEFAULT_EH_FIRST_PAINT_COUNT,
     1,
     ehMediaForegroundWarmCount,
   );
@@ -1145,7 +1152,7 @@ export function createGatewayServer(options = {}) {
             failures: discovery.failures,
             totalPages: discovery.totalPages,
             truncated: discovery.truncated,
-            preloadCount: ehMediaForegroundWarmCount,
+            preloadCount: ehFirstPaintCount,
             status: discovery.status,
           };
           unavailableStatus = discovery.status;
@@ -1154,7 +1161,10 @@ export function createGatewayServer(options = {}) {
               adapter,
               target,
               initialHtml: body,
-              fetchExternal: fetchExternalDocument,
+              fetchExternal: (url, request) => fetchExternalDocument(url, {
+                ...request,
+                priority: 'background',
+              }),
               baseUrl: publicBaseUrl(req),
               secret,
               concurrency: currentEhPrefetchConcurrency(),
@@ -1170,7 +1180,7 @@ export function createGatewayServer(options = {}) {
             const foregroundWarm = await warmEhMedia({
               pages: resolvedGallery.pages,
               cache,
-              fetcher: (url, request) => fetchExternal(url, { ...request, priority: 'foreground' }),
+              fetcher: (url, request) => fetchExternal(url, { ...request, priority: 'background' }),
               maxBytes: mediaCacheMaxFileBytes,
               count: ehMediaForegroundWarmCount,
               concurrency: ehMediaForegroundWarmConcurrency,

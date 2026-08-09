@@ -162,6 +162,60 @@ test('returns the E-Hentai reader shell before slow image detail pages finish', 
   assert.match(body, /_gateway\/media\//);
 });
 
+test('keeps one E-Hentai image request at first-paint priority', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/fast-shell/')) {
+        return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      }
+      return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/fast-shell/', 'secret');
+
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal((body.match(/<link rel="preload" as="image"/g) || []).length, 1);
+  assert.equal((body.match(/loading="eager"/g) || []).length, 1);
+});
+
+test('keeps E-Hentai background detail and media warming off foreground egress', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-priority-'));
+  const requests = [];
+  try {
+    const cache = createResponseCache({ root });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      ehMediaForegroundWarmCount: 2,
+      ehMediaForegroundWarmConcurrency: 2,
+      fetchExternal: async (url, request = {}) => {
+        const value = String(url);
+        requests.push({ url: value, priority: request.priority || 'unspecified' });
+        if (value.endsWith('/g/123/gallery/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+        return new Response('image-bytes', { headers: { 'content-type': 'image/webp', 'content-length': '11' } });
+      },
+    });
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    const { response } = await request(server, `/_gateway/item/${token}`);
+
+    assert.equal(response.status, 200);
+    await waitFor(() => requests.some((entry) => entry.url.includes('page.example.hath.network')));
+    const backgroundRequests = requests.filter((entry) => !entry.url.endsWith('/g/123/gallery/'));
+    assert.ok(backgroundRequests.length > 0);
+    assert.ok(backgroundRequests.every((entry) => entry.priority === 'background'), JSON.stringify(backgroundRequests));
+    await waitFor(async () => (await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit
+      && (await cache.peek('https://page.example.hath.network/h/two.webp', 'media')).hit);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('resolves an E-Hentai image page when it is requested as gateway media', async () => {
   const requested = [];
   const server = createGatewayServer({
