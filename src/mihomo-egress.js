@@ -3,6 +3,8 @@ import { ProxyAgent } from 'undici';
 const DEFAULT_CONTROLLER_URL = process.env.EGRESS_CONTROLLER_URL || 'http://127.0.0.1:9090';
 const DEFAULT_LISTENER_BASE_URL = process.env.EGRESS_PROXY_BASE_URL || 'http://127.0.0.1';
 const DEFAULT_LANE_COUNT = 12;
+const DEFAULT_SESSION_LANE_COUNT = 12;
+const DEFAULT_SESSION_LISTENER_BASE_PORT = 7921;
 const DEFAULT_PROBE_TIMEOUT_MS = 5_000;
 const DEFAULT_PROBE_CACHE_MS = 5 * 60_000;
 const PUBLIC_GROUP = 'PUBLIC';
@@ -36,9 +38,17 @@ function laneGroup(index) {
   return `EGRESS_LANE_${String(index + 1).padStart(2, '0')}`;
 }
 
-function listenerUrl(baseUrl, index) {
+function sessionLaneId(index) {
+  return `session-lane-${String(index + 1).padStart(2, '0')}`;
+}
+
+function sessionLaneGroup(index) {
+  return `SESSION_LANE_${String(index + 1).padStart(2, '0')}`;
+}
+
+function listenerUrl(baseUrl, index, basePort = 7901) {
   const target = new URL(baseUrl);
-  target.port = String(7901 + index);
+  target.port = String(basePort + index);
   return target.toString().replace(/\/$/, '');
 }
 
@@ -54,6 +64,8 @@ export function createMihomoEgressAdapter({
   controllerUrl = DEFAULT_CONTROLLER_URL,
   listenerBaseUrl = DEFAULT_LISTENER_BASE_URL,
   laneCount = DEFAULT_LANE_COUNT,
+  sessionLaneCount = DEFAULT_SESSION_LANE_COUNT,
+  sessionListenerBasePort = DEFAULT_SESSION_LISTENER_BASE_PORT,
   fetchImpl = fetch,
   probeUrl,
   probeFetchImpl = fetch,
@@ -64,12 +76,23 @@ export function createMihomoEgressAdapter({
 } = {}) {
   const controller = String(controllerUrl).replace(/\/$/, '');
   const lanesLimit = Math.max(1, Number.parseInt(laneCount, 10) || DEFAULT_LANE_COUNT);
+  const sessionLanesLimit = Math.max(1, Number.parseInt(sessionLaneCount, 10) || DEFAULT_SESSION_LANE_COUNT);
+  const sessionPort = boundedPositiveInteger(sessionListenerBasePort, DEFAULT_SESSION_LISTENER_BASE_PORT, 65_535);
   const sourceProbeUrl = String(probeUrl || '').trim();
   const sourceProbeTimeoutMs = boundedPositiveInteger(probeTimeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 30_000);
   const sourceProbeCacheMs = boundedPositiveInteger(probeCacheMs, DEFAULT_PROBE_CACHE_MS, 60 * 60_000);
   let lastLanes = [];
   let degraded = false;
   const probeResults = new Map();
+  const unhealthySessionNodes = new Set();
+  const sessionSlots = Array.from({ length: sessionLanesLimit }, (_, index) => ({
+    id: sessionLaneId(index),
+    group: sessionLaneGroup(index),
+    proxyUrl: listenerUrl(listenerBaseUrl, index, sessionPort),
+    proxyName: undefined,
+    dispatcher: undefined,
+    unhealthy: false,
+  }));
 
   async function request(path, options) {
     const response = await fetchImpl(`${controller}${path}`, {
@@ -97,6 +120,7 @@ export function createMihomoEgressAdapter({
         && !RESERVED_NAMES.has(name)
         && !isSubscriptionMetadataName(name)
         && !String(name).startsWith('EGRESS_LANE_')
+        && !String(name).startsWith('SESSION_LANE_')
         && !GROUP_TYPES.has(detail.type)
         && (includeGenericFailures || detail.alive !== false);
     });
@@ -140,19 +164,23 @@ export function createMihomoEgressAdapter({
     return { lane: undefined, index };
   }
 
-  async function refresh() {
+  async function proxyCandidates() {
+    const payload = await request('/proxies');
+    const publicNames = payload?.proxies?.[PUBLIC_GROUP]?.all || [];
+    const needsProviderDetails = publicNames.some((name) => !payload?.proxies?.[name]);
+    const providersPayload = needsProviderDetails ? await request('/providers/proxies') : undefined;
+    const primaryNodes = healthyNodes(payload, providersPayload);
+    const fallbackNodes = sourceProbeUrl
+      ? healthyNodes(payload, providersPayload, { includeGenericFailures: true })
+        .filter((node) => !primaryNodes.includes(node))
+        .slice(0, Math.max(lanesLimit, sessionLanesLimit))
+      : [];
+    return [...primaryNodes, ...fallbackNodes];
+  }
+
+  async function refreshPublicLanes() {
     try {
-      const payload = await request('/proxies');
-      const publicNames = payload?.proxies?.[PUBLIC_GROUP]?.all || [];
-      const needsProviderDetails = publicNames.some((name) => !payload?.proxies?.[name]);
-      const providersPayload = needsProviderDetails ? await request('/providers/proxies') : undefined;
-      const primaryNodes = healthyNodes(payload, providersPayload);
-      const fallbackNodes = sourceProbeUrl
-        ? healthyNodes(payload, providersPayload, { includeGenericFailures: true })
-          .filter((node) => !primaryNodes.includes(node))
-          .slice(0, lanesLimit)
-        : [];
-      const nodes = [...primaryNodes, ...fallbackNodes];
+      const nodes = await proxyCandidates();
       const nextLanes = [];
       let cursor = 0;
       let freeIndexes = Array.from({ length: lanesLimit }, (_, index) => index);
@@ -183,10 +211,95 @@ export function createMihomoEgressAdapter({
     }
   }
 
+  function sessionSnapshot(slot) {
+    if (!slot.proxyName || !slot.dispatcher || slot.unhealthy) return undefined;
+    return {
+      id: slot.id,
+      proxyName: slot.proxyName,
+      proxyUrl: slot.proxyUrl,
+      dispatcher: slot.dispatcher,
+    };
+  }
+
+  function sessionLanes() {
+    return sessionSlots.map(sessionSnapshot).filter(Boolean);
+  }
+
+  function sessionSlotFor(laneId) {
+    return sessionSlots.find((slot) => slot.id === String(laneId || '').trim());
+  }
+
+  async function assignSessionLane(laneId, node) {
+    const slot = sessionSlotFor(laneId);
+    const proxyName = String(node || '').trim();
+    if (!slot) throw new Error(`unknown session lane: ${laneId}`);
+    if (!proxyName) throw new Error('session lane proxy is required');
+    if (slot.proxyName === proxyName && slot.dispatcher && !slot.unhealthy) return sessionSnapshot(slot);
+    await request(`/proxies/${encodeURIComponent(slot.group)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: proxyName }),
+    });
+    await slot.dispatcher?.close().catch(() => {});
+    slot.proxyName = proxyName;
+    slot.dispatcher = new ProxyAgent(slot.proxyUrl);
+    slot.unhealthy = false;
+    unhealthySessionNodes.delete(proxyName);
+    return sessionSnapshot(slot);
+  }
+
+  async function refreshSessionLanes() {
+    try {
+      const nodes = await proxyCandidates();
+      const occupied = new Set(sessionSlots
+        .filter((slot) => slot.proxyName && !slot.unhealthy)
+        .map((slot) => slot.proxyName));
+      for (const slot of sessionSlots) {
+        if (slot.proxyName && !slot.unhealthy) continue;
+        const node = nodes.find((candidate) => !occupied.has(candidate) && !unhealthySessionNodes.has(candidate));
+        if (!node) continue;
+        await assignSessionLane(slot.id, node);
+        occupied.add(node);
+      }
+      safeEvent(onEvent, { state: 'session-refresh', lanes: sessionLanes().length });
+      return sessionLanes();
+    } catch (error) {
+      safeEvent(onEvent, { state: 'session-degraded', lanes: sessionLanes().length, code: error.code || 'MIHOMO_CONTROLLER_ERROR' });
+      return sessionLanes();
+    }
+  }
+
+  async function markSessionLaneUnhealthy(laneId) {
+    const slot = sessionSlotFor(laneId);
+    if (!slot) return false;
+    if (slot.proxyName) unhealthySessionNodes.add(slot.proxyName);
+    slot.unhealthy = true;
+    await slot.dispatcher?.close().catch(() => {});
+    slot.proxyName = undefined;
+    slot.dispatcher = undefined;
+    safeEvent(onEvent, { state: 'session-unhealthy', lane: slot.id });
+    return true;
+  }
+
+  async function releaseSessionLane(laneId) {
+    const slot = sessionSlotFor(laneId);
+    if (!slot) return false;
+    await slot.dispatcher?.close().catch(() => {});
+    slot.proxyName = undefined;
+    slot.dispatcher = undefined;
+    slot.unhealthy = false;
+    return true;
+  }
+
   return {
-    refresh,
+    refresh: refreshPublicLanes,
+    refreshPublicLanes,
+    refreshSessionLanes,
+    sessionLanes,
+    assignSessionLane,
+    releaseSessionLane,
+    markSessionLaneUnhealthy,
     lanes: () => lastLanes,
     ready: () => Promise.resolve(lastLanes),
-    stats: () => ({ degraded, lanes: lastLanes.length }),
+    stats: () => ({ degraded, lanes: lastLanes.length, sessionLanes: sessionLanes().length }),
   };
 }

@@ -11,6 +11,202 @@ proxy-groups:
     type: select
     proxies:
       - DIRECT
+  - name: EGRESS_LANE_01
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_02
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_03
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_04
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_05
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_06
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_07
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_08
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_09
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_10
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_11
+    type: select
+    proxies: [PROXY]
+  - name: EGRESS_LANE_12
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_01
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_02
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_03
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_04
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_05
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_06
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_07
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_08
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_09
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_10
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_11
+    type: select
+    proxies: [PROXY]
+  - name: SESSION_LANE_12
+    type: select
+    proxies: [PROXY]
+
+listeners:
+  - name: egress-lane-01
+    type: mixed
+    listen: 127.0.0.1
+    port: 7901
+    proxy: EGRESS_LANE_01
+  - name: egress-lane-02
+    type: mixed
+    listen: 127.0.0.1
+    port: 7902
+    proxy: EGRESS_LANE_02
+  - name: egress-lane-03
+    type: mixed
+    listen: 127.0.0.1
+    port: 7903
+    proxy: EGRESS_LANE_03
+  - name: egress-lane-04
+    type: mixed
+    listen: 127.0.0.1
+    port: 7904
+    proxy: EGRESS_LANE_04
+  - name: egress-lane-05
+    type: mixed
+    listen: 127.0.0.1
+    port: 7905
+    proxy: EGRESS_LANE_05
+  - name: egress-lane-06
+    type: mixed
+    listen: 127.0.0.1
+    port: 7906
+    proxy: EGRESS_LANE_06
+  - name: egress-lane-07
+    type: mixed
+    listen: 127.0.0.1
+    port: 7907
+    proxy: EGRESS_LANE_07
+  - name: egress-lane-08
+    type: mixed
+    listen: 127.0.0.1
+    port: 7908
+    proxy: EGRESS_LANE_08
+  - name: egress-lane-09
+    type: mixed
+    listen: 127.0.0.1
+    port: 7909
+    proxy: EGRESS_LANE_09
+  - name: egress-lane-10
+    type: mixed
+    listen: 127.0.0.1
+    port: 7910
+    proxy: EGRESS_LANE_10
+  - name: egress-lane-11
+    type: mixed
+    listen: 127.0.0.1
+    port: 7911
+    proxy: EGRESS_LANE_11
+  - name: egress-lane-12
+    type: mixed
+    listen: 127.0.0.1
+    port: 7912
+    proxy: EGRESS_LANE_12
+  - name: session-lane-01
+    type: mixed
+    listen: 127.0.0.1
+    port: 7921
+    proxy: SESSION_LANE_01
+  - name: session-lane-02
+    type: mixed
+    listen: 127.0.0.1
+    port: 7922
+    proxy: SESSION_LANE_02
+  - name: session-lane-03
+    type: mixed
+    listen: 127.0.0.1
+    port: 7923
+    proxy: SESSION_LANE_03
+  - name: session-lane-04
+    type: mixed
+    listen: 127.0.0.1
+    port: 7924
+    proxy: SESSION_LANE_04
+  - name: session-lane-05
+    type: mixed
+    listen: 127.0.0.1
+    port: 7925
+    proxy: SESSION_LANE_05
+  - name: session-lane-06
+    type: mixed
+    listen: 127.0.0.1
+    port: 7926
+    proxy: SESSION_LANE_06
+  - name: session-lane-07
+    type: mixed
+    listen: 127.0.0.1
+    port: 7927
+    proxy: SESSION_LANE_07
+  - name: session-lane-08
+    type: mixed
+    listen: 127.0.0.1
+    port: 7928
+    proxy: SESSION_LANE_08
+  - name: session-lane-09
+    type: mixed
+    listen: 127.0.0.1
+    port: 7929
+    proxy: SESSION_LANE_09
+  - name: session-lane-10
+    type: mixed
+    listen: 127.0.0.1
+    port: 7930
+    proxy: SESSION_LANE_10
+  - name: session-lane-11
+    type: mixed
+    listen: 127.0.0.1
+    port: 7931
+    proxy: SESSION_LANE_11
+  - name: session-lane-12
+    type: mixed
+    listen: 127.0.0.1
+    port: 7932
+    proxy: SESSION_LANE_12
+
+external-controller: 127.0.0.1:9090
 
 rules:
   - MATCH,PROXY

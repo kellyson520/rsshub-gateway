@@ -222,3 +222,68 @@ test('probes candidate lanes concurrently within each available batch', async ()
 
   assert.equal(maxActive, 2);
 });
+
+test('keeps dedicated session lanes across public refreshes', async () => {
+  const requests = [];
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    listenerBaseUrl: 'http://127.0.0.1',
+    laneCount: 2,
+    sessionLaneCount: 2,
+    sessionListenerBasePort: 7921,
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      if (options.method === 'PUT') return new Response(null, { status: 204 });
+      return response({ proxies: {
+        PUBLIC: { type: 'LoadBalance', all: ['node-a', 'node-b', 'node-c'] },
+        'node-a': { type: 'Hysteria2', alive: true },
+        'node-b': { type: 'Vless', alive: true },
+        'node-c': { type: 'Shadowsocks', alive: true },
+      } });
+    },
+  });
+
+  const sessions = await adapter.refreshSessionLanes();
+  assert.deepEqual(sessions.map((lane) => ({ id: lane.id, proxyName: lane.proxyName, proxyUrl: lane.proxyUrl })), [
+    { id: 'session-lane-01', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7921' },
+    { id: 'session-lane-02', proxyName: 'node-b', proxyUrl: 'http://127.0.0.1:7922' },
+  ]);
+
+  const sessionBindings = () => requests.filter((request) => request.options.method === 'PUT' && /SESSION_LANE_/.test(request.url));
+  assert.deepEqual(sessionBindings().map((request) => ({ url: request.url, body: JSON.parse(request.options.body) })), [
+    { url: 'http://127.0.0.1:9090/proxies/SESSION_LANE_01', body: { name: 'node-a' } },
+    { url: 'http://127.0.0.1:9090/proxies/SESSION_LANE_02', body: { name: 'node-b' } },
+  ]);
+
+  await adapter.refreshPublicLanes();
+  await adapter.refreshSessionLanes();
+  assert.equal(sessionBindings().length, 2);
+});
+
+test('replaces a session lane only after it is marked unhealthy', async () => {
+  const requests = [];
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    sessionLaneCount: 2,
+    sessionListenerBasePort: 7921,
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      if (options.method === 'PUT') return new Response(null, { status: 204 });
+      return response({ proxies: {
+        PUBLIC: { type: 'LoadBalance', all: ['node-a', 'node-b', 'node-c'] },
+        'node-a': { type: 'Hysteria2', alive: true },
+        'node-b': { type: 'Vless', alive: true },
+        'node-c': { type: 'Shadowsocks', alive: true },
+      } });
+    },
+  });
+
+  const first = await adapter.refreshSessionLanes();
+  await adapter.refreshSessionLanes();
+  assert.equal(requests.filter((request) => request.options.method === 'PUT').length, 2);
+
+  await adapter.markSessionLaneUnhealthy(first[0].id);
+  const second = await adapter.refreshSessionLanes();
+  assert.notEqual(second.find((lane) => lane.id === first[0].id).proxyName, first[0].proxyName);
+  assert.equal(requests.filter((request) => request.options.method === 'PUT').length, 3);
+});
