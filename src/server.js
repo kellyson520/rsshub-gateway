@@ -572,7 +572,7 @@ export function createGatewayServer(options = {}) {
     options.ehFirstPaintCount ?? process.env.EH_FIRST_PAINT_COUNT,
     DEFAULT_EH_FIRST_PAINT_COUNT,
     1,
-    ehMediaForegroundWarmCount,
+    24,
   );
   const mediaCacheMaxFileBytes = boundedInteger(
     options.mediaCacheMaxFileBytes ?? process.env.GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES,
@@ -726,7 +726,7 @@ export function createGatewayServer(options = {}) {
     return scope === 'session' && session?.fingerprint ? `session:${session.fingerprint}` : 'public';
   }
 
-  async function readCachedGatewayDocument(target, kind, namespace) {
+  async function readCachedGatewayDocument(target, kind, namespace, { bypassInflight = false } = {}) {
     if (!cache) return null;
     const cacheKind = documentCacheKind(target, kind);
     const miss = new Error('gateway cache miss');
@@ -735,6 +735,7 @@ export function createGatewayServer(options = {}) {
       const result = await cache.getOrLoad(target, cacheKind, async () => { throw miss; }, {
         allowStale: cacheKind !== 'eh-image',
         namespace,
+        bypassInflight,
       });
       cacheStateLog(target, cacheKind, result.state);
       return responseFromCachedDocument(result);
@@ -744,7 +745,7 @@ export function createGatewayServer(options = {}) {
     }
   }
 
-  async function cacheGatewayDocument(target, kind, namespace, response) {
+  async function cacheGatewayDocument(target, kind, namespace, response, { bypassInflight = false } = {}) {
     const body = await readLimited(response);
     if (!cache) return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
     const cacheKind = documentCacheKind(target, kind);
@@ -758,6 +759,7 @@ export function createGatewayServer(options = {}) {
     }), {
       allowStale: cacheKind !== 'eh-image',
       namespace,
+      bypassInflight,
     });
     cacheStateLog(target, cacheKind, result.state);
     return responseFromCachedDocument(result);
@@ -772,21 +774,23 @@ export function createGatewayServer(options = {}) {
       const session = await resolveSessionTransport(adapter);
       if (!session) return { adapter, unavailable: true, egressScope: 'session' };
       const namespace = cacheNamespaceFor('session', session);
-      const cached = await readCachedGatewayDocument(target, 'html', namespace);
+      const bypassInflight = requestOptions?.priority === 'foreground';
+      const cached = await readCachedGatewayDocument(target, 'html', namespace, { bypassInflight });
       if (cached) return { adapter, egressScope: 'session', session, response: cached };
       const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
-      return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response) };
+      return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response, { bypassInflight }) };
     }
 
-    const publicCached = await readCachedGatewayDocument(target, 'html', 'public');
+    const bypassInflight = requestOptions?.priority === 'foreground';
+    const publicCached = await readCachedGatewayDocument(target, 'html', 'public', { bypassInflight });
     if (publicCached) return { adapter, egressScope: 'public', response: publicCached };
     const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
     if (routed.unavailable) return routed;
     const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
-    return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response) };
+    return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response, { bypassInflight }) };
   }
 
-  async function cacheGatewayMedia(target, namespace, response) {
+  async function cacheGatewayMedia(target, namespace, response, { bypassInflight = false } = {}) {
     if (!cache) return response;
     const contentType = response.headers.get('content-type') || '';
     const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
@@ -802,7 +806,7 @@ export function createGatewayServer(options = {}) {
       headers: responseHeaders(response),
       body,
       cacheable: true,
-    }), { namespace });
+    }), { namespace, bypassInflight });
     cacheStateLog(target, 'media', result.state);
     return responseFromCachedDocument(result);
   }
@@ -872,6 +876,7 @@ export function createGatewayServer(options = {}) {
   async function fetchGatewayMedia(target, requestOptions, routeMetadata, variantWidth) {
     if (requestOptions.range) return fetchGatewayTarget(target, requestOptions, routeMetadata);
     const adapter = adapterForUrl(target);
+    const bypassInflight = requestOptions?.priority === 'foreground';
     const requestedScope = routeMetadata.egressScope === 'session'
       ? 'session'
       : (routeMetadata.egressScope === 'sticky' ? 'sticky' : 'public');
@@ -880,30 +885,30 @@ export function createGatewayServer(options = {}) {
       if (!session) return { adapter, unavailable: true, egressScope: 'session' };
       const namespace = cacheNamespaceFor('session', session);
       if (variantWidth && cache) {
-        const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace);
+        const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace, { bypassInflight });
         if (cachedVariant) {
           recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
           return { adapter, egressScope: 'session', session, response: cachedVariant };
         }
       }
-      const cached = await readCachedGatewayDocument(target, 'media', namespace);
+      const cached = await readCachedGatewayDocument(target, 'media', namespace, { bypassInflight });
       if (cached) {
         const source = { adapter, egressScope: 'session', session, response: cached };
         return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
       }
       const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
-      const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+      const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response, { bypassInflight }) };
       return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
     }
 
     if (variantWidth && cache) {
-      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', 'public');
+      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', 'public', { bypassInflight });
       if (cachedVariant) {
         recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
         return { adapter, egressScope: 'public', response: cachedVariant };
       }
     }
-    const publicCached = await readCachedGatewayDocument(target, 'media', 'public');
+    const publicCached = await readCachedGatewayDocument(target, 'media', 'public', { bypassInflight });
     if (publicCached) {
       const source = { adapter, egressScope: 'public', response: publicCached };
       return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, 'public') : source;
@@ -912,18 +917,18 @@ export function createGatewayServer(options = {}) {
     if (routed.unavailable) return routed;
     const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
     if (variantWidth && namespace !== 'public' && cache) {
-      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace);
+      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace, { bypassInflight });
       if (cachedVariant) {
         recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
         return { ...routed, response: cachedVariant };
       }
     }
-    const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+    const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response, { bypassInflight }) };
     return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
   }
 
   async function fetchResolvedEhMedia(target, requestOptions, routeMetadata, variantWidth, baseUrl) {
-    const pageRouted = await fetchGatewayDocument(target, { range: requestOptions.range }, routeMetadata);
+    const pageRouted = await fetchGatewayDocument(target, requestOptions, routeMetadata);
     if (pageRouted.unavailable) return pageRouted;
     const pageBody = await readLimited(pageRouted.response);
     const page = extractEhImagePage({
@@ -1069,16 +1074,16 @@ export function createGatewayServer(options = {}) {
           || ehImageMediaTarget;
         const routed = responseDriven
           ? (gatewayMatch[1] === 'item'
-            ? await fetchGatewayDocument(target, { range: req.headers.range }, routeMetadata)
+            ? await fetchGatewayDocument(target, { range: req.headers.range, priority: 'foreground' }, routeMetadata)
             : (ehImageMediaTarget
               ? await fetchResolvedEhMedia(
                 target,
-                { range: req.headers.range, circuit: false },
+                { range: req.headers.range, circuit: false, priority: 'foreground' },
                 routeMetadata,
                 mediaVariant.width,
                 publicBaseUrl(req),
               )
-              : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata, mediaVariant.width)))
+              : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false, priority: 'foreground' }, routeMetadata, mediaVariant.width)))
           : {
             adapter,
             egressScope: routeMetadata.egressScope || 'public',

@@ -196,13 +196,17 @@ export function createResponseCache({
     }
   }
 
-  async function getOrLoad(url, kind, loader, { allowStale = true, namespace = 'public' } = {}) {
+  async function getOrLoad(url, kind, loader, {
+    allowStale = true,
+    namespace = 'public',
+    bypassInflight = false,
+  } = {}) {
     const cacheNamespace = normalizedNamespace(namespace);
     const fresh = await readEntry(url, kind, cacheNamespace, false);
     if (fresh) return resultFromEntry(fresh.entry, fresh.body, 'HIT');
     const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
     const key = keyFor(url, kind, cacheNamespace);
-    if (inflight.has(key)) return inflight.get(key);
+    if (!bypassInflight && inflight.has(key)) return inflight.get(key);
 
     const operation = (async () => {
       try {
@@ -215,11 +219,11 @@ export function createResponseCache({
         throw error;
       }
     })();
-    inflight.set(key, operation);
+    if (!bypassInflight) inflight.set(key, operation);
     try {
       return await operation;
     } finally {
-      if (inflight.get(key) === operation) inflight.delete(key);
+      if (!bypassInflight && inflight.get(key) === operation) inflight.delete(key);
     }
   }
 
