@@ -1,10 +1,11 @@
 export const name = 'telegram';
+export const publiclyReadable = true;
 
 export function matches(hostname) {
   return hostname === 't.me' || hostname.endsWith('.t.me');
 }
 
-export function headers() {
+export function headers(_config = {}, _options = {}) {
   return {};
 }
 
@@ -19,4 +20,8 @@ export function readerTarget(value) {
 
 export function unavailableMessage() {
   return 'Telegram 内容暂时无法读取，请稍后重试或打开原始来源。';
+}
+
+export function isAuthenticationChallenge() {
+  return false;
 }

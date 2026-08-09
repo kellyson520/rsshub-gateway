@@ -8,7 +8,9 @@ const adapters = [iwara, x, instagram, telegram, ehviewer];
 
 const defaultAdapter = {
   name: 'unknown',
+  publiclyReadable: false,
   headers: () => ({}),
+  isAuthenticationChallenge: () => false,
   readerTarget: (url) => String(url),
   isGalleryUrl: () => false,
   galleryPageUrls: () => [],

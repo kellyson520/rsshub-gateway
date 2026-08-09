@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EGRESS_POLICIES, egressPolicyForUrl, isPublicEgressTarget } from '../src/egress-policy.js';
+import {
+  EGRESS_POLICIES,
+  egressPolicyForRequest,
+  egressPolicyForUrl,
+  isPublicEgressTarget,
+} from '../src/egress-policy.js';
 
 test('routes public E-Hentai and H@H targets through the public egress', () => {
   const targets = [
@@ -45,4 +50,21 @@ test('defaults malformed and unknown targets to the sticky egress', () => {
 test('matches complete host labels instead of lookalike domains', () => {
   assert.equal(egressPolicyForUrl('https://not-e-hentai.org/page'), EGRESS_POLICIES.STICKY);
   assert.equal(egressPolicyForUrl('https://examplehath.network/h/1.webp'), EGRESS_POLICIES.STICKY);
+});
+
+test('routes explicitly public reader sources through the shared pool', () => {
+  for (const target of [
+    'https://iwara.tv/video/1',
+    'https://x.com/example/status/1',
+    'https://instagram.com/p/example/',
+    'https://t.me/s/channel',
+  ]) {
+    assert.equal(egressPolicyForRequest(target, { scope: 'public' }), EGRESS_POLICIES.PUBLIC, target);
+  }
+});
+
+test('keeps session and unknown requests on a stable route', () => {
+  assert.equal(egressPolicyForRequest('https://x.com/example/status/1', { scope: 'session' }), EGRESS_POLICIES.STICKY);
+  assert.equal(egressPolicyForRequest('https://exhentai.org/g/1/a/', { scope: 'public' }), EGRESS_POLICIES.STICKY);
+  assert.equal(egressPolicyForRequest('https://example.com/page', { scope: 'public' }), EGRESS_POLICIES.STICKY);
 });
