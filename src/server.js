@@ -13,6 +13,7 @@ import { createResponseCache } from './cache.js';
 import { createMediaPrefetchQueue } from './media-prefetch.js';
 import { createEgressPool } from './egress-pool.js';
 import { createMihomoEgressAdapter } from './mihomo-egress.js';
+import { createSessionAffinity } from './session-affinity.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -140,6 +141,8 @@ const DEFAULT_EH_MEDIA_PREFETCH_MIN_CONCURRENCY = 3;
 const DEFAULT_EH_MEDIA_PREFETCH_MAX_CONCURRENCY = 12;
 const DEFAULT_EH_MEDIA_PREFETCH_PER_ORIGIN = 2;
 const DEFAULT_EGRESS_LANE_COUNT = 12;
+const DEFAULT_EGRESS_SESSION_LANE_COUNT = 12;
+const DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT = 7921;
 const DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE = 3;
 const DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE = 6;
 const DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY = 48;
@@ -310,6 +313,18 @@ export function createGatewayServer(options = {}) {
     1,
     DEFAULT_EGRESS_LANE_COUNT,
   );
+  const egressSessionLaneCount = boundedInteger(
+    options.egressSessionLaneCount ?? process.env.EGRESS_SESSION_LANE_COUNT,
+    DEFAULT_EGRESS_SESSION_LANE_COUNT,
+    1,
+    DEFAULT_EGRESS_SESSION_LANE_COUNT,
+  );
+  const egressSessionListenerBasePort = boundedInteger(
+    options.egressSessionListenerBasePort ?? process.env.EGRESS_SESSION_LISTENER_BASE_PORT,
+    DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT,
+    1024,
+    65_524,
+  );
   const egressMinConcurrencyPerLane = boundedInteger(
     options.egressMinConcurrencyPerLane ?? process.env.EGRESS_MIN_CONCURRENCY_PER_LANE,
     DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE,
@@ -369,6 +384,8 @@ export function createGatewayServer(options = {}) {
       controllerUrl,
       listenerBaseUrl: options.egressProxyBaseUrl || process.env.EGRESS_PROXY_BASE_URL,
       laneCount: egressLaneCount,
+      sessionLaneCount: egressSessionLaneCount,
+      sessionListenerBasePort: egressSessionListenerBasePort,
       probeUrl: egressProbeUrl,
       probeTimeoutMs: egressProbeTimeoutMs,
       probeCacheMs: egressProbeCacheMs,
@@ -379,10 +396,21 @@ export function createGatewayServer(options = {}) {
       },
     })
     : null);
+  const sessionAffinity = options.sessionAffinity || (egressAdapter
+    ? createSessionAffinity({
+      root: options.sessionAffinityRoot || process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
+      file: options.sessionAffinityFile || process.env.SESSION_AFFINITY_FILE,
+      secret,
+      laneIds: () => egressAdapter.sessionLanes?.().map((lane) => lane.id) || [],
+    })
+    : null);
   if (egressAdapter) {
     const refreshEgress = async () => {
-      const lanes = await egressAdapter.refresh();
+      const lanes = egressAdapter.refreshPublicLanes
+        ? await egressAdapter.refreshPublicLanes()
+        : await egressAdapter.refresh();
       egressPool.setLanes(lanes);
+      await egressAdapter.refreshSessionLanes?.();
     };
     void refreshEgress();
     const refreshTimer = setInterval(() => void refreshEgress(), egressRefreshIntervalMs);
@@ -435,6 +463,196 @@ export function createGatewayServer(options = {}) {
     request,
     kind,
   });
+  function sessionCredentialsFor(adapter) {
+    const credentials = sourceConfig[adapter.name];
+    const headers = adapter.headers?.(credentials, { includeCredentials: true }) || {};
+    return Object.keys(headers).some((name) => /^(cookie|authorization)$/i.test(name)) ? credentials : null;
+  }
+
+  async function resolveSessionTransport(adapter) {
+    const credentials = sessionCredentialsFor(adapter);
+    if (!credentials) return null;
+    if (typeof options.resolveSessionTransport === 'function') {
+      const resolved = await options.resolveSessionTransport({ adapter, credentials });
+      return resolved?.dispatcher ? { ...resolved, credentials } : null;
+    }
+    if (!sessionAffinity || !egressAdapter?.sessionLanes) return null;
+    await egressAdapter.refreshSessionLanes?.();
+    sessionAffinity.setLaneIds?.(egressAdapter.sessionLanes().map((lane) => lane.id));
+    const affinity = await sessionAffinity.resolve(adapter.name, credentials);
+    const lane = egressAdapter.sessionLanes().find((entry) => entry.id === affinity.laneId);
+    return lane?.dispatcher ? { ...affinity, dispatcher: lane.dispatcher, credentials } : null;
+  }
+
+  async function authenticationChallenge(adapter, response) {
+    let body = '';
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('html')) {
+      try {
+        body = await readLimited(response.clone(), 512 * 1024);
+      } catch {
+        body = '';
+      }
+    }
+    return adapter.isAuthenticationChallenge?.({ status: response.status, headers: response.headers, body }) || false;
+  }
+
+  async function fetchGatewayTarget(target, requestOptions = {}, routeMetadata = {}) {
+    const adapter = adapterForUrl(target);
+    const requestedScope = routeMetadata.egressScope === 'session'
+      ? 'session'
+      : (routeMetadata.egressScope === 'sticky' ? 'sticky' : 'public');
+    if (requestedScope === 'session') {
+      const session = await resolveSessionTransport(adapter);
+      if (!session) return { adapter, unavailable: true, egressScope: 'session' };
+      return {
+        adapter,
+        egressScope: 'session',
+        session,
+        response: await fetchExternal(adapter.readerTarget(target), {
+          ...requestOptions,
+          egressScope: 'session',
+          sessionDispatcher: session.dispatcher,
+          sessionCredentials: session.credentials,
+        }),
+      };
+    }
+
+    const response = await fetchExternal(adapter.readerTarget(target), {
+      ...requestOptions,
+      egressScope: requestedScope,
+    });
+    if (requestedScope !== 'public' || !adapter.publiclyReadable || !await authenticationChallenge(adapter, response)) {
+      return { adapter, egressScope: requestedScope, response };
+    }
+    const session = await resolveSessionTransport(adapter);
+    if (!session) return { adapter, egressScope: 'public', response };
+    await response.body?.cancel();
+    return {
+      adapter,
+      egressScope: 'session',
+      session,
+      response: await fetchExternal(adapter.readerTarget(target), {
+        ...requestOptions,
+        egressScope: 'session',
+        sessionDispatcher: session.dispatcher,
+        sessionCredentials: session.credentials,
+      }),
+    };
+  }
+
+  function signedTargetMetadata(adapter, scope) {
+    return { egressScope: scope, source: adapter.name };
+  }
+
+  function cacheNamespaceFor(scope, session) {
+    return scope === 'session' && session?.fingerprint ? `session:${session.fingerprint}` : 'public';
+  }
+
+  async function readCachedGatewayDocument(target, kind, namespace) {
+    if (!cache) return null;
+    const cacheKind = documentCacheKind(target, kind);
+    const miss = new Error('gateway cache miss');
+    miss.code = 'GATEWAY_CACHE_MISS';
+    try {
+      const result = await cache.getOrLoad(target, cacheKind, async () => { throw miss; }, {
+        allowStale: cacheKind !== 'eh-image',
+        namespace,
+      });
+      cacheStateLog(target, cacheKind, result.state);
+      return responseFromCachedDocument(result);
+    } catch (error) {
+      if (error === miss) return null;
+      throw error;
+    }
+  }
+
+  async function cacheGatewayDocument(target, kind, namespace, response) {
+    const body = await readLimited(response);
+    if (!cache) return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+    const cacheKind = documentCacheKind(target, kind);
+    const contentType = response.headers.get('content-type') || '';
+    const result = await cache.getOrLoad(target, cacheKind, async () => ({
+      status: response.status,
+      headers: responseHeaders(response),
+      body,
+      cacheable: response.ok && contentType.includes('html'),
+      refreshFailed: [408, 425, 429].includes(response.status) || response.status >= 500,
+    }), {
+      allowStale: cacheKind !== 'eh-image',
+      namespace,
+    });
+    cacheStateLog(target, cacheKind, result.state);
+    return responseFromCachedDocument(result);
+  }
+
+  async function fetchGatewayDocument(target, requestOptions, routeMetadata) {
+    const adapter = adapterForUrl(target);
+    const requestedScope = routeMetadata.egressScope === 'session'
+      ? 'session'
+      : (routeMetadata.egressScope === 'sticky' ? 'sticky' : 'public');
+    if (requestedScope === 'session') {
+      const session = await resolveSessionTransport(adapter);
+      if (!session) return { adapter, unavailable: true, egressScope: 'session' };
+      const namespace = cacheNamespaceFor('session', session);
+      const cached = await readCachedGatewayDocument(target, 'html', namespace);
+      if (cached) return { adapter, egressScope: 'session', session, response: cached };
+      const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
+      return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response) };
+    }
+
+    const publicCached = await readCachedGatewayDocument(target, 'html', 'public');
+    if (publicCached) return { adapter, egressScope: 'public', response: publicCached };
+    const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
+    if (routed.unavailable) return routed;
+    const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
+    return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response) };
+  }
+
+  async function cacheGatewayMedia(target, namespace, response) {
+    if (!cache) return response;
+    const contentType = response.headers.get('content-type') || '';
+    const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+    const cacheable = response.ok
+      && contentType.toLowerCase().startsWith('image/')
+      && Number.isSafeInteger(contentLength)
+      && contentLength >= 0
+      && contentLength <= mediaCacheMaxFileBytes;
+    if (!cacheable) return response;
+    const body = await readBinaryLimited(response, mediaCacheMaxFileBytes);
+    const result = await cache.getOrLoad(target, 'media', async () => ({
+      status: response.status,
+      headers: responseHeaders(response),
+      body,
+      cacheable: true,
+    }), { namespace });
+    cacheStateLog(target, 'media', result.state);
+    return responseFromCachedDocument(result);
+  }
+
+  async function fetchGatewayMedia(target, requestOptions, routeMetadata) {
+    if (requestOptions.range) return fetchGatewayTarget(target, requestOptions, routeMetadata);
+    const adapter = adapterForUrl(target);
+    const requestedScope = routeMetadata.egressScope === 'session'
+      ? 'session'
+      : (routeMetadata.egressScope === 'sticky' ? 'sticky' : 'public');
+    if (requestedScope === 'session') {
+      const session = await resolveSessionTransport(adapter);
+      if (!session) return { adapter, unavailable: true, egressScope: 'session' };
+      const namespace = cacheNamespaceFor('session', session);
+      const cached = await readCachedGatewayDocument(target, 'media', namespace);
+      if (cached) return { adapter, egressScope: 'session', session, response: cached };
+      const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
+      return { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+    }
+
+    const publicCached = await readCachedGatewayDocument(target, 'media', 'public');
+    if (publicCached) return { adapter, egressScope: 'public', response: publicCached };
+    const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
+    if (routed.unavailable) return routed;
+    const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
+    return { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+  }
   const mediaPreloadQueue = cache
     ? createMediaPrefetchQueue({
       queueFile: options.mediaPrefetchQueueFile
@@ -505,6 +723,7 @@ export function createGatewayServer(options = {}) {
           baseUrl: publicBaseUrl(req),
           selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
           secret,
+          signedTargetMetadata: { egressScope: 'public' },
         });
         writeText(res, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
       } catch (error) {
@@ -530,23 +749,52 @@ export function createGatewayServer(options = {}) {
     const gatewayMatch = requestUrl.pathname.match(/^\/_gateway\/(item|media)\/(.+)$/);
     if (gatewayMatch) {
       let target;
+      let routeMetadata;
       try {
-        target = verifySignedTarget(gatewayMatch[2], secret).url;
+        const verified = verifySignedTarget(gatewayMatch[2], secret);
+        target = verified.url;
+        routeMetadata = { egressScope: verified.egressScope, source: verified.source };
       } catch {
         writeText(res, 403, 'resource unavailable\n');
         return;
       }
       try {
         const adapter = adapterForUrl(target);
-        let remote = gatewayMatch[1] === 'item'
-          ? await fetchExternalDocument(adapter.readerTarget(target), { range: req.headers.range }, 'html')
-          : await fetchCachedMedia({
-            cache,
-            fetcher: fetchExternal,
-            target,
-            range: req.headers.range,
-            maxBytes: mediaCacheMaxFileBytes,
-          });
+        const responseDriven = adapter.publiclyReadable || ['session', 'sticky'].includes(routeMetadata.egressScope);
+        const routed = responseDriven
+          ? (gatewayMatch[1] === 'item'
+            ? await fetchGatewayDocument(target, { range: req.headers.range }, routeMetadata)
+            : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata))
+          : {
+            adapter,
+            egressScope: routeMetadata.egressScope || 'public',
+            response: gatewayMatch[1] === 'item'
+              ? await fetchExternalDocument(adapter.readerTarget(target), { range: req.headers.range }, 'html')
+              : await fetchCachedMedia({
+                cache,
+                fetcher: fetchExternal,
+                target,
+                range: req.headers.range,
+                maxBytes: mediaCacheMaxFileBytes,
+              }),
+          };
+        if (routed.unavailable) {
+          if (gatewayMatch[1] === 'media') {
+            writeText(res, 503, 'source unavailable\n');
+          } else {
+            const page = renderUnavailablePage({
+              url: target,
+              title: adapter.name,
+              message: adapter.unavailableMessage(target, 503),
+              baseUrl: publicBaseUrl(req),
+              secret,
+              signedTargetMetadata: signedTargetMetadata(adapter, 'session'),
+            });
+            writeText(res, 503, page, 'text/html; charset=utf-8');
+          }
+          return;
+        }
+        const remote = routed.response;
         if (gatewayMatch[1] === 'media') {
           const headers = {};
           for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
@@ -591,9 +839,17 @@ export function createGatewayServer(options = {}) {
             message: adapter.unavailableMessage(target, remote.status),
             baseUrl: publicBaseUrl(req),
             secret,
+            signedTargetMetadata: signedTargetMetadata(adapter, routed.egressScope),
           })
           : (contentType.includes('html')
-            ? renderReaderPage({ url: target, html: body, baseUrl: publicBaseUrl(req), secret, prefetchedGallery })
+            ? renderReaderPage({
+              url: target,
+              html: body,
+              baseUrl: publicBaseUrl(req),
+              secret,
+              prefetchedGallery,
+              signedTargetMetadata: signedTargetMetadata(adapter, routed.egressScope),
+            })
             : body);
         writeText(res, unavailable ? unavailableStatus : (remote.ok ? 200 : remote.status), page, unavailable || contentType.includes('html') ? 'text/html; charset=utf-8' : contentType);
       } catch (error) {
@@ -635,6 +891,7 @@ export function createGatewayServer(options = {}) {
         baseUrl: publicBaseUrl(req),
         selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
         secret,
+        signedTargetMetadata: { egressScope: 'public' },
       }) : body;
       writeText(res, remote.status, output, contentType || 'application/octet-stream');
     } catch (error) {

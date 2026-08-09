@@ -5,7 +5,7 @@ import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createGatewayServer } from '../src/server.js';
 import { createResponseCache } from '../src/cache.js';
-import { createSignedTarget } from '../src/signed-target.js';
+import { createSignedTarget, verifySignedTarget } from '../src/signed-target.js';
 import { GatewayUpstreamError } from '../src/upstream-errors.js';
 
 const feed = `<?xml version="1.0"?><rss version="2.0"><channel><title>Test</title><item><title>Entry</title><link>https://www.iwara.tv/video/abc</link></item></channel></rss>`;
@@ -54,6 +54,9 @@ test('forwards and transforms an RSSHub feed', async () => {
   const { response, body } = await request(server, '/iwara/ranking/video/date/ecchi');
   assert.equal(response.status, 200);
   assert.match(body, /_gateway\/item/);
+  const token = body.match(/_gateway\/item\/([^"<]+)/)?.[1];
+  assert.ok(token);
+  assert.equal(verifySignedTarget(token, 'secret').egressScope, 'public');
 });
 
 test('serves the EhViewer daily ranking as transformed RSS', async () => {
@@ -613,4 +616,184 @@ test('renders a Telegram post from its content-bearing embed endpoint', async ()
   assert.deepEqual(requested, ['https://t.me/baipiaotg/67336?embed=1']);
   assert.match(body, /完整的 Telegram 正文/);
   assert.doesNotMatch(body, /Embed[\s\S]*View In Channel[\s\S]*Copy/);
+});
+
+test('escalates an authenticated detail from a public lane to one stable session lane', async () => {
+  const requests = [];
+  const sessionDispatcher = { name: 'session-lane-x' };
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { x: { authToken: 'session-token', ct0: 'session-csrf' } },
+    resolveSessionTransport: async () => ({
+      laneId: 'session-lane-x',
+      fingerprint: 'a'.repeat(64),
+      dispatcher: sessionDispatcher,
+    }),
+    fetchExternal: async (_url, requestOptions) => {
+      requests.push(requestOptions);
+      if (requestOptions.egressScope === 'public') {
+        return new Response('<html><body><form action="/i/flow/login"><input name="password"></form></body></html>', {
+          headers: { 'content-type': 'text/html' },
+        });
+      }
+      return new Response('<html><head><title>Post</title></head><body><article>Readable post<img src="https://pbs.twimg.com/media/demo.jpg"></article></body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+    },
+  });
+  const token = createSignedTarget('https://x.com/example/status/1', 'secret');
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(requests.map((entry) => entry.egressScope), ['public', 'session']);
+  assert.equal(requests[0].sessionCredentials, undefined);
+  assert.equal(requests[1].sessionDispatcher, sessionDispatcher);
+  assert.match(body, /Readable post/);
+  const mediaToken = body.match(/_gateway\/media\/([^" ]+)/)?.[1];
+  assert.ok(mediaToken);
+  assert.equal(verifySignedTarget(mediaToken, 'secret').egressScope, 'session');
+  assert.doesNotMatch(body, /session-token|session-csrf|aaaaaaaa/);
+});
+
+test('keeps readable public details anonymous and returns a safe fallback without credentials', async () => {
+  const requests = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    fetchExternal: async (_url, requestOptions) => {
+      requests.push(requestOptions);
+      return new Response('<html><body><form action="/i/flow/login"><input name="password"></form></body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+    },
+  });
+  const token = createSignedTarget('https://x.com/example/status/1', 'secret');
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].egressScope, 'public');
+  assert.match(body, /X 内容暂时无法读取/);
+  assert.doesNotMatch(body, /form action/);
+});
+
+test('does not upgrade rate limits or service failures to a session lane', async () => {
+  for (const status of [429, 503]) {
+    const requests = [];
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache: false,
+      sourceConfig: { x: { authToken: 'session-token' } },
+      resolveSessionTransport: async () => ({
+        laneId: 'session-lane-x',
+        fingerprint: 'a'.repeat(64),
+        dispatcher: { name: 'session-lane-x' },
+      }),
+      fetchExternal: async (_url, requestOptions) => {
+        requests.push(requestOptions);
+        return new Response('temporary failure', { status, headers: { 'content-type': 'text/plain' } });
+      },
+    });
+    const token = createSignedTarget('https://x.com/example/status/1', 'secret');
+    const result = await request(server, `/_gateway/item/${token}`);
+    assert.equal(result.response.status, status);
+    assert.deepEqual(requests.map((entry) => entry.egressScope), ['public']);
+  }
+});
+
+test('uses the token session scope for protected media on the same dispatcher', async () => {
+  const requests = [];
+  const sessionDispatcher = { name: 'session-lane-x' };
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { x: { authToken: 'session-token', ct0: 'session-csrf' } },
+    resolveSessionTransport: async () => ({
+      laneId: 'session-lane-x',
+      fingerprint: 'a'.repeat(64),
+      dispatcher: sessionDispatcher,
+    }),
+    fetchExternal: async (_url, requestOptions) => {
+      requests.push(requestOptions);
+      return new Response('image', { headers: { 'content-type': 'image/webp', 'content-length': '5' } });
+    },
+  });
+  const token = createSignedTarget('https://pbs.twimg.com/media/demo.jpg', 'secret', 900, undefined, {
+    egressScope: 'session',
+    source: 'x',
+  });
+  const { response, body } = await request(server, `/_gateway/media/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(body, 'image');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].egressScope, 'session');
+  assert.equal(requests[0].sessionDispatcher, sessionDispatcher);
+});
+
+test('stores an escalated detail only in its session cache namespace', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-session-document-cache-'));
+  try {
+    const cache = createResponseCache({ root });
+    const fingerprint = 'a'.repeat(64);
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      sourceConfig: { x: { authToken: 'session-token' } },
+      resolveSessionTransport: async () => ({
+        laneId: 'session-lane-x',
+        fingerprint,
+        dispatcher: { name: 'session-lane-x' },
+      }),
+      fetchExternal: async (_url, requestOptions) => (requestOptions.egressScope === 'public'
+        ? new Response('<html><body><form action="/i/flow/login"><input name="password"></form></body></html>', {
+          headers: { 'content-type': 'text/html' },
+        })
+        : new Response('<html><body><article>Private readable detail</article></body></html>', {
+          headers: { 'content-type': 'text/html' },
+        })),
+    });
+    const target = 'https://x.com/example/status/1';
+    const token = createSignedTarget(target, 'secret');
+    const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+    assert.equal(response.status, 200);
+    assert.match(body, /Private readable detail/);
+    assert.equal((await cache.peek(target, 'html', { namespace: `session:${fingerprint}` })).hit, true);
+    assert.equal((await cache.peek(target, 'html', { namespace: 'public' })).hit, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('stores protected media only in its session cache namespace', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-session-media-cache-'));
+  try {
+    const cache = createResponseCache({ root });
+    const fingerprint = 'b'.repeat(64);
+    const target = 'https://pbs.twimg.com/media/demo.jpg';
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      sourceConfig: { x: { authToken: 'session-token' } },
+      resolveSessionTransport: async () => ({
+        laneId: 'session-lane-x',
+        fingerprint,
+        dispatcher: { name: 'session-lane-x' },
+      }),
+      fetchExternal: async () => new Response('image', {
+        headers: { 'content-type': 'image/webp', 'content-length': '5' },
+      }),
+    });
+    const token = createSignedTarget(target, 'secret', 900, undefined, { egressScope: 'session', source: 'x' });
+    const { response, body } = await request(server, `/_gateway/media/${token}`);
+
+    assert.equal(response.status, 200);
+    assert.equal(body, 'image');
+    assert.equal((await cache.peek(target, 'media', { namespace: `session:${fingerprint}` })).hit, true);
+    assert.equal((await cache.peek(target, 'media', { namespace: 'public' })).hit, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
