@@ -24,7 +24,7 @@
 Run:
 
 ```bash
-npm install sharp@^0.34.3
+npm install sharp@^0.35.3
 ```
 
 Expected: `package.json` and `package-lock.json` contain `sharp`; no production source changes are made by this step.
@@ -112,7 +112,7 @@ Add the dependency installation to the existing `npm ci --omit=dev` image layer 
 
 ```bash
 docker build -t rsshub-gateway-variant-check .
-docker run --rm rsshub-gateway-variant-check node --input-type=module -e "import sharp from 'sharp'; console.log(typeof sharp)"
+docker run --rm --entrypoint node rsshub-gateway-variant-check --input-type=module -e "import sharp from 'sharp'; console.log(typeof sharp)"
 ```
 
 Expected: image build succeeds and prints `function`.
