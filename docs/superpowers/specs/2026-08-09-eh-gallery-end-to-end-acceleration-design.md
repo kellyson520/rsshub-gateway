@@ -47,7 +47,7 @@ This overlaps upstream detail discovery, image downloading, image variant constr
 
 ## HTML Compression
 
-Reader HTML and gallery manifests of at least 4 KiB are encoded with Brotli quality 4 when the request advertises `br` support and the compressed body is smaller. Responses include `Content-Encoding: br` and `Vary: Accept-Encoding`; requests without Brotli support receive the original payload. Browsers and WebViews perform native decompression, so no reader-side JavaScript decompression is required.
+Reader HTML of at least 4 KiB is encoded with Brotli quality 4 when the request advertises `br` support and the compressed body is smaller. Responses include `Content-Encoding: br` and `Vary: Accept-Encoding`; requests without Brotli support receive the original payload. Browsers and WebViews perform native decompression, so no reader-side JavaScript decompression is required.
 
 Image responses are never wrapped in HTTP content encoding. Images already use a native image codec, and additional HTTP compression would waste CPU without materially reducing transfer bytes.
 
