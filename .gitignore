@@ -1,4 +1,5 @@
 node_modules/
+.worktrees/
 config/mihomo/config.yaml
 config/mihomo/providers/
 config/mihomo/cache.db
