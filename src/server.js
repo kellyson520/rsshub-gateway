@@ -240,6 +240,7 @@ function createConcurrencyLimiter(limit) {
 
 async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, request }) {
   const requestOptions = { ...request, range, circuit: false };
+  const foreground = request?.priority === 'foreground';
   if (!cache || range) {
     return { response: await fetcher(target, requestOptions), cacheState: 'BYPASS' };
   }
@@ -255,13 +256,28 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
     if (!cacheable) {
       return { passthrough: remote, cacheable: false };
     }
+    if (foreground) {
+      const cacheCopy = remote.clone();
+      return {
+        passthrough: remote,
+        status: remote.status,
+        headers: responseHeaders(remote),
+        cacheable: true,
+        cacheBody: async () => ({
+          status: remote.status,
+          headers: responseHeaders(remote),
+          body: await readBinaryLimited(cacheCopy, maxBytes),
+          cacheable: true,
+        }),
+      };
+    }
     return {
       status: remote.status,
       headers: responseHeaders(remote),
       body: await readBinaryLimited(remote, maxBytes),
       cacheable: true,
     };
-  }, { bypassInflight: request?.priority === 'foreground' });
+  }, { bypassInflight: foreground, deferStore: foreground });
   cacheStateLog(target, 'media', result.state);
   return {
     response: result.passthrough || responseFromCachedDocument(result),
@@ -764,6 +780,7 @@ export function createGatewayServer(options = {}) {
       allowStale: cacheKind !== 'eh-image',
       namespace,
       bypassInflight,
+      ignoreFresh: bypassInflight,
     });
     cacheStateLog(target, cacheKind, result.state);
     return responseFromCachedDocument(result);
@@ -804,6 +821,28 @@ export function createGatewayServer(options = {}) {
       && contentLength >= 0
       && contentLength <= mediaCacheMaxFileBytes;
     if (!cacheable) return response;
+    if (bypassInflight) {
+      const cacheCopy = response.clone();
+      const result = await cache.getOrLoad(target, 'media', async () => ({
+        passthrough: response,
+        status: response.status,
+        headers: responseHeaders(response),
+        cacheable: true,
+        cacheBody: async () => ({
+          status: response.status,
+          headers: responseHeaders(response),
+          body: await readBinaryLimited(cacheCopy, mediaCacheMaxFileBytes),
+          cacheable: true,
+        }),
+      }), {
+        namespace,
+        bypassInflight: true,
+        ignoreFresh: true,
+        deferStore: true,
+      });
+      cacheStateLog(target, 'media', result.state);
+      return result.passthrough || responseFromCachedDocument(result);
+    }
     const body = await readBinaryLimited(response, mediaCacheMaxFileBytes);
     const result = await cache.getOrLoad(target, 'media', async () => ({
       status: response.status,

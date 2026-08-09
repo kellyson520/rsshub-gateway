@@ -14,6 +14,15 @@ async function withCache(options, callback) {
   }
 }
 
+async function waitForCacheHit(cache, url, kind, timeout = 500) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if ((await cache.peek(url, kind)).hit) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail(`timed out waiting for ${kind} cache entry`);
+}
+
 test('returns a fresh cached response without calling the loader twice', async () => {
   let loads = 0;
   await withCache({ now: () => 1_000, maxBytes: 1024 }, async (cache) => {
@@ -116,6 +125,69 @@ test('does not let a background completion overwrite a foreground cache result',
     releaseBackground();
     await background;
 
+    const cached = await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'unexpected-reload',
+    }));
+    assert.equal(cached.state, 'HIT');
+    assert.equal(cached.body, 'foreground-body');
+  });
+});
+
+test('keeps a completed foreground response after an intervening cache fill', async () => {
+  await withCache({}, async (cache) => {
+    const url = 'https://page.example.hath.network/h/intervening.webp';
+    await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'background-body',
+    }));
+
+    const foreground = await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'foreground-body',
+    }), { bypassInflight: true, ignoreFresh: true });
+
+    assert.equal(foreground.body, 'foreground-body');
+    const cached = await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'unexpected-reload',
+    }));
+    assert.equal(cached.state, 'HIT');
+    assert.equal(cached.body, 'foreground-body');
+  });
+});
+
+test('returns a foreground passthrough before deferred cache storage finishes', async () => {
+  let releaseCacheBody;
+  let notifyCacheBodyStarted;
+  let notifyCacheBodyFinished;
+  const cacheBodyGate = new Promise((resolve) => { releaseCacheBody = resolve; });
+  const cacheBodyStarted = new Promise((resolve) => { notifyCacheBodyStarted = resolve; });
+  const cacheBodyFinished = new Promise((resolve) => { notifyCacheBodyFinished = resolve; });
+  await withCache({}, async (cache) => {
+    const url = 'https://page.example.hath.network/h/streamed.webp';
+    const result = await cache.getOrLoad(url, 'media', async () => ({
+      passthrough: new Response('foreground-body', { headers: { 'content-type': 'image/webp' } }),
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      cacheable: true,
+      cacheBody: async () => {
+        notifyCacheBodyStarted();
+        await cacheBodyGate;
+        notifyCacheBodyFinished();
+        return { status: 200, headers: { 'content-type': 'image/webp' }, body: 'foreground-body' };
+      },
+    }), { bypassInflight: true, deferStore: true });
+
+    assert.equal(await result.passthrough.text(), 'foreground-body');
+    await cacheBodyStarted;
+    releaseCacheBody();
+    await cacheBodyFinished;
+    await waitForCacheHit(cache, url, 'media');
     const cached = await cache.getOrLoad(url, 'media', async () => ({
       status: 200,
       headers: { 'content-type': 'image/webp' },

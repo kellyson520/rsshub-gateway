@@ -1308,9 +1308,18 @@ test('stores protected media only in its session cache namespace', async () => {
 
     assert.equal(response.status, 200);
     assert.equal(body, 'image');
+    await waitFor(async () => (await cache.peek(target, 'media', { namespace: `session:${fingerprint}` })).hit);
     assert.equal((await cache.peek(target, 'media', { namespace: `session:${fingerprint}` })).hit, true);
     assert.equal((await cache.peek(target, 'media', { namespace: 'public' })).hit, false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await rm(root, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOTEMPTY' || attempt === 19) throw error;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
   }
 });

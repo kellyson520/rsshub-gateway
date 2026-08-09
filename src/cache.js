@@ -200,7 +200,11 @@ export function createResponseCache({
   }
 
   function beginLoad(key) {
-    const state = loadStates.get(key) || { active: 0, lastForegroundCompletion: 0 };
+    const state = loadStates.get(key) || {
+      active: 0,
+      lastForegroundCompletion: 0,
+      foregroundStore: null,
+    };
     state.active += 1;
     loadStates.set(key, state);
     return { state, startedAt: ++operationSequence };
@@ -232,12 +236,22 @@ export function createResponseCache({
     allowStale = true,
     namespace = 'public',
     bypassInflight = false,
+    ignoreFresh = false,
+    deferStore = false,
   } = {}) {
     const cacheNamespace = normalizedNamespace(namespace);
-    const fresh = await readEntry(url, kind, cacheNamespace, false);
-    if (fresh) return resultFromEntry(fresh.entry, fresh.body, 'HIT');
-    const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
     const key = keyFor(url, kind, cacheNamespace);
+    const fresh = ignoreFresh ? null : await readEntry(url, kind, cacheNamespace, false);
+    if (fresh) return resultFromEntry(fresh.entry, fresh.body, 'HIT');
+    if (bypassInflight) {
+      const pendingForegroundStore = loadStates.get(key)?.foregroundStore;
+      if (pendingForegroundStore) {
+        await pendingForegroundStore.catch(() => {});
+        const stored = await readEntry(url, kind, cacheNamespace, false);
+        if (stored) return resultFromEntry(stored.entry, stored.body, 'HIT');
+      }
+    }
+    const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
     if (!bypassInflight && inflight.has(key)) return inflight.get(key);
     const loadOrder = beginLoad(key);
 
@@ -247,11 +261,25 @@ export function createResponseCache({
         if (loaded?.refreshFailed && stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
         if (loaded?.status >= 200 && loaded.status < 300) {
           if (bypassInflight) loadOrder.state.lastForegroundCompletion = ++operationSequence;
-          await storeInOrder(
-            key,
-            () => store(url, kind, cacheNamespace, loaded),
-            () => !bypassInflight && loadOrder.state.lastForegroundCompletion > loadOrder.startedAt,
-          );
+          const storeTask = async () => {
+            const cacheLoaded = typeof loaded.cacheBody === 'function' ? await loaded.cacheBody() : loaded;
+            await store(url, kind, cacheNamespace, cacheLoaded);
+          };
+          const shouldSkip = () => !bypassInflight
+            && loadOrder.state.lastForegroundCompletion > loadOrder.startedAt;
+          if (deferStore) {
+            const storePromise = storeInOrder(key, storeTask, shouldSkip);
+            if (bypassInflight) {
+              loadOrder.state.foregroundStore = storePromise;
+              void storePromise.then(() => {
+                if (loadOrder.state.foregroundStore === storePromise) loadOrder.state.foregroundStore = null;
+              }, () => {
+                if (loadOrder.state.foregroundStore === storePromise) loadOrder.state.foregroundStore = null;
+              });
+            }
+            void storePromise.catch(() => {});
+          }
+          else await storeInOrder(key, storeTask, shouldSkip);
         }
         return { ...loaded, state: 'MISS' };
       } catch (error) {
