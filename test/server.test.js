@@ -135,6 +135,58 @@ test('opens an E-Hentai gallery item as one ordered continuous image page', asyn
   assert.doesNotMatch(body, /_gateway\/item\//);
 });
 
+test('returns the E-Hentai reader shell before slow image detail pages finish', async () => {
+  const gallery = '<html><body><div id="gn">Fast shell</div><div id="gdt"><a href="https://e-hentai.org/s/first/123-1">Page 1</a><a href="https://e-hentai.org/s/second/123-2">Page 2</a></div></body></html>';
+  let completed = false;
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async (url) => {
+      if (String(url).endsWith('/g/123/fast-shell/')) {
+        return new Response(gallery, { headers: { 'content-type': 'text/html' } });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/fast-shell/', 'secret');
+  const pending = request(server, `/_gateway/item/${token}`).then((result) => {
+    completed = true;
+    return result;
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(completed, true);
+  const { response, body } = await pending;
+  assert.equal(response.status, 200);
+  assert.match(body, /class="reader eh-image-page"/);
+  assert.match(body, /_gateway\/media\//);
+});
+
+test('resolves an E-Hentai image page when it is requested as gateway media', async () => {
+  const requested = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async (url) => {
+      requested.push(String(url));
+      if (String(url).endsWith('/s/first/123-1')) {
+        return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      }
+      return new Response('image-bytes', { headers: { 'content-type': 'image/webp', 'content-length': '11' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/s/first/123-1', 'secret');
+
+  const { response, body } = await request(server, `/_gateway/media/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'image/webp');
+  assert.equal(body, 'image-bytes');
+  assert.deepEqual(requested, [
+    'https://e-hentai.org/s/first/123-1',
+    'https://page.example.hath.network/h/one.webp',
+  ]);
+});
+
 test('uses healthy egress capacity to accelerate E-Hentai image detail prefetching', async () => {
   const imageUrls = Array.from({ length: 36 }, (_, index) => `https://e-hentai.org/s/image-${index}/123-${index}`);
   const gallery = `<html><body><div id="gn">Parallel gallery</div><div id="gdt">${imageUrls.map((url) => `<a href="${url}">Page</a>`).join('')}</div></body></html>`;
@@ -242,7 +294,7 @@ test('uses a short-lived cache class for E-Hentai image documents', async () => 
   }
 });
 
-test('keeps successful E-Hentai images when one image page fails', async () => {
+test('keeps the E-Hentai reader available while a detail page fails in the background', async () => {
   const server = createGatewayServer({
     secret: 'secret',
     fetchExternal: async (url) => {
@@ -257,8 +309,8 @@ test('keeps successful E-Hentai images when one image page fails', async () => {
 
   assert.equal(response.status, 200);
   assert.match(body, /_gateway\/media\//);
-  assert.match(body, /第 2 页暂时无法读取/);
-  assert.match(body, /已加载 2 \/ 3 页/);
+  assert.match(body, /已加载 3 \/ 3 页/);
+  assert.doesNotMatch(body, /第 2 页暂时无法读取/);
 });
 
 test('fetches E-Hentai gallery pagination before rendering all image pages', async () => {
@@ -300,7 +352,7 @@ test('keeps the gallery preview when view=gallery is requested', async () => {
   assert.match(body, /class="reader eh-gallery"/);
 });
 
-test('renders a safe unavailable page when the selected image page returns a non-HTML error', async () => {
+test('returns a media-resolving E-Hentai reader when a detail page is not immediately available', async () => {
   let requests = 0;
   const server = createGatewayServer({
     secret: 'secret',
@@ -317,10 +369,11 @@ test('renders a safe unavailable page when the selected image page returns a non
   const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
   const { response, body } = await request(server, `/_gateway/item/${token}`);
 
-  assert.equal(response.status, 404);
+  assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
-  assert.equal(requests, 3);
-  assert.match(body, /E-Hentai 内容暂时无法读取/);
+  assert.equal(requests >= 1, true);
+  assert.match(body, /class="reader eh-image-page"/);
+  assert.match(body, /_gateway\/media\//);
   assert.doesNotMatch(body, /upstream image page missing/);
 });
 
@@ -564,7 +617,7 @@ test('warms E-Hentai image bytes in the background after rendering a gallery', a
   }
 });
 
-test('waits for the configured E-Hentai first-screen media warm before returning the reader', async () => {
+test('returns the E-Hentai reader before first-screen media warming completes', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-foreground-warm-'));
   let releaseMedia;
   let result;
@@ -601,14 +654,14 @@ test('waits for the configured E-Hentai first-screen media warm before returning
     });
 
     await mediaFetchStartedPromise;
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(completed, false);
+    await waitFor(() => completed, 100);
+    assert.equal(completed, true);
     releaseMedia();
 
     const { response, body } = await result;
     assert.equal(response.status, 200);
     assert.match(body, /已加载 2 \/ 2 页/);
-    assert.equal((await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit, true);
+    await waitFor(async () => (await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit);
   } finally {
     releaseMedia?.();
     await result?.catch(() => {});
@@ -620,30 +673,21 @@ test('waits for the configured E-Hentai first-screen media warm before returning
   }
 });
 
-test('keeps the E-Hentai reader available when first-screen media warming fails', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-foreground-failure-'));
-  try {
-    const cache = createResponseCache({ root });
-    const server = createGatewayServer({
-      secret: 'secret',
-      cache,
-      ehMediaForegroundWarmCount: 1,
-      fetchExternal: async (url) => {
-        const value = String(url);
-        if (value.endsWith('/g/123/gallery/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
-        if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
-        if (value.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
-        return new Response('temporarily unavailable', { status: 503, headers: { 'content-type': 'text/plain' } });
-      },
-    });
-    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
-    const { response, body } = await request(server, `/_gateway/item/${token}`);
+test('keeps the E-Hentai reader available without a media cache', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    fetchExternal: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/gallery/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      return new Response('temporarily unavailable', { status: 503, headers: { 'content-type': 'text/plain' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
 
-    assert.equal(response.status, 200);
-    assert.match(body, /已加载 2 \/ 2 页/);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  assert.equal(response.status, 200);
+  assert.match(body, /已加载 2 \/ 2 页/);
 });
 
 test('marks public gateway images cacheable and session images private', async () => {

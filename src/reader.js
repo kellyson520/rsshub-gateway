@@ -111,6 +111,11 @@ function cleanText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+export function extractEhGalleryTitle({ url, html }) {
+  const $ = cheerio.load(String(html || ''), { decodeEntities: false });
+  return cleanText($('#gn').first().text()) || cleanText($('title').first().text()) || url;
+}
+
 function numericStyle(style, property, fallback) {
   const match = String(style || '').match(new RegExp(`${property}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px`, 'i'));
   const value = Number(match?.[1]);
@@ -253,12 +258,21 @@ export function renderEhImageSequence({
   failures = [],
   truncated = false,
   preloadCount = DEFAULT_EH_IMAGE_PRELOAD_COUNT,
+  baseUrl,
+  secret,
+  signedTargetMetadata,
 }) {
+  const renderedPages = pages.map((page) => ({
+    ...page,
+    media: page.media || (page.mediaTarget && baseUrl
+      ? localUrl(baseUrl, 'media', page.mediaTarget, secret, signedTargetMetadata)
+      : ''),
+  })).filter((page) => page.media);
   const safeTotalPages = Math.max(Number(totalPages) || pages.length, pages.length);
-  const eagerCount = Math.min(Math.max(Number.parseInt(preloadCount, 10) || 0, 0), pages.length);
+  const eagerCount = Math.min(Math.max(Number.parseInt(preloadCount, 10) || 0, 0), renderedPages.length);
   const readerTitle = `${title || 'E-Hentai 画廊'} · 连续阅读 · 共 ${safeTotalPages} 页`;
-  const summary = `<p class="eh-image-summary">已加载 ${pages.length} / ${safeTotalPages} 页</p>`;
-  const imageBlocks = pages.map((page, index) => {
+  const summary = `<p class="eh-image-summary">已加载 ${renderedPages.length} / ${safeTotalPages} 页</p>`;
+  const imageBlocks = renderedPages.map((page, index) => {
     const eager = index < eagerCount;
     const srcset = mediaSrcset(page.media);
     const deferred = eager ? '' : ' eh-image-deferred';
@@ -275,7 +289,7 @@ export function renderEhImageSequence({
   return renderDocument(
     title || readerTitle,
     `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`,
-    pages.slice(0, eagerCount).map((page) => ({ url: page.media, srcset: mediaSrcset(page.media) })),
+    renderedPages.slice(0, eagerCount).map((page) => ({ url: page.media, srcset: mediaSrcset(page.media) })),
   );
 }
 
@@ -355,7 +369,14 @@ function renderGenericReaderPage({ url, html, baseUrl, secret, signedTargetMetad
 
 export function renderReaderPage({ url, html, baseUrl, secret, prefetchedGallery, signedTargetMetadata }) {
   if (isEhentaiPage(url, EH_GALLERY_PATH)) {
-    if (prefetchedGallery?.pages?.length) return renderEhImageSequence(prefetchedGallery);
+    if (prefetchedGallery?.pages?.length) {
+      return renderEhImageSequence({
+        ...prefetchedGallery,
+        baseUrl,
+        secret,
+        signedTargetMetadata,
+      });
+    }
     const gallery = renderEhGalleryPage({ url, html, baseUrl, secret, signedTargetMetadata });
     if (gallery) return gallery;
   }

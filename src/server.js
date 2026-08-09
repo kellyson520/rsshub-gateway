@@ -8,7 +8,12 @@ import { createUpstreamClient } from './upstream.js';
 import { GatewayUpstreamError } from './upstream-errors.js';
 import { adapterForUrl } from './adapters/index.js';
 import { parseRankingHtml, rankingTarget, renderRankingFeed } from './adapters/ehviewer.js';
-import { extractEhImagePage, renderReaderPage, renderUnavailablePage } from './reader.js';
+import {
+  extractEhGalleryTitle,
+  extractEhImagePage,
+  renderReaderPage,
+  renderUnavailablePage,
+} from './reader.js';
 import { createResponseCache } from './cache.js';
 import { createMediaPrefetchQueue } from './media-prefetch.js';
 import { createEgressPool } from './egress-pool.js';
@@ -189,6 +194,17 @@ function imageVariantCacheUrl(target, width) {
   return cacheUrl.toString();
 }
 
+function isEhImagePageTarget(value) {
+  try {
+    const target = new URL(value);
+    return target.protocol === 'https:'
+      && target.hostname === 'e-hentai.org'
+      && /^\/s\/[^/]+\/[^/]+\/?$/.test(target.pathname);
+  } catch {
+    return false;
+  }
+}
+
 async function mapWithConcurrency(items, concurrency, worker) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -272,16 +288,13 @@ function failureMessage(kind, pageNumber) {
   return `第 ${pageNumber} 页暂时无法读取`;
 }
 
-async function prefetchEhGallery({
+async function discoverEhGallery({
   adapter,
   target,
   initialHtml,
   fetchExternal,
-  baseUrl,
-  secret,
   concurrency,
   maxPages,
-  onPage,
 }) {
   const galleryUrls = adapter.galleryPageUrls(initialHtml, target);
   const galleryResults = await mapWithConcurrency(galleryUrls, concurrency, async (galleryUrl, index) => {
@@ -318,7 +331,40 @@ async function prefetchEhGallery({
   const truncated = imageUrls.length > maxPages;
   const selectedImageUrls = imageUrls.slice(0, maxPages);
   if (truncated) failures.push({ message: '画廊页数超过网关预处理上限，后续页面未读取' });
-  const imageResults = await mapWithConcurrency(selectedImageUrls, concurrency, async (imageUrl, index) => {
+  return {
+    galleryResults,
+    selectedImageUrls,
+    imageUrls,
+    failures,
+    truncated,
+    totalPages: imageUrls.length,
+    status: galleryResults.find((result) => !result.ok)?.status || 200,
+    title: extractEhGalleryTitle({ url: target, html: initialHtml }),
+  };
+}
+
+async function prefetchEhGallery({
+  adapter,
+  target,
+  initialHtml,
+  fetchExternal,
+  baseUrl,
+  secret,
+  concurrency,
+  maxPages,
+  onPage,
+  discovery: providedDiscovery,
+}) {
+  const discovery = providedDiscovery || await discoverEhGallery({
+    adapter,
+    target,
+    initialHtml,
+    fetchExternal,
+    concurrency,
+    maxPages,
+  });
+  const failures = [...discovery.failures];
+  const imageResults = await mapWithConcurrency(discovery.selectedImageUrls, concurrency, async (imageUrl, index) => {
     const pageNumber = index + 1;
     try {
       const remote = await fetchExternal(adapter.readerTarget(imageUrl), { galleryShard: index });
@@ -344,7 +390,7 @@ async function prefetchEhGallery({
   });
 
   const pages = [];
-  let status = galleryResults.find((result) => !result.ok)?.status || 200;
+  let status = discovery.status;
   for (const result of imageResults) {
     if (result.page) pages.push(result.page);
     if (result.failure) failures.push(result.failure);
@@ -352,11 +398,11 @@ async function prefetchEhGallery({
   }
   pages.sort((left, right) => left.pageNumber - right.pageNumber);
   return {
-    title: pages[0]?.title || 'E-Hentai 画廊',
+    title: pages[0]?.title || discovery.title || 'E-Hentai 画廊',
     pages,
     failures,
-    totalPages: imageUrls.length,
-    truncated,
+    totalPages: discovery.totalPages,
+    truncated: discovery.truncated,
     status,
   };
 }
@@ -868,6 +914,30 @@ export function createGatewayServer(options = {}) {
     const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
     return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
   }
+
+  async function fetchResolvedEhMedia(target, requestOptions, routeMetadata, variantWidth, baseUrl) {
+    const pageRouted = await fetchGatewayDocument(target, { range: requestOptions.range }, routeMetadata);
+    if (pageRouted.unavailable) return pageRouted;
+    const pageBody = await readLimited(pageRouted.response);
+    const page = extractEhImagePage({
+      url: target,
+      html: pageBody,
+      baseUrl,
+      secret,
+      signedTargetMetadata: { egressScope: pageRouted.egressScope, source: 'ehviewer' },
+    });
+    if (!page?.mediaTarget) {
+      return {
+        adapter: adapterForUrl(target),
+        egressScope: pageRouted.egressScope,
+        response: new Response('image unavailable\n', {
+          status: 502,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        }),
+      };
+    }
+    return fetchGatewayMedia(page.mediaTarget, requestOptions, routeMetadata, variantWidth);
+  }
   const mediaPreloadQueue = cache
     ? createMediaPrefetchQueue({
       queueFile: options.mediaPrefetchQueueFile
@@ -985,13 +1055,23 @@ export function createGatewayServer(options = {}) {
       }
       try {
         const adapter = adapterForUrl(target);
+        const ehImageMediaTarget = gatewayMatch[1] === 'media' && isEhImagePageTarget(target);
         const responseDriven = adapter.publiclyReadable
           || ['session', 'sticky'].includes(routeMetadata.egressScope)
-          || mediaVariant.width !== undefined;
+          || mediaVariant.width !== undefined
+          || ehImageMediaTarget;
         const routed = responseDriven
           ? (gatewayMatch[1] === 'item'
             ? await fetchGatewayDocument(target, { range: req.headers.range }, routeMetadata)
-            : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata, mediaVariant.width))
+            : (ehImageMediaTarget
+              ? await fetchResolvedEhMedia(
+                target,
+                { range: req.headers.range, circuit: false },
+                routeMetadata,
+                mediaVariant.width,
+                publicBaseUrl(req),
+              )
+              : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata, mediaVariant.width)))
           : {
             adapter,
             egressScope: routeMetadata.egressScope || 'public',
@@ -1047,39 +1127,64 @@ export function createGatewayServer(options = {}) {
           && remote.ok
           && contentType.includes('html');
         if (shouldPrefetchGallery) {
-          prefetchedGallery = await prefetchEhGallery({
+          const discovery = await discoverEhGallery({
             adapter,
             target,
             initialHtml: body,
             fetchExternal: fetchExternalDocument,
-            baseUrl: publicBaseUrl(req),
-            secret,
             concurrency: currentEhPrefetchConcurrency(),
             maxPages: ehMaxPrefetchPages,
-            onPage: (page) => {
-              recordMetric('gallery_detail_completed', { source: adapter.name, count: 1 });
-              if (page.pageNumber > ehMediaForegroundWarmCount && page.mediaTarget) {
-                mediaPreloadQueue.enqueue([page.mediaTarget]);
-              }
-            },
           });
-          const foregroundWarm = await warmEhMedia({
-            pages: prefetchedGallery.pages,
-            cache,
-            fetcher: (url, request) => fetchExternal(url, { ...request, priority: 'foreground' }),
-            maxBytes: mediaCacheMaxFileBytes,
-            count: ehMediaForegroundWarmCount,
-            concurrency: ehMediaForegroundWarmConcurrency,
+          prefetchedGallery = {
+            title: discovery.title,
+            pages: discovery.selectedImageUrls.map((mediaTarget, index) => ({
+              pageNumber: index + 1,
+              mediaTarget,
+              alt: `第 ${index + 1} 页`,
+            })),
+            failures: discovery.failures,
+            totalPages: discovery.totalPages,
+            truncated: discovery.truncated,
+            preloadCount: ehMediaForegroundWarmCount,
+            status: discovery.status,
+          };
+          unavailableStatus = discovery.status;
+          void (async () => {
+            const resolvedGallery = await prefetchEhGallery({
+              adapter,
+              target,
+              initialHtml: body,
+              fetchExternal: fetchExternalDocument,
+              baseUrl: publicBaseUrl(req),
+              secret,
+              concurrency: currentEhPrefetchConcurrency(),
+              maxPages: ehMaxPrefetchPages,
+              discovery,
+              onPage: (page) => {
+                recordMetric('gallery_detail_completed', { source: adapter.name, count: 1 });
+                if (page.pageNumber > ehMediaForegroundWarmCount && page.mediaTarget) {
+                  mediaPreloadQueue.enqueue([page.mediaTarget]);
+                }
+              },
+            });
+            const foregroundWarm = await warmEhMedia({
+              pages: resolvedGallery.pages,
+              cache,
+              fetcher: (url, request) => fetchExternal(url, { ...request, priority: 'foreground' }),
+              maxBytes: mediaCacheMaxFileBytes,
+              count: ehMediaForegroundWarmCount,
+              concurrency: ehMediaForegroundWarmConcurrency,
+            });
+            const readyCount = foregroundWarm.targets.length - foregroundWarm.failedTargets.length;
+            if (readyCount > 0) recordMetric('media_cache_ready', { source: adapter.name, count: readyCount });
+            const warmed = new Set(foregroundWarm.targets);
+            mediaPreloadQueue.enqueue([
+              ...foregroundWarm.failedTargets,
+              ...resolvedGallery.pages.map((page) => page.mediaTarget).filter((mediaTarget) => !warmed.has(mediaTarget)),
+            ]);
+          })().catch(() => {
+            recordMetric('gallery_background_prefetch_failed', { source: adapter.name });
           });
-          prefetchedGallery.preloadCount = foregroundWarm.targets.length;
-          const readyCount = foregroundWarm.targets.length - foregroundWarm.failedTargets.length;
-          if (readyCount > 0) recordMetric('media_cache_ready', { source: adapter.name, count: readyCount });
-          const warmed = new Set(foregroundWarm.targets);
-          mediaPreloadQueue.enqueue([
-            ...foregroundWarm.failedTargets,
-            ...prefetchedGallery.pages.map((page) => page.mediaTarget).filter((mediaTarget) => !warmed.has(mediaTarget)),
-          ]);
-          unavailableStatus = prefetchedGallery.status;
         }
         const unavailable = !remote.ok
           || (contentType.includes('html') && adapter.isReaderUnavailable?.(body))
