@@ -5,6 +5,8 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 8;
+const IMAGE_VARIANT_WIDTHS = [1280, 1920, 2560];
+const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
 
 const READER_CSS = `
 :root{color-scheme:light dark}
@@ -71,9 +73,27 @@ function gatewayUrl(baseUrl, kind, value, sourceUrl, secret, signedTargetMetadat
   }
 }
 
+function mediaSrcset(media) {
+  try {
+    return IMAGE_VARIANT_WIDTHS.map((width) => {
+      const variant = new URL(media);
+      variant.searchParams.set('w', String(width));
+      return `${variant.toString()} ${width}w`;
+    }).join(', ');
+  } catch {
+    return '';
+  }
+}
+
 function renderDocument(title, content, preloadImages = []) {
-  const preloads = [...new Set(preloadImages.filter(Boolean))]
-    .map((url) => `<link rel="preload" as="image" href="${escapeHtml(url)}" fetchpriority="high">`)
+  const preloads = [...new Map(preloadImages.filter(Boolean).map((value) => {
+    const image = typeof value === 'string' ? { url: value } : value;
+    return [image.url, image];
+  })).values()]
+    .map((image) => {
+      const srcset = image.srcset || '';
+      return `<link rel="preload" as="image" href="${escapeHtml(image.url)}" fetchpriority="high"${srcset ? ` imagesrcset="${escapeHtml(srcset)}" imagesizes="${IMAGE_SIZES}"` : ''}>`;
+    })
     .join('');
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}</style></head><body>${content}</body></html>`;
 }
@@ -240,7 +260,10 @@ export function renderEhImageSequence({
   const summary = `<p class="eh-image-summary">已加载 ${pages.length} / ${safeTotalPages} 页</p>`;
   const imageBlocks = pages.map((page, index) => {
     const eager = index < eagerCount;
-    return `<p class="eh-image-label">第 ${page.pageNumber} 页</p><p class="eh-image-content"><img src="${escapeHtml(page.media)}" alt="${escapeHtml(page.alt || `第 ${page.pageNumber} 页`)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''}></p>`;
+    const srcset = mediaSrcset(page.media);
+    const deferred = eager ? '' : ' eh-image-deferred';
+    const containment = eager ? '' : ' style="content-visibility:auto;contain-intrinsic-size:1000px 1400px"';
+    return `<p class="eh-image-label">第 ${page.pageNumber} 页</p><p class="eh-image-content${deferred}"${containment}><img src="${escapeHtml(page.media)}"${srcset ? ` srcset="${escapeHtml(srcset)}" sizes="${IMAGE_SIZES}"` : ''} alt="${escapeHtml(page.alt || `第 ${page.pageNumber} 页`)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ' decoding="async"'}></p>`;
   }).join('');
   const failureBlocks = failures.map((failure) => {
     const message = failure.message || `第 ${failure.pageNumber} 页暂时无法读取`;
@@ -252,7 +275,7 @@ export function renderEhImageSequence({
   return renderDocument(
     title || readerTitle,
     `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`,
-    pages.slice(0, eagerCount).map((page) => page.media),
+    pages.slice(0, eagerCount).map((page) => ({ url: page.media, srcset: mediaSrcset(page.media) })),
   );
 }
 

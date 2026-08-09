@@ -14,6 +14,12 @@ import { createMediaPrefetchQueue } from './media-prefetch.js';
 import { createEgressPool } from './egress-pool.js';
 import { createMihomoEgressAdapter } from './mihomo-egress.js';
 import { createSessionAffinity } from './session-affinity.js';
+import { IMAGE_VARIANT_WIDTHS, createImageVariant } from './image-variants.js';
+import {
+  DEFAULT_HTML_BROTLI_MIN_BYTES,
+  DEFAULT_HTML_BROTLI_QUALITY,
+  encodeHtmlResponse,
+} from './http-encoding.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -40,6 +46,12 @@ function publicBaseUrl(req) {
 function writeText(res, status, body, contentType = 'text/plain; charset=utf-8', headers = {}) {
   res.writeHead(status, { 'content-type': contentType, ...headers, 'content-length': Buffer.byteLength(body) });
   res.end(body);
+}
+
+function writeBuffer(res, status, body, contentType, headers = {}) {
+  const output = Buffer.isBuffer(body) ? body : Buffer.from(body || '');
+  res.writeHead(status, { 'content-type': contentType, ...headers, 'content-length': output.length });
+  res.end(output);
 }
 
 function writeJson(res, status, payload) {
@@ -151,6 +163,7 @@ const DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY = 48;
 const DEFAULT_EGRESS_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
 const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
+const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -159,6 +172,21 @@ function positiveInteger(value, fallback) {
 
 function boundedInteger(value, fallback, minimum, maximum) {
   return Math.min(Math.max(positiveInteger(value, fallback), minimum), maximum);
+}
+
+function requestedImageVariantWidth(searchParams) {
+  if (!searchParams.has('w')) return { width: undefined };
+  const values = searchParams.getAll('w');
+  const value = values.length === 1 ? values[0] : '';
+  const width = Number(value);
+  if (!IMAGE_VARIANT_WIDTHS.includes(width) || String(width) !== value) return { error: true };
+  return { width };
+}
+
+function imageVariantCacheUrl(target, width) {
+  const cacheUrl = new URL(target);
+  cacheUrl.hash = `rsshub-gateway-${IMAGE_VARIANT_CACHE_VERSION}-w${width}`;
+  return cacheUrl.toString();
 }
 
 async function mapWithConcurrency(items, concurrency, worker) {
@@ -173,6 +201,21 @@ async function mapWithConcurrency(items, concurrency, worker) {
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
   return results;
+}
+
+function createConcurrencyLimiter(limit) {
+  let active = 0;
+  const waiters = [];
+  return async (task) => {
+    if (active >= limit) await new Promise((resolve) => waiters.push(resolve));
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      waiters.shift()?.();
+    }
+  };
 }
 
 async function loadCachedMedia({ cache, fetcher, target, range, maxBytes }) {
@@ -238,6 +281,7 @@ async function prefetchEhGallery({
   secret,
   concurrency,
   maxPages,
+  onPage,
 }) {
   const galleryUrls = adapter.galleryPageUrls(initialHtml, target);
   const galleryResults = await mapWithConcurrency(galleryUrls, concurrency, async (galleryUrl, index) => {
@@ -284,6 +328,13 @@ async function prefetchEhGallery({
         return { page: null, failure: { pageNumber, message: failureMessage('image', pageNumber) }, status: remote.status };
       }
       const page = extractEhImagePage({ url: imageUrl, html: body, baseUrl, secret, pageNumber });
+      if (page) {
+        try {
+          onPage?.(page);
+        } catch {
+          // Background warming must not affect gallery parsing.
+        }
+      }
       return page
         ? { page, failure: null, status: remote.status }
         : { page: null, failure: { pageNumber, message: failureMessage('image', pageNumber) }, status: remote.status };
@@ -482,10 +533,47 @@ export function createGatewayServer(options = {}) {
     60,
     86_400,
   );
+  const imageVariantConcurrency = boundedInteger(
+    options.imageVariantConcurrency ?? process.env.GATEWAY_IMAGE_VARIANT_CONCURRENCY,
+    2,
+    1,
+    12,
+  );
+  const imageVariantMaxSourceBytes = boundedInteger(
+    options.imageVariantMaxSourceBytes ?? process.env.GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES,
+    mediaCacheMaxFileBytes,
+    1 * 1024 ** 2,
+    mediaCacheMaxFileBytes,
+  );
+  const htmlBrotliMinBytes = boundedInteger(
+    options.htmlBrotliMinBytes ?? process.env.GATEWAY_HTML_BROTLI_MIN_BYTES,
+    DEFAULT_HTML_BROTLI_MIN_BYTES,
+    256,
+    16 * 1024 ** 2,
+  );
+  const htmlBrotliQuality = boundedInteger(
+    options.htmlBrotliQuality ?? process.env.GATEWAY_HTML_BROTLI_QUALITY,
+    DEFAULT_HTML_BROTLI_QUALITY,
+    1,
+    11,
+  );
+  const imageVariantLimiter = createConcurrencyLimiter(imageVariantConcurrency);
+  const metricCounts = new Map();
+  const metricSink = options.onMetric || ((event) => console.log(JSON.stringify(event)));
+  function recordMetric(metric, details = {}) {
+    const count = (metricCounts.get(metric) || 0) + 1;
+    metricCounts.set(metric, count);
+    try {
+      metricSink({ event: 'gateway_metric', metric, count, ...details });
+    } catch {
+      // Metrics must never affect a gateway response.
+    }
+  }
   const cache = options.cache === false
     ? null
     : options.cache || ((!options.fetchExternal && !options.fetchRssHub) ? createResponseCache() : null);
   const client = options.client || createUpstreamClient({ sourceConfig, fetchImpl: options.fetchImpl, egressPool });
+  const makeImageVariant = options.createImageVariant || createImageVariant;
   const fetchRssHub = options.fetchRssHub || ((path, request) => client.fetchRssHub(path, undefined, request?.headers, request));
   const fetchExternal = options.fetchExternal || ((url, request) => client.fetchExternal(url, request));
   const currentEhPrefetchConcurrency = () => {
@@ -666,7 +754,69 @@ export function createGatewayServer(options = {}) {
     return responseFromCachedDocument(result);
   }
 
-  async function fetchGatewayMedia(target, requestOptions, routeMetadata) {
+  async function createGatewayMediaVariant(source, target, width, namespace) {
+    const original = source.response;
+    if (!original?.ok || !original.body) return source;
+
+    let variant;
+    let sourceBytes = 0;
+    const startedAt = Date.now();
+    try {
+      const body = await readBinaryLimited(original.clone(), imageVariantMaxSourceBytes);
+      sourceBytes = body.length;
+      variant = await imageVariantLimiter(() => makeImageVariant({
+        body,
+        contentType: original.headers.get('content-type') || '',
+        width,
+      }));
+    } catch {
+      recordMetric('image_variant_fallback', {
+        source: source.adapter?.name || 'unknown',
+        width,
+        reason: 'transform-failed',
+        durationMs: Date.now() - startedAt,
+      });
+      return source;
+    }
+    if (!variant?.usedVariant || !Buffer.isBuffer(variant.body)) {
+      recordMetric('image_variant_fallback', {
+        source: source.adapter?.name || 'unknown',
+        width,
+        reason: 'not-smaller',
+        durationMs: Date.now() - startedAt,
+      });
+      return source;
+    }
+    recordMetric('image_variant_generated', {
+      source: source.adapter?.name || 'unknown',
+      width,
+      sourceBytes,
+      variantBytes: variant.body.length,
+      durationMs: Date.now() - startedAt,
+    });
+
+    const headers = responseHeaders(original);
+    headers['content-type'] = variant.contentType;
+    headers['content-length'] = String(variant.body.length);
+    const cacheUrl = imageVariantCacheUrl(target, width);
+    if (!cache) {
+      return {
+        ...source,
+        response: new Response(variant.body, { status: original.status, statusText: original.statusText, headers }),
+      };
+    }
+
+    const result = await cache.getOrLoad(cacheUrl, 'media-variant', async () => ({
+      status: original.status,
+      headers,
+      body: variant.body,
+      cacheable: true,
+    }), { namespace });
+    cacheStateLog(target, 'media-variant', result.state);
+    return { ...source, response: responseFromCachedDocument(result) };
+  }
+
+  async function fetchGatewayMedia(target, requestOptions, routeMetadata, variantWidth) {
     if (requestOptions.range) return fetchGatewayTarget(target, requestOptions, routeMetadata);
     const adapter = adapterForUrl(target);
     const requestedScope = routeMetadata.egressScope === 'session'
@@ -676,18 +826,47 @@ export function createGatewayServer(options = {}) {
       const session = await resolveSessionTransport(adapter);
       if (!session) return { adapter, unavailable: true, egressScope: 'session' };
       const namespace = cacheNamespaceFor('session', session);
+      if (variantWidth && cache) {
+        const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace);
+        if (cachedVariant) {
+          recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
+          return { adapter, egressScope: 'session', session, response: cachedVariant };
+        }
+      }
       const cached = await readCachedGatewayDocument(target, 'media', namespace);
-      if (cached) return { adapter, egressScope: 'session', session, response: cached };
+      if (cached) {
+        const source = { adapter, egressScope: 'session', session, response: cached };
+        return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
+      }
       const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
-      return { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+      const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+      return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
     }
 
+    if (variantWidth && cache) {
+      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', 'public');
+      if (cachedVariant) {
+        recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
+        return { adapter, egressScope: 'public', response: cachedVariant };
+      }
+    }
     const publicCached = await readCachedGatewayDocument(target, 'media', 'public');
-    if (publicCached) return { adapter, egressScope: 'public', response: publicCached };
+    if (publicCached) {
+      const source = { adapter, egressScope: 'public', response: publicCached };
+      return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, 'public') : source;
+    }
     const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
     if (routed.unavailable) return routed;
     const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
-    return { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+    if (variantWidth && namespace !== 'public' && cache) {
+      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace);
+      if (cachedVariant) {
+        recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
+        return { ...routed, response: cachedVariant };
+      }
+    }
+    const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response) };
+    return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
   }
   const mediaPreloadQueue = cache
     ? createMediaPrefetchQueue({
@@ -708,6 +887,9 @@ export function createGatewayServer(options = {}) {
           maxBytes: mediaCacheMaxFileBytes,
         });
         await loaded.response.body?.cancel();
+        if (loaded.response.ok) {
+          recordMetric('media_cache_ready', { source: adapterForUrl(target).name, count: 1 });
+        }
         return { status: loaded.response.status, cacheState: loaded.cacheState };
       },
       onEvent: (event) => {
@@ -784,6 +966,13 @@ export function createGatewayServer(options = {}) {
     }
     const gatewayMatch = requestUrl.pathname.match(/^\/_gateway\/(item|media)\/(.+)$/);
     if (gatewayMatch) {
+      const mediaVariant = gatewayMatch[1] === 'media'
+        ? requestedImageVariantWidth(requestUrl.searchParams)
+        : { width: undefined };
+      if (mediaVariant.error) {
+        writeText(res, 400, 'unsupported image variant\n');
+        return;
+      }
       let target;
       let routeMetadata;
       try {
@@ -796,11 +985,13 @@ export function createGatewayServer(options = {}) {
       }
       try {
         const adapter = adapterForUrl(target);
-        const responseDriven = adapter.publiclyReadable || ['session', 'sticky'].includes(routeMetadata.egressScope);
+        const responseDriven = adapter.publiclyReadable
+          || ['session', 'sticky'].includes(routeMetadata.egressScope)
+          || mediaVariant.width !== undefined;
         const routed = responseDriven
           ? (gatewayMatch[1] === 'item'
             ? await fetchGatewayDocument(target, { range: req.headers.range }, routeMetadata)
-            : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata))
+            : await fetchGatewayMedia(target, { range: req.headers.range, circuit: false }, routeMetadata, mediaVariant.width))
           : {
             adapter,
             egressScope: routeMetadata.egressScope || 'public',
@@ -865,6 +1056,12 @@ export function createGatewayServer(options = {}) {
             secret,
             concurrency: currentEhPrefetchConcurrency(),
             maxPages: ehMaxPrefetchPages,
+            onPage: (page) => {
+              recordMetric('gallery_detail_completed', { source: adapter.name, count: 1 });
+              if (page.pageNumber > ehMediaForegroundWarmCount && page.mediaTarget) {
+                mediaPreloadQueue.enqueue([page.mediaTarget]);
+              }
+            },
           });
           const foregroundWarm = await warmEhMedia({
             pages: prefetchedGallery.pages,
@@ -875,6 +1072,8 @@ export function createGatewayServer(options = {}) {
             concurrency: ehMediaForegroundWarmConcurrency,
           });
           prefetchedGallery.preloadCount = foregroundWarm.targets.length;
+          const readyCount = foregroundWarm.targets.length - foregroundWarm.failedTargets.length;
+          if (readyCount > 0) recordMetric('media_cache_ready', { source: adapter.name, count: readyCount });
           const warmed = new Set(foregroundWarm.targets);
           mediaPreloadQueue.enqueue([
             ...foregroundWarm.failedTargets,
@@ -904,7 +1103,30 @@ export function createGatewayServer(options = {}) {
               signedTargetMetadata: signedTargetMetadata(adapter, routed.egressScope),
             })
             : body);
-        writeText(res, unavailable ? unavailableStatus : (remote.ok ? 200 : remote.status), page, unavailable || contentType.includes('html') ? 'text/html; charset=utf-8' : contentType);
+        const status = unavailable ? unavailableStatus : (remote.ok ? 200 : remote.status);
+        const renderedHtml = !unavailable && contentType.includes('html');
+        if (renderedHtml) {
+          const encodingStartedAt = Date.now();
+          const encoded = encodeHtmlResponse({
+            body: page,
+            contentType: 'text/html; charset=utf-8',
+            acceptEncoding: req.headers['accept-encoding'],
+            method: req.method,
+            minBytes: htmlBrotliMinBytes,
+            quality: htmlBrotliQuality,
+          });
+          if (encoded.headers['content-encoding'] === 'br') {
+            recordMetric('html_brotli_encoded', {
+              source: adapter.name,
+              bytesIn: Buffer.byteLength(page),
+              bytesOut: encoded.body.length,
+              durationMs: Date.now() - encodingStartedAt,
+            });
+          }
+          writeBuffer(res, status, encoded.body, 'text/html; charset=utf-8', encoded.headers);
+        } else {
+          writeText(res, status, page, contentType.includes('html') ? 'text/html; charset=utf-8' : contentType);
+        }
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
           console.log(JSON.stringify({

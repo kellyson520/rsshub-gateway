@@ -282,8 +282,7 @@ export function createMediaPrefetchQueue(options = {}) {
 
   async function idle() {
     await ready;
-    if (isIdle()) return;
-    await new Promise((resolve) => idleWaiters.push(resolve));
+    if (!isIdle()) await new Promise((resolve) => idleWaiters.push(resolve));
     await persistChain;
   }
 

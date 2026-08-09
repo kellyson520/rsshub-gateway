@@ -18,7 +18,11 @@ Source tokens are optional. Iwara, X, and Instagram use public fallback behavior
 
 The gateway caches small source documents by canonical upstream URL, never by expiring signed gateway tokens. RSS/XML responses use a 5-minute TTL; E-Hentai ranking, gallery, and image-detail HTML use a 3-day TTL. Cache writes are atomic, concurrent requests for the same document are coalesced, and expired documents are used only when an upstream refresh fails. The logical cache limit is 5 GB and the persistent application cache is mounted at `/var/cache/rsshub-gateway`.
 
-Images use the gateway's persistent media cache with a 7-day TTL and the same 5 GB disk budget. When an E-Hentai continuous reader opens, the first 8 images are fetched in parallel into that cache before the page is returned; their media URLs are preloaded and high priority in the reader. Later pages remain in the adaptive background queue. `EH_MEDIA_FOREGROUND_WARM_COUNT` and `EH_MEDIA_FOREGROUND_WARM_CONCURRENCY` control that bounded first screen. Successful public image responses use a 5-minute shared browser cache (`GATEWAY_MEDIA_BROWSER_CACHE_SECONDS`); session-scoped media uses the same private browser cache lifetime and is never marked shared.
+Images use the gateway's persistent media cache with a 7-day TTL and the same 5 GB disk budget. E-Hentai continuous readers retain the original image as a fallback and advertise high-quality WebP candidates at 1280, 1920, and 2560 pixels. A candidate is cached only when it is smaller than the original and remains in the same public or session cache namespace. `GATEWAY_IMAGE_VARIANT_CONCURRENCY` defaults to 2 CPU tasks and `GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES` defaults to 32 MiB, so image conversion cannot exhaust outbound or request capacity.
+
+When an E-Hentai continuous reader opens, the first 8 images are fetched in parallel into that cache before the page is returned; their media URLs are preloaded and high priority in the reader. Later image detail pages start background media warming as soon as each detail page resolves. The reader defers later image decoding and rendering while preserving a fixed layout reserve. `EH_MEDIA_FOREGROUND_WARM_COUNT` and `EH_MEDIA_FOREGROUND_WARM_CONCURRENCY` control that bounded first screen. Successful public image responses use a 5-minute shared browser cache (`GATEWAY_MEDIA_BROWSER_CACHE_SECONDS`); session-scoped media uses the same private browser cache lifetime and is never marked shared.
+
+Rendered reader HTML of at least 4 KiB uses Brotli when the client advertises `br` and the compressed form is smaller. `GATEWAY_HTML_BROTLI_MIN_BYTES` and `GATEWAY_HTML_BROTLI_QUALITY` control this behavior. RSS/XML, media, range responses, unavailable pages, and errors remain uncompressed.
 
 E-Hentai gallery image-detail prefetch starts at 8 requests and expands with healthy public egress capacity to a 36-request maximum. At startup this is still bounded by three requests per E-Hentai-verified lane; media warming uses the same adaptive multi-egress pool while reserving one lane slot for foreground requests. Successful upstream downloads ramp up gradually, while 429/5xx/timeouts reduce concurrency and retry with bounded backoff. The queue is deduplicated, persisted under the cache directory, and resumes non-expired work after a restart. Range requests continue to bypass image caching so video seeking behavior is unchanged.
 
@@ -27,6 +31,7 @@ Useful diagnostics:
 ```sh
 sudo docker exec rsshub-gateway du -sh /var/cache/rsshub-gateway
 sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml logs gateway | grep gateway_cache
+sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml logs gateway | grep gateway_metric
 ```
 
 ## RSSHub Source Requirements
@@ -37,6 +42,7 @@ The gateway can make an existing RSSHub route readable, but it cannot enable a r
 
 ```sh
 npm test
+npm run benchmark:gallery -- http://127.0.0.1:1300/_gateway/item/REDACTED_TOKEN
 sudo docker exec rsshub-gateway mihomo -t -d /root/.config/mihomo
 sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml ps
 curl -fsS http://127.0.0.1:1300/healthz

@@ -144,7 +144,7 @@ test('renders an ordered E-Hentai image sequence without navigation links', () =
   assert.match(output, /已加载 2 \/ 3 页/);
   assert.ok(output.indexOf('/_gateway/media/one') < output.indexOf('/_gateway/media/three'));
   assert.match(output, /<p class="eh-image-content"><img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/one"/);
-  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/one" fetchpriority="high">/);
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/one" fetchpriority="high"[^>]*>/);
   assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/one"[^>]+loading="eager"[^>]+fetchpriority="high"/);
   assert.doesNotMatch(output, /<a[^>]+>上一页|<a[^>]+>下一页/);
   assert.match(output, /第 2 页暂时无法读取/);
@@ -158,12 +158,23 @@ test('preloads only the configured E-Hentai first-screen images and leaves later
   }));
   const output = renderEhImageSequence({ title: 'Gallery title', pages, preloadCount: 2 });
 
-  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/1" fetchpriority="high">/);
-  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/2" fetchpriority="high">/);
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/1" fetchpriority="high"[^>]*>/);
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/2" fetchpriority="high"[^>]*>/);
   assert.doesNotMatch(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/3"/);
   assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/1"[^>]+loading="eager"[^>]+fetchpriority="high"/);
   assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/2"[^>]+loading="eager"[^>]+fetchpriority="high"/);
   assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/3"[^>]+loading="lazy"/);
+});
+
+test('uses derived media candidates and render containment for later gallery pages', () => {
+  const pages = [
+    { pageNumber: 1, media: 'https://gateway.example.test/_gateway/media/one', alt: 'Page 1' },
+    { pageNumber: 2, media: 'https://gateway.example.test/_gateway/media/two', alt: 'Page 2' },
+  ];
+  const output = renderEhImageSequence({ title: 'Gallery title', pages, preloadCount: 1 });
+
+  assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/one"[^>]+srcset="[^"]+w=1280 1280w, [^"]+w=1920 1920w, [^"]+w=2560 2560w"[^>]+sizes="\(min-width:1120px\) 1120px, 100vw"/);
+  assert.match(output, /<p class="eh-image-content eh-image-deferred"[^>]+content-visibility:auto[^>]+contain-intrinsic-size:1000px 1400px[^>]*><img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/two"[^>]+loading="lazy"[^>]+decoding="async"/);
 });
 
 test('carries session scope into generated reader media URLs without exposing its fingerprint', () => {

@@ -7,6 +7,7 @@ const DEFAULT_TTL_SECONDS = Object.freeze({
   html: 3 * 24 * 60 * 60,
   'eh-image': 5 * 60,
   media: 7 * 24 * 60 * 60,
+  'media-variant': 7 * 24 * 60 * 60,
 });
 const DEFAULT_MAX_BYTES = 5 * 1024 ** 3;
 const SAFE_HEADERS = new Set(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);

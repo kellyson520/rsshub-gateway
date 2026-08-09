@@ -379,6 +379,163 @@ test('reuses cached E-Hentai media instead of downloading it again', async () =>
   }
 });
 
+test('serves a smaller requested media variant from its own cache entry', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-variant-'));
+  try {
+    const cache = createResponseCache({ root });
+    const target = 'https://page.example.hath.network/h/variant.webp';
+    const requested = [];
+    let variants = 0;
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      createImageVariant: async ({ body, contentType, width }) => {
+        variants += 1;
+        assert.equal(body.toString(), 'original-image-bytes');
+        assert.equal(contentType, 'image/jpeg');
+        assert.equal(width, 1280);
+        return { body: Buffer.from('reading-variant'), contentType: 'image/webp', usedVariant: true };
+      },
+      fetchExternal: async (url) => {
+        requested.push(String(url));
+        return new Response('original-image-bytes', {
+          headers: { 'content-type': 'image/jpeg', 'content-length': '20' },
+        });
+      },
+    });
+    const token = createSignedTarget(target, 'secret');
+    const results = await requestMany(server, [
+      `/_gateway/media/${token}?w=1280`,
+      `/_gateway/media/${token}?w=1280`,
+    ]);
+
+    assert.deepEqual(results.map((result) => result.response.status), [200, 200]);
+    assert.deepEqual(results.map((result) => result.body), ['reading-variant', 'reading-variant']);
+    assert.deepEqual(results.map((result) => result.response.headers.get('content-type')), ['image/webp', 'image/webp']);
+    assert.equal(variants, 1);
+    assert.deepEqual(requested, [target]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('rejects unsupported requested media variant widths without contacting upstream', async () => {
+  let requests = 0;
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async () => {
+      requests += 1;
+      return new Response('unexpected', { headers: { 'content-type': 'image/webp', 'content-length': '10' } });
+    },
+  });
+  const token = createSignedTarget('https://page.example.hath.network/h/variant.webp', 'secret');
+  const { response } = await request(server, `/_gateway/media/${token}?w=1600`);
+
+  assert.equal(response.status, 400);
+  assert.equal(requests, 0);
+});
+
+test('keeps requested session media variants private', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-session-media-variant-'));
+  try {
+    const cache = createResponseCache({ root });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      sourceConfig: { x: { authToken: 'session-token', ct0: 'session-csrf' } },
+      resolveSessionTransport: async () => ({
+        laneId: 'session-lane-x',
+        fingerprint: 'c'.repeat(64),
+        dispatcher: { name: 'session-lane-x' },
+      }),
+      createImageVariant: async () => ({
+        body: Buffer.from('private-variant'),
+        contentType: 'image/webp',
+        usedVariant: true,
+      }),
+      fetchExternal: async () => new Response('private-original-bytes', {
+        headers: { 'content-type': 'image/jpeg', 'content-length': '22' },
+      }),
+    });
+    const target = 'https://pbs.twimg.com/media/private.jpg';
+    const token = createSignedTarget(target, 'secret', 900, undefined, { egressScope: 'session', source: 'x' });
+    const { response, body } = await request(server, `/_gateway/media/${token}?w=1920`);
+
+    assert.equal(response.status, 200);
+    assert.equal(body, 'private-variant');
+    assert.equal(response.headers.get('cache-control'), 'private, max-age=300');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('falls back to the original media when a derived variant is larger', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    createImageVariant: async () => ({
+      body: Buffer.from('larger-than-source'),
+      contentType: 'image/webp',
+      usedVariant: false,
+    }),
+    fetchExternal: async () => new Response('source-image', {
+      headers: { 'content-type': 'image/jpeg', 'content-length': '12' },
+    }),
+  });
+  const token = createSignedTarget('https://page.example.hath.network/h/fallback.jpg', 'secret');
+  const { response, body } = await request(server, `/_gateway/media/${token}?w=2560`);
+
+  assert.equal(response.status, 200);
+  assert.equal(body, 'source-image');
+  assert.equal(response.headers.get('content-type'), 'image/jpeg');
+});
+
+test('starts warming later media while a gallery detail page is still pending', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-gallery-overlap-'));
+  let releaseLastDetail;
+  let lastDetailStarted;
+  const mediaStarted = [];
+  const lastDetail = new Promise((resolve) => { releaseLastDetail = resolve; });
+  const detailStarted = new Promise((resolve) => { lastDetailStarted = resolve; });
+  let pending;
+  try {
+    const cache = createResponseCache({ root });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      ehMediaForegroundWarmCount: 1,
+      fetchExternal: async (url, request = {}) => {
+        if (url.endsWith('/g/123/gallery/')) {
+          return new Response(galleryPageWithThreeImages, { headers: { 'content-type': 'text/html' } });
+        }
+        if (url.includes('page.example.hath.network')) {
+          mediaStarted.push(String(url));
+          return new Response('media', { headers: { 'content-type': 'image/jpeg', 'content-length': '5' } });
+        }
+        if (url.endsWith('/s/third/123-3')) {
+          lastDetailStarted();
+          await lastDetail;
+        }
+        assert.equal(request.galleryShard === undefined || Number.isInteger(request.galleryShard), true);
+        return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      },
+    });
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    pending = request(server, `/_gateway/item/${token}`);
+
+    await detailStarted;
+    await waitFor(() => mediaStarted.length > 0, 300);
+    releaseLastDetail();
+    const { response, body } = await pending;
+
+    assert.equal(response.status, 200);
+    assert.ok(body.indexOf('第 1 页') < body.indexOf('第 2 页'));
+    assert.ok(body.indexOf('第 2 页') < body.indexOf('第 3 页'));
+  } finally {
+    releaseLastDetail?.();
+    await pending?.catch(() => {});
+  }
+});
+
 test('warms E-Hentai image bytes in the background after rendering a gallery', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-warm-'));
   try {
