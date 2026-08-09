@@ -288,3 +288,132 @@ test('keeps sticky and RSSHub requests outside the public egress pool', async ()
   assert.equal(rsshub.status, 200);
   assert.equal(acquired, 0);
 });
+
+test('uses the public pool for anonymous source requests without credentials', async () => {
+  const publicDispatchers = [{ name: 'public-01' }, { name: 'public-02' }];
+  const acquired = [];
+  const requests = [];
+  const client = createUpstreamClient({
+    sourceConfig: {
+      iwara: { cookie: 'iwara-session' },
+      x: { authToken: 'x-auth', ct0: 'x-csrf' },
+      instagram: { cookie: 'instagram-session' },
+    },
+    egressPool: {
+      acquire: async () => {
+        const dispatcher = publicDispatchers[acquired.length % publicDispatchers.length];
+        acquired.push(dispatcher.name);
+        return { dispatcher, release: () => {} };
+      },
+    },
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      return new Response('ok', { status: 200 });
+    },
+  });
+
+  for (const target of [
+    'https://iwara.tv/video/1',
+    'https://x.com/example/status/1',
+    'https://instagram.com/p/1',
+    'https://t.me/s/channel',
+  ]) {
+    const response = await client.fetchExternal(target, {
+      egressScope: 'public',
+      headers: { Cookie: 'caller-cookie', Authorization: 'Bearer caller-token' },
+    });
+    await response.text();
+  }
+
+  assert.deepEqual(acquired, ['public-01', 'public-02', 'public-01', 'public-02']);
+  assert.equal(requests.every(({ headers }) => !Object.keys(headers).some((name) => /^(cookie|authorization)$/i.test(name))), true);
+});
+
+test('uses only the stable session dispatcher and session credentials for session scope', async () => {
+  let acquired = 0;
+  const sessionDispatcher = { name: 'session-lane-x' };
+  const requests = [];
+  const client = createUpstreamClient({
+    sourceConfig: { x: { authToken: 'wrong-public-token', ct0: 'wrong-public-csrf' } },
+    egressPool: { acquire: async () => { acquired += 1; throw new Error('public pool must not be used'); } },
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      return new Response('ok', { status: 200 });
+    },
+  });
+
+  const response = await client.fetchExternal('https://x.com/example/status/1', {
+    egressScope: 'session',
+    sessionDispatcher,
+    sessionCredentials: { authToken: 'session-token', ct0: 'session-csrf' },
+  });
+  await response.text();
+
+  assert.equal(acquired, 0);
+  assert.equal(requests[0].dispatcher, sessionDispatcher);
+  assert.match(requests[0].headers.cookie, /auth_token=session-token/);
+  assert.match(requests[0].headers.cookie, /ct0=session-csrf/);
+});
+
+test('escalates one authentication challenge to the session dispatcher', async () => {
+  const dispatchers = [];
+  let attempts = 0;
+  const sessionDispatcher = { name: 'session-lane-x' };
+  const client = createUpstreamClient({
+    egressPool: {
+      acquire: async () => ({
+        dispatcher: { name: 'public-lane' },
+        release: () => {},
+      }),
+    },
+    fetchImpl: async (_url, options) => {
+      dispatchers.push({ dispatcher: options.dispatcher, headers: options.headers });
+      attempts += 1;
+      return attempts === 1 ? new Response('login', { status: 401 }) : new Response('ok', { status: 200 });
+    },
+    sleep: async () => {},
+  });
+
+  const response = await client.fetchExternal('https://x.com/example/status/1', {
+    egressScope: 'public',
+    allowSessionRetry: true,
+    sessionDispatcher,
+    sessionCredentials: { authToken: 'session-token', ct0: 'session-csrf' },
+  });
+  assert.equal(await response.text(), 'ok');
+  assert.equal(dispatchers.length, 2);
+  assert.equal(dispatchers[0].dispatcher.name, 'public-lane');
+  assert.equal(dispatchers[1].dispatcher, sessionDispatcher);
+  assert.equal(dispatchers[0].headers.cookie, undefined);
+  assert.match(dispatchers[1].headers.cookie, /auth_token=session-token/);
+});
+
+test('keeps throttling responses on public retry lanes', async () => {
+  const dispatchers = [];
+  let attempts = 0;
+  const sessionDispatcher = { name: 'session-lane-x' };
+  const client = createUpstreamClient({
+    egressPool: {
+      acquire: async () => ({
+        dispatcher: { name: `public-lane-${attempts + 1}` },
+        release: () => {},
+      }),
+    },
+    fetchImpl: async (_url, options) => {
+      dispatchers.push(options.dispatcher);
+      attempts += 1;
+      return attempts === 1 ? new Response('busy', { status: 429 }) : new Response('ok', { status: 200 });
+    },
+    sleep: async () => {},
+  });
+
+  const response = await client.fetchExternal('https://x.com/example/status/1', {
+    egressScope: 'public',
+    allowSessionRetry: true,
+    sessionDispatcher,
+    sessionCredentials: { authToken: 'session-token' },
+  });
+  assert.equal(await response.text(), 'ok');
+  assert.equal(dispatchers.length, 2);
+  assert.equal(dispatchers.every((dispatcher) => dispatcher.name.startsWith('public-lane-')), true);
+});
