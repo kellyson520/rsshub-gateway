@@ -407,6 +407,118 @@ test('warms E-Hentai image bytes in the background after rendering a gallery', a
   }
 });
 
+test('waits for the configured E-Hentai first-screen media warm before returning the reader', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-foreground-warm-'));
+  let releaseMedia;
+  let result;
+  let cache;
+  try {
+    cache = createResponseCache({ root });
+    const mediaStarted = new Promise((resolve) => {
+      releaseMedia = resolve;
+    });
+    let mediaFetchStarted;
+    const mediaFetchStartedPromise = new Promise((resolve) => {
+      mediaFetchStarted = resolve;
+    });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      ehMediaForegroundWarmCount: 1,
+      ehMediaForegroundWarmConcurrency: 1,
+      fetchExternal: async (url) => {
+        const value = String(url);
+        if (value.endsWith('/g/123/gallery/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+        mediaFetchStarted();
+        await mediaStarted;
+        return new Response('image-bytes', { headers: { 'content-type': 'image/webp', 'content-length': '11' } });
+      },
+    });
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    let completed = false;
+    result = request(server, `/_gateway/item/${token}`).then((value) => {
+      completed = true;
+      return value;
+    });
+
+    await mediaFetchStartedPromise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(completed, false);
+    releaseMedia();
+
+    const { response, body } = await result;
+    assert.equal(response.status, 200);
+    assert.match(body, /已加载 2 \/ 2 页/);
+    assert.equal((await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit, true);
+  } finally {
+    releaseMedia?.();
+    await result?.catch(() => {});
+    if (cache) {
+      await waitFor(async () => (await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit
+        && (await cache.peek('https://page.example.hath.network/h/two.webp', 'media')).hit, 2_000).catch(() => {});
+    }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('keeps the E-Hentai reader available when first-screen media warming fails', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-foreground-failure-'));
+  try {
+    const cache = createResponseCache({ root });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      ehMediaForegroundWarmCount: 1,
+      fetchExternal: async (url) => {
+        const value = String(url);
+        if (value.endsWith('/g/123/gallery/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+        if (value.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+        return new Response('temporarily unavailable', { status: 503, headers: { 'content-type': 'text/plain' } });
+      },
+    });
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+    assert.equal(response.status, 200);
+    assert.match(body, /已加载 2 \/ 2 页/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('marks public gateway images cacheable and session images private', async () => {
+  const publicServer = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async () => new Response('image', { headers: { 'content-type': 'image/webp', 'content-length': '5' } }),
+  });
+  const publicToken = createSignedTarget('https://ehgt.org/w/01/002/thumbnail.webp', 'secret');
+  const publicResult = await request(publicServer, `/_gateway/media/${publicToken}`);
+
+  assert.equal(publicResult.response.headers.get('cache-control'), 'public, max-age=300');
+
+  const sessionServer = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { x: { authToken: 'session-token', ct0: 'session-csrf' } },
+    resolveSessionTransport: async () => ({
+      laneId: 'session-lane-x',
+      fingerprint: 'a'.repeat(64),
+      dispatcher: { name: 'session-lane-x' },
+    }),
+    fetchExternal: async () => new Response('image', { headers: { 'content-type': 'image/webp', 'content-length': '5' } }),
+  });
+  const sessionToken = createSignedTarget('https://pbs.twimg.com/media/demo.jpg', 'secret', 900, undefined, {
+    egressScope: 'session',
+    source: 'x',
+  });
+  const sessionResult = await request(sessionServer, `/_gateway/media/${sessionToken}`);
+
+  assert.equal(sessionResult.response.headers.get('cache-control'), 'private, max-age=300');
+});
+
 test('retries a throttled E-Hentai media warmup without failing the reader', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-retry-'));
   try {

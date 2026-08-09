@@ -140,6 +140,8 @@ const DEFAULT_EH_MEDIA_PREFETCH_CONCURRENCY = 6;
 const DEFAULT_EH_MEDIA_PREFETCH_MIN_CONCURRENCY = 3;
 const DEFAULT_EH_MEDIA_PREFETCH_MAX_CONCURRENCY = 12;
 const DEFAULT_EH_MEDIA_PREFETCH_PER_ORIGIN = 2;
+const DEFAULT_EH_MEDIA_FOREGROUND_WARM_COUNT = 8;
+const DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY = 8;
 const DEFAULT_EGRESS_LANE_COUNT = 12;
 const DEFAULT_EGRESS_SESSION_LANE_COUNT = 12;
 const DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT = 7921;
@@ -148,6 +150,7 @@ const DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE = 6;
 const DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY = 48;
 const DEFAULT_EGRESS_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
+const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -204,6 +207,21 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes }) {
 
 async function fetchCachedMedia(options) {
   return (await loadCachedMedia(options)).response;
+}
+
+async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
+  const targets = [...new Set(pages.map((page) => page.mediaTarget).filter(Boolean))].slice(0, count);
+  if (!cache || !targets.length) return { targets, failedTargets: [] };
+  const results = await mapWithConcurrency(targets, concurrency, async (target) => {
+    try {
+      const loaded = await loadCachedMedia({ cache, fetcher, target, maxBytes });
+      await loaded.response.body?.cancel();
+      return { target, failed: !loaded.response.ok };
+    } catch {
+      return { target, failed: true };
+    }
+  });
+  return { targets, failedTargets: results.filter((result) => result.failed).map((result) => result.target) };
 }
 
 function failureMessage(kind, pageNumber) {
@@ -440,11 +458,29 @@ export function createGatewayServer(options = {}) {
     1,
     48,
   );
+  const ehMediaForegroundWarmCount = boundedInteger(
+    options.ehMediaForegroundWarmCount ?? process.env.EH_MEDIA_FOREGROUND_WARM_COUNT,
+    DEFAULT_EH_MEDIA_FOREGROUND_WARM_COUNT,
+    1,
+    24,
+  );
+  const ehMediaForegroundWarmConcurrency = boundedInteger(
+    options.ehMediaForegroundWarmConcurrency ?? process.env.EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
+    DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
+    1,
+    ehMediaForegroundWarmCount,
+  );
   const mediaCacheMaxFileBytes = boundedInteger(
     options.mediaCacheMaxFileBytes ?? process.env.GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES,
     DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES,
     1 * 1024 ** 2,
     256 * 1024 ** 2,
+  );
+  const mediaBrowserCacheSeconds = boundedInteger(
+    options.mediaBrowserCacheSeconds ?? process.env.GATEWAY_MEDIA_BROWSER_CACHE_SECONDS,
+    DEFAULT_MEDIA_BROWSER_CACHE_SECONDS,
+    60,
+    86_400,
   );
   const cache = options.cache === false
     ? null
@@ -801,6 +837,10 @@ export function createGatewayServer(options = {}) {
             const value = remote.headers.get(name);
             if (value) headers[name] = value;
           }
+          const mediaContentType = remote.headers.get('content-type') || '';
+          if (remote.ok && mediaContentType.toLowerCase().startsWith('image/')) {
+            headers['cache-control'] = `${routed.egressScope === 'public' ? 'public' : 'private'}, max-age=${mediaBrowserCacheSeconds}`;
+          }
           res.writeHead(remote.status, headers);
           if (req.method === 'HEAD') return res.end();
           if (remote.body) Readable.fromWeb(remote.body).pipe(res);
@@ -826,7 +866,20 @@ export function createGatewayServer(options = {}) {
             concurrency: currentEhPrefetchConcurrency(),
             maxPages: ehMaxPrefetchPages,
           });
-          mediaPreloadQueue.enqueue(prefetchedGallery.pages.map((page) => page.mediaTarget));
+          const foregroundWarm = await warmEhMedia({
+            pages: prefetchedGallery.pages,
+            cache,
+            fetcher: (url, request) => fetchExternal(url, { ...request, priority: 'foreground' }),
+            maxBytes: mediaCacheMaxFileBytes,
+            count: ehMediaForegroundWarmCount,
+            concurrency: ehMediaForegroundWarmConcurrency,
+          });
+          prefetchedGallery.preloadCount = foregroundWarm.targets.length;
+          const warmed = new Set(foregroundWarm.targets);
+          mediaPreloadQueue.enqueue([
+            ...foregroundWarm.failedTargets,
+            ...prefetchedGallery.pages.map((page) => page.mediaTarget).filter((mediaTarget) => !warmed.has(mediaTarget)),
+          ]);
           unavailableStatus = prefetchedGallery.status;
         }
         const unavailable = !remote.ok

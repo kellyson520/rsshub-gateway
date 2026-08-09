@@ -4,6 +4,7 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './
 
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
+const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 8;
 
 const READER_CSS = `
 :root{color-scheme:light dark}
@@ -70,8 +71,11 @@ function gatewayUrl(baseUrl, kind, value, sourceUrl, secret, signedTargetMetadat
   }
 }
 
-function renderDocument(title, content) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${READER_CSS}</style></head><body>${content}</body></html>`;
+function renderDocument(title, content, preloadImages = []) {
+  const preloads = [...new Set(preloadImages.filter(Boolean))]
+    .map((url) => `<link rel="preload" as="image" href="${escapeHtml(url)}" fetchpriority="high">`)
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}</style></head><body>${content}</body></html>`;
 }
 
 function isEhentaiPage(url, pattern) {
@@ -222,13 +226,22 @@ export function extractEhImagePage({ url, html, baseUrl, secret, pageNumber, sig
   };
 }
 
-export function renderEhImageSequence({ title, pages = [], totalPages = pages.length, failures = [], truncated = false }) {
+export function renderEhImageSequence({
+  title,
+  pages = [],
+  totalPages = pages.length,
+  failures = [],
+  truncated = false,
+  preloadCount = DEFAULT_EH_IMAGE_PRELOAD_COUNT,
+}) {
   const safeTotalPages = Math.max(Number(totalPages) || pages.length, pages.length);
+  const eagerCount = Math.min(Math.max(Number.parseInt(preloadCount, 10) || 0, 0), pages.length);
   const readerTitle = `${title || 'E-Hentai 画廊'} · 连续阅读 · 共 ${safeTotalPages} 页`;
   const summary = `<p class="eh-image-summary">已加载 ${pages.length} / ${safeTotalPages} 页</p>`;
-  const imageBlocks = pages.map((page) => (
-    `<p class="eh-image-label">第 ${page.pageNumber} 页</p><p class="eh-image-content"><img src="${escapeHtml(page.media)}" alt="${escapeHtml(page.alt || `第 ${page.pageNumber} 页`)}" loading="lazy"></p>`
-  )).join('');
+  const imageBlocks = pages.map((page, index) => {
+    const eager = index < eagerCount;
+    return `<p class="eh-image-label">第 ${page.pageNumber} 页</p><p class="eh-image-content"><img src="${escapeHtml(page.media)}" alt="${escapeHtml(page.alt || `第 ${page.pageNumber} 页`)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''}></p>`;
+  }).join('');
   const failureBlocks = failures.map((failure) => {
     const message = failure.message || `第 ${failure.pageNumber} 页暂时无法读取`;
     return `<p class="eh-image-warning">${escapeHtml(message)}</p>`;
@@ -236,7 +249,11 @@ export function renderEhImageSequence({ title, pages = [], totalPages = pages.le
   const truncatedBlock = truncated
     ? `<p class="eh-image-warning">画廊页数超过网关预处理上限，后续页面未读取</p>`
     : '';
-  return renderDocument(title || readerTitle, `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`);
+  return renderDocument(
+    title || readerTitle,
+    `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`,
+    pages.slice(0, eagerCount).map((page) => page.media),
+  );
 }
 
 function renderEhImagePage({ url, html, baseUrl, secret, signedTargetMetadata }) {

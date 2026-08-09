@@ -4,7 +4,7 @@ This project is a transparent companion gateway for RSSHub. Existing RSSHub subs
 
 ## Runtime
 
-The production container lives at `/opt/1panel/apps/rsshub-gateway`. It joins the existing `1panel-network`, exposes only `127.0.0.1:1300` to OpenResty, and exposes Mihomo port `7890` only to containers on that Docker network.
+The production Compose project lives at `/home/ubuntu/.config/rsshub-gateway`. It joins the existing `1panel-network`, exposes only `127.0.0.1:1300` to OpenResty, and exposes Mihomo port `7890` only to containers on that Docker network.
 
 Runtime-only files are deliberately excluded from Git:
 
@@ -18,13 +18,15 @@ Source tokens are optional. Iwara, X, and Instagram use public fallback behavior
 
 The gateway caches small source documents by canonical upstream URL, never by expiring signed gateway tokens. RSS/XML responses use a 5-minute TTL; E-Hentai ranking, gallery, and image-detail HTML use a 3-day TTL. Cache writes are atomic, concurrent requests for the same document are coalesced, and expired documents are used only when an upstream refresh fails. The logical cache limit is 5 GB and the persistent application cache is mounted at `/var/cache/rsshub-gateway`.
 
-Images use the gateway's persistent media cache with a 7-day TTL and the same 5 GB disk budget. E-Hentai gallery image-detail prefetch starts at 8 requests and expands with healthy public egress capacity to a 36-request maximum. At startup this is still bounded by three requests per E-Hentai-verified lane; media warming uses the same adaptive multi-egress pool while reserving one lane slot for foreground requests. Successful upstream downloads ramp up gradually, while 429/5xx/timeouts reduce concurrency and retry with bounded backoff. The queue is deduplicated, persisted under the cache directory, and resumes non-expired work after a restart. Range requests continue to bypass image caching so video seeking behavior is unchanged.
+Images use the gateway's persistent media cache with a 7-day TTL and the same 5 GB disk budget. When an E-Hentai continuous reader opens, the first 8 images are fetched in parallel into that cache before the page is returned; their media URLs are preloaded and high priority in the reader. Later pages remain in the adaptive background queue. `EH_MEDIA_FOREGROUND_WARM_COUNT` and `EH_MEDIA_FOREGROUND_WARM_CONCURRENCY` control that bounded first screen. Successful public image responses use a 5-minute shared browser cache (`GATEWAY_MEDIA_BROWSER_CACHE_SECONDS`); session-scoped media uses the same private browser cache lifetime and is never marked shared.
+
+E-Hentai gallery image-detail prefetch starts at 8 requests and expands with healthy public egress capacity to a 36-request maximum. At startup this is still bounded by three requests per E-Hentai-verified lane; media warming uses the same adaptive multi-egress pool while reserving one lane slot for foreground requests. Successful upstream downloads ramp up gradually, while 429/5xx/timeouts reduce concurrency and retry with bounded backoff. The queue is deduplicated, persisted under the cache directory, and resumes non-expired work after a restart. Range requests continue to bypass image caching so video seeking behavior is unchanged.
 
 Useful diagnostics:
 
 ```sh
 sudo docker exec rsshub-gateway du -sh /var/cache/rsshub-gateway
-sudo docker compose -f /opt/1panel/apps/rsshub-gateway/docker-compose.yml logs gateway | grep gateway_cache
+sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml logs gateway | grep gateway_cache
 ```
 
 ## RSSHub Source Requirements
@@ -36,10 +38,10 @@ The gateway can make an existing RSSHub route readable, but it cannot enable a r
 ```sh
 npm test
 sudo docker exec rsshub-gateway mihomo -t -d /root/.config/mihomo
-sudo docker compose -f /opt/1panel/apps/rsshub-gateway/docker-compose.yml ps
+sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml ps
 curl -fsS http://127.0.0.1:1300/healthz
 curl -fsS http://127.0.0.1:1300/readyz
-sudo docker compose -f /opt/1panel/apps/rsshub-gateway/docker-compose.yml up -d --build
+sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml up -d --build
 ```
 
 `/healthz` is a liveness check and does not call dependencies. `/readyz` checks the local RSSHub instance and reports the currently open source circuits. Mihomo's runtime `AUTO` health target is `https://t.me`, so Telegram access selects nodes that can reach the actual source rather than a generic connectivity endpoint.

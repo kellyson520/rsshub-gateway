@@ -144,9 +144,26 @@ test('renders an ordered E-Hentai image sequence without navigation links', () =
   assert.match(output, /已加载 2 \/ 3 页/);
   assert.ok(output.indexOf('/_gateway/media/one') < output.indexOf('/_gateway/media/three'));
   assert.match(output, /<p class="eh-image-content"><img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/one"/);
-  assert.match(output, /<img[^>]+loading="lazy"/);
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/one" fetchpriority="high">/);
+  assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/one"[^>]+loading="eager"[^>]+fetchpriority="high"/);
   assert.doesNotMatch(output, /<a[^>]+>上一页|<a[^>]+>下一页/);
   assert.match(output, /第 2 页暂时无法读取/);
+});
+
+test('preloads only the configured E-Hentai first-screen images and leaves later images lazy', () => {
+  const pages = Array.from({ length: 3 }, (_, index) => ({
+    pageNumber: index + 1,
+    media: `https://gateway.example.test/_gateway/media/${index + 1}`,
+    alt: `Page ${index + 1}`,
+  }));
+  const output = renderEhImageSequence({ title: 'Gallery title', pages, preloadCount: 2 });
+
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/1" fetchpriority="high">/);
+  assert.match(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/2" fetchpriority="high">/);
+  assert.doesNotMatch(output, /<link rel="preload" as="image" href="https:\/\/gateway\.example\.test\/_gateway\/media\/3"/);
+  assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/1"[^>]+loading="eager"[^>]+fetchpriority="high"/);
+  assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/2"[^>]+loading="eager"[^>]+fetchpriority="high"/);
+  assert.match(output, /<img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/3"[^>]+loading="lazy"/);
 });
 
 test('carries session scope into generated reader media URLs without exposing its fingerprint', () => {
