@@ -15,8 +15,12 @@ function canonicalUrl(value) {
   return new URL(value).toString();
 }
 
-function keyFor(url, kind) {
-  return createHash('sha256').update(`${kind}\n${canonicalUrl(url)}`).digest('hex');
+function normalizedNamespace(value) {
+  return String(value || 'public').trim() || 'public';
+}
+
+function keyFor(url, kind, namespace = 'public') {
+  return createHash('sha256').update(`${kind}\n${normalizedNamespace(namespace)}\n${canonicalUrl(url)}`).digest('hex');
 }
 
 function normalizedHeaders(headers) {
@@ -124,9 +128,9 @@ export function createResponseCache({
 
   const ready = initialize();
 
-  async function readEntry(url, kind, allowExpired) {
+  async function readEntry(url, kind, namespace, allowExpired) {
     await ready;
-    const key = keyFor(url, kind);
+    const key = keyFor(url, kind, namespace);
     const entry = entries.get(key);
     if (!entry) return null;
     const fresh = now() < entry.expiresAt;
@@ -155,12 +159,12 @@ export function createResponseCache({
     }
   }
 
-  async function store(url, kind, loaded) {
+  async function store(url, kind, namespace, loaded) {
     const body = normalizeBody(loaded.body);
     if (loaded.cacheable === false || !body || loaded.status < 200 || loaded.status >= 300 || body.buffer.length > byteLimit) return;
     await ready;
     await fsp.mkdir(cacheRoot, { recursive: true });
-    const key = keyFor(url, kind);
+    const key = keyFor(url, kind, namespace);
     const file = `${key}.body`;
     const tempPath = path.join(cacheRoot, `${file}.${process.pid}.${randomUUID()}.tmp`);
     try {
@@ -191,18 +195,19 @@ export function createResponseCache({
     }
   }
 
-  async function getOrLoad(url, kind, loader, { allowStale = true } = {}) {
-    const fresh = await readEntry(url, kind, false);
+  async function getOrLoad(url, kind, loader, { allowStale = true, namespace = 'public' } = {}) {
+    const cacheNamespace = normalizedNamespace(namespace);
+    const fresh = await readEntry(url, kind, cacheNamespace, false);
     if (fresh) return resultFromEntry(fresh.entry, fresh.body, 'HIT');
-    const stale = allowStale ? await readEntry(url, kind, true) : null;
-    const key = keyFor(url, kind);
+    const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
+    const key = keyFor(url, kind, cacheNamespace);
     if (inflight.has(key)) return inflight.get(key);
 
     const operation = (async () => {
       try {
         const loaded = await loader();
         if (loaded?.refreshFailed && stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
-        if (loaded?.status >= 200 && loaded.status < 300) await store(url, kind, loaded);
+        if (loaded?.status >= 200 && loaded.status < 300) await store(url, kind, cacheNamespace, loaded);
         return { ...loaded, state: 'MISS' };
       } catch (error) {
         if (stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
@@ -217,8 +222,8 @@ export function createResponseCache({
     }
   }
 
-  async function peek(url, kind) {
-    const entry = await readEntry(url, kind, false);
+  async function peek(url, kind, { namespace = 'public' } = {}) {
+    const entry = await readEntry(url, kind, normalizedNamespace(namespace), false);
     return { hit: Boolean(entry) };
   }
 

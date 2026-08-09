@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderEhImageSequence, renderReaderPage, renderUnavailablePage } from '../src/reader.js';
+import { verifySignedTarget } from '../src/signed-target.js';
 
 test('rewrites lazy-loaded E-Hentai images to signed media URLs', () => {
   const output = renderReaderPage({
@@ -146,4 +147,20 @@ test('renders an ordered E-Hentai image sequence without navigation links', () =
   assert.match(output, /<img[^>]+loading="lazy"/);
   assert.doesNotMatch(output, /<a[^>]+>上一页|<a[^>]+>下一页/);
   assert.match(output, /第 2 页暂时无法读取/);
+});
+
+test('carries session scope into generated reader media URLs without exposing its fingerprint', () => {
+  const output = renderReaderPage({
+    url: 'https://x.com/example/status/1',
+    html: '<html><head><title>Post</title></head><body><img src="https://pbs.twimg.com/media/demo.jpg" alt="demo"></body></html>',
+    baseUrl: 'https://gateway.example.test',
+    secret: 'secret',
+    signedTargetMetadata: { egressScope: 'session', source: 'x' },
+  });
+  const token = output.match(/_gateway\/media\/([^" ]+)/)?.[1];
+  assert.ok(token);
+  const data = verifySignedTarget(token, 'secret');
+  assert.equal(data.egressScope, 'session');
+  assert.equal(data.source, 'x');
+  assert.doesNotMatch(output, /credentialFingerprint|abcdef123456/);
 });

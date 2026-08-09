@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { transformFeed } from '../src/feed-transform.js';
+import { verifySignedTarget } from '../src/signed-target.js';
 
 const fixture = `<?xml version="1.0"?><rss version="2.0"><channel>
   <title>Iwara Ranking</title>
@@ -70,4 +71,16 @@ test('normalizes numeric text entities while retaining XML escaping', () => {
   assert.match(output, /<title>你好<\/title>/);
   assert.match(output, /你好 &amp; 世界/);
   assert.doesNotMatch(output, /&#x4f60;/i);
+});
+
+test('carries public route metadata into transformed feed links', () => {
+  const output = transformFeed(fixture, {
+    ...options,
+    signedTargetMetadata: { egressScope: 'public', source: 'iwara' },
+  });
+  const token = output.match(/_gateway\/media\/([^"<]+)/)?.[1];
+  assert.ok(token);
+  const data = verifySignedTarget(token, 'secret', 1001);
+  assert.equal(data.egressScope, 'public');
+  assert.equal(data.source, 'iwara');
 });

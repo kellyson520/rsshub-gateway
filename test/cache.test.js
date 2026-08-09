@@ -131,3 +131,22 @@ test('ignores a corrupt index and reloads the document', async () => {
     assert.equal(loads, 2);
   });
 });
+
+test('isolates public and session cache namespaces for one upstream URL', async () => {
+  await withCache({}, async (cache) => {
+    const url = 'https://x.com/example/status/1';
+    const publicNamespace = 'public';
+    const sessionNamespace = 'session:abcdef123456';
+    assert.notEqual(cache.keyFor(url, 'html', publicNamespace), cache.keyFor(url, 'html', sessionNamespace));
+
+    await cache.getOrLoad(url, 'html', async () => ({ status: 200, headers: {}, body: 'public-body' }), { namespace: publicNamespace });
+    await cache.getOrLoad(url, 'html', async () => ({ status: 200, headers: {}, body: 'session-body' }), { namespace: sessionNamespace });
+
+    const publicHit = await cache.getOrLoad(url, 'html', async () => ({ status: 500, headers: {}, body: 'wrong-public-body' }), { namespace: publicNamespace });
+    const sessionHit = await cache.getOrLoad(url, 'html', async () => ({ status: 500, headers: {}, body: 'wrong-session-body' }), { namespace: sessionNamespace });
+    assert.equal(publicHit.body, 'public-body');
+    assert.equal(sessionHit.body, 'session-body');
+    assert.equal((await cache.peek(url, 'html', { namespace: publicNamespace })).hit, true);
+    assert.equal((await cache.peek(url, 'html', { namespace: sessionNamespace })).hit, true);
+  });
+});

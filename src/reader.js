@@ -53,16 +53,18 @@ video{background:#111}
 @media (max-width:460px){.eh-grid{grid-template-columns:200px}}
 `;
 
-function localUrl(baseUrl, kind, target, secret) {
+function localUrl(baseUrl, kind, target, secret, signedTargetMetadata) {
   if (!isAllowedTarget(target)) return target;
-  const token = kind === 'media' ? createMediaSignedTarget(target, secret) : createSignedTarget(target, secret);
+  const token = kind === 'media'
+    ? createMediaSignedTarget(target, secret, undefined, signedTargetMetadata)
+    : createSignedTarget(target, secret, undefined, undefined, signedTargetMetadata);
   return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
 }
 
-function gatewayUrl(baseUrl, kind, value, sourceUrl, secret) {
+function gatewayUrl(baseUrl, kind, value, sourceUrl, secret, signedTargetMetadata) {
   try {
     const target = new URL(value, sourceUrl).toString();
-    return isAllowedTarget(target) ? localUrl(baseUrl, kind, target, secret) : '';
+    return isAllowedTarget(target) ? localUrl(baseUrl, kind, target, secret, signedTargetMetadata) : '';
   } catch {
     return '';
   }
@@ -91,10 +93,10 @@ function numericStyle(style, property, fallback) {
   return Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 5000) : fallback;
 }
 
-function parseTile(style, sourceUrl, baseUrl, secret) {
+function parseTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata) {
   const value = String(style || '');
   const image = value.match(/url\(\s*["']?([^"')]+)["']?\s*\)/i)?.[1];
-  const media = gatewayUrl(baseUrl, 'media', image, sourceUrl, secret);
+  const media = gatewayUrl(baseUrl, 'media', image, sourceUrl, secret, signedTargetMetadata);
   if (!media) return null;
   const position = value.match(/\)\s*(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)(px)?/i);
   const x = Number(position?.[1] || 0);
@@ -156,29 +158,29 @@ function renderRating($) {
   return rating ? `<p class="eh-byline">评分：${escapeHtml(rating)}</p>` : '';
 }
 
-function renderPagination($, url, baseUrl, secret) {
+function renderPagination($, url, baseUrl, secret, signedTargetMetadata) {
   const links = $('.gtb').first().find('a[href]').map((_, element) => {
-    const href = gatewayUrl(baseUrl, 'item', $(element).attr('href'), url, secret);
+    const href = gatewayUrl(baseUrl, 'item', $(element).attr('href'), url, secret, signedTargetMetadata);
     const label = cleanText($(element).text());
     return href && label ? `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>` : '';
   }).get().filter(Boolean).join('');
   return links ? `<nav class="eh-pagination" aria-label="画廊分页">${links}</nav>` : '';
 }
 
-function renderEhGalleryPage({ url, html, baseUrl, secret }) {
+function renderEhGalleryPage({ url, html, baseUrl, secret, signedTargetMetadata }) {
   const $ = cheerio.load(html, { decodeEntities: false });
   if (!$('#gn').length || !$('#gdt').length) return '';
   const title = cleanText($('#gn').first().text()) || cleanText($('title').first().text()) || url;
   const subtitle = cleanText($('#gj').first().text());
   const uploader = cleanText($('#gdn a').first().text());
   const category = cleanText($('#gdc .cs').first().text());
-  const cover = parseTile($('#gd1 > div').first().attr('style'), url, baseUrl, secret);
+  const cover = parseTile($('#gd1 > div').first().attr('style'), url, baseUrl, secret, signedTargetMetadata);
   const summary = cleanText($('.gtb .gpc').first().text());
   const thumbnails = $('#gdt > a').map((_, element) => {
     const anchor = $(element);
-    const href = gatewayUrl(baseUrl, 'item', anchor.attr('href'), url, secret);
+    const href = gatewayUrl(baseUrl, 'item', anchor.attr('href'), url, secret, signedTargetMetadata);
     const tileElement = anchor.children('div').first();
-    const tile = parseTile(tileElement.attr('style'), url, baseUrl, secret);
+    const tile = parseTile(tileElement.attr('style'), url, baseUrl, secret, signedTargetMetadata);
     const label = cleanText(tileElement.attr('title'));
     if (!href || !tile) return '';
     return `<figure class="eh-page"><a class="eh-thumb" href="${escapeHtml(href)}" title="${escapeHtml(label)}"><span class="eh-thumb-tile" style="${tileStyle(tile)}">${tileImage(tile, 'eh-thumb-image', label, 'lazy')}</span></a><p class="eh-thumb-label">${escapeHtml(label)}</p></figure>`;
@@ -187,11 +189,11 @@ function renderEhGalleryPage({ url, html, baseUrl, secret }) {
   const header = `<section class="eh-gallery-info"><div>${cover
     ? `<div class="eh-cover" style="${tileStyle(cover)}" role="img" aria-label="封面">${tileImage(cover, 'eh-cover-image', '封面', 'eager')}</div>`
     : '<div class="eh-cover eh-cover-empty">暂无封面</div>'}</div><div><h1 class="eh-title">${escapeHtml(title)}</h1>${subtitle ? `<p class="eh-subtitle">${escapeHtml(subtitle)}</p>` : ''}${uploader ? `<p class="eh-byline">上传者：${escapeHtml(uploader)}</p>` : ''}${category ? `<p class="eh-byline">分类：${escapeHtml(category)}</p>` : ''}${renderRating($)}${renderMetadata($)}${renderTags($)}</div></section>`;
-  const body = `${header}${summary ? `<p class="eh-summary">${escapeHtml(summary)}</p>` : ''}${renderPagination($, url, baseUrl, secret)}<section class="eh-grid" aria-label="画廊预览">${thumbnails || '<p class="eh-summary">暂无预览图</p>'}</section>`;
+  const body = `${header}${summary ? `<p class="eh-summary">${escapeHtml(summary)}</p>` : ''}${renderPagination($, url, baseUrl, secret, signedTargetMetadata)}<section class="eh-grid" aria-label="画廊预览">${thumbnails || '<p class="eh-summary">暂无预览图</p>'}</section>`;
   return renderDocument(title, `<article class="reader eh-gallery">${body}</article>`);
 }
 
-export function extractEhImagePage({ url, html, baseUrl, secret, pageNumber }) {
+export function extractEhImagePage({ url, html, baseUrl, secret, pageNumber, signedTargetMetadata }) {
   const $ = cheerio.load(html, { decodeEntities: false });
   const image = $('#img').first().length ? $('#img').first() : $('img[src*=".hath.network"]').first();
   if (!image.length) return null;
@@ -203,7 +205,7 @@ export function extractEhImagePage({ url, html, baseUrl, secret, pageNumber }) {
     mediaTarget = undefined;
   }
   if (!mediaTarget) return null;
-  const media = localUrl(baseUrl, 'media', mediaTarget, secret);
+  const media = localUrl(baseUrl, 'media', mediaTarget, secret, signedTargetMetadata);
   const title = cleanText($('#i1 h1').first().text()) || cleanText($('title').first().text()) || url;
   const counter = cleanText($('#i2').first().text()) || cleanText($('.sn > div').first().text());
   const parsedPageNumber = Number(counter.match(/^\s*(\d+)/)?.[1]);
@@ -237,9 +239,9 @@ export function renderEhImageSequence({ title, pages = [], totalPages = pages.le
   return renderDocument(title || readerTitle, `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p>${summary}${imageBlocks}${failureBlocks}${truncatedBlock}</div>`);
 }
 
-function renderEhImagePage({ url, html, baseUrl, secret }) {
+function renderEhImagePage({ url, html, baseUrl, secret, signedTargetMetadata }) {
   const $ = cheerio.load(html, { decodeEntities: false });
-  const page = extractEhImagePage({ url, html, baseUrl, secret });
+  const page = extractEhImagePage({ url, html, baseUrl, secret, signedTargetMetadata });
   if (!page) return '';
   const { title, counter, media } = page;
   const previousAnchor = $('#prev').first().length
@@ -248,8 +250,8 @@ function renderEhImagePage({ url, html, baseUrl, secret }) {
   const nextAnchor = $('#next').first().length
     ? $('#next').first()
     : $('.sn a[href]').filter((_, element) => $(element).find('img[src*="/n.png"]').length).first();
-  const previous = gatewayUrl(baseUrl, 'item', previousAnchor.attr('href'), url, secret);
-  const next = gatewayUrl(baseUrl, 'item', nextAnchor.attr('href'), url, secret);
+  const previous = gatewayUrl(baseUrl, 'item', previousAnchor.attr('href'), url, secret, signedTargetMetadata);
+  const next = gatewayUrl(baseUrl, 'item', nextAnchor.attr('href'), url, secret, signedTargetMetadata);
   const navigation = [
     previous ? `<a href="${escapeHtml(previous)}">上一页</a>` : '',
     counter ? `<span>${escapeHtml(counter)}</span>` : '',
@@ -259,7 +261,7 @@ function renderEhImagePage({ url, html, baseUrl, secret }) {
   return renderDocument(title, `<div class="reader eh-image-page"><p class="eh-image-title">${escapeHtml(readerTitle)}</p><p class="eh-image-nav" aria-label="图片导航">${navigation}</p><p class="eh-image-content"><img id="img" src="${escapeHtml(media)}" alt="${escapeHtml(title)}" loading="eager"></p></div>`);
 }
 
-function renderGenericReaderPage({ url, html, baseUrl, secret }) {
+function renderGenericReaderPage({ url, html, baseUrl, secret, signedTargetMetadata }) {
   const $ = cheerio.load(html, { decodeEntities: false });
   $('script, noscript, iframe, form, object, embed').remove();
   $('img').each((_, element) => {
@@ -280,7 +282,7 @@ function renderGenericReaderPage({ url, html, baseUrl, secret }) {
       const value = $(element).attr(attribute);
       if (!value) continue;
       try {
-        $(element).attr(attribute, localUrl(baseUrl, 'media', new URL(value, url).toString(), secret));
+        $(element).attr(attribute, localUrl(baseUrl, 'media', new URL(value, url).toString(), secret, signedTargetMetadata));
       } catch {
         $(element).removeAttr(attribute);
       }
@@ -289,7 +291,7 @@ function renderGenericReaderPage({ url, html, baseUrl, secret }) {
   $('a[href]').each((_, element) => {
     const value = $(element).attr('href');
     try {
-      if (value) $(element).attr('href', localUrl(baseUrl, 'item', new URL(value, url).toString(), secret));
+      if (value) $(element).attr('href', localUrl(baseUrl, 'item', new URL(value, url).toString(), secret, signedTargetMetadata));
     } catch {
       $(element).removeAttr('href');
     }
@@ -311,21 +313,21 @@ function renderGenericReaderPage({ url, html, baseUrl, secret }) {
   return renderDocument(title, `<main class="reader"><p class="reader-source"><a href="${escapeHtml(url)}">原始来源</a></p>${safe}</main>`);
 }
 
-export function renderReaderPage({ url, html, baseUrl, secret, prefetchedGallery }) {
+export function renderReaderPage({ url, html, baseUrl, secret, prefetchedGallery, signedTargetMetadata }) {
   if (isEhentaiPage(url, EH_GALLERY_PATH)) {
     if (prefetchedGallery?.pages?.length) return renderEhImageSequence(prefetchedGallery);
-    const gallery = renderEhGalleryPage({ url, html, baseUrl, secret });
+    const gallery = renderEhGalleryPage({ url, html, baseUrl, secret, signedTargetMetadata });
     if (gallery) return gallery;
   }
   if (isEhentaiPage(url, EH_IMAGE_PATH)) {
-    const image = renderEhImagePage({ url, html, baseUrl, secret });
+    const image = renderEhImagePage({ url, html, baseUrl, secret, signedTargetMetadata });
     if (image) return image;
   }
-  return renderGenericReaderPage({ url, html, baseUrl, secret });
+  return renderGenericReaderPage({ url, html, baseUrl, secret, signedTargetMetadata });
 }
 
-export function renderUnavailablePage({ url, title, message, baseUrl, secret }) {
-  const sourceUrl = localUrl(baseUrl, 'item', url, secret);
+export function renderUnavailablePage({ url, title, message, baseUrl, secret, signedTargetMetadata }) {
+  const sourceUrl = localUrl(baseUrl, 'item', url, secret, signedTargetMetadata);
   const content = `<main class="reader"><p>${escapeHtml(message)}</p><p><a href="${escapeHtml(sourceUrl)}">原始来源</a></p></main>`;
   return renderDocument(title || url, content);
 }

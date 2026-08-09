@@ -56,3 +56,21 @@ test('allows E-Hentai gallery and image hosts but not unrelated hosts', () => {
   assert.equal(isAllowedTarget('https://node.example.hath.network:54200/not-gallery/image.webp'), false);
   assert.equal(isAllowedTarget('https://images.example.invalid/full.jpg'), false);
 });
+
+test('protects scope metadata in signed targets and keeps legacy tokens compatible', () => {
+  const token = createSignedTarget(
+    'https://x.com/example/status/1',
+    'secret',
+    3600,
+    1000,
+    { egressScope: 'session', source: 'x' },
+  );
+  const data = verifySignedTarget(token, 'secret', 1001);
+  assert.equal(data.egressScope, 'session');
+  assert.equal(data.source, 'x');
+  assert.equal(data.credentialFingerprint, undefined);
+
+  const legacy = verifySignedTarget(createSignedTarget('https://x.com/example/status/1', 'secret', 3600, 1000), 'secret', 1001);
+  assert.equal(legacy.egressScope, undefined);
+  assert.throws(() => createSignedTarget('https://x.com/example/status/1', 'secret', 3600, 1000, { egressScope: 'private' }));
+});

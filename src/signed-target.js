@@ -3,6 +3,7 @@ import net from 'node:net';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
+const EGRESS_SCOPES = new Set(['public', 'session', 'sticky']);
 
 const ALLOWED_HOSTS = [
   'iwara.tv',
@@ -28,6 +29,20 @@ function decode(value) {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
+function routeMetadata(metadata = {}) {
+  const result = {};
+  if (metadata?.egressScope !== undefined) {
+    if (!EGRESS_SCOPES.has(metadata.egressScope)) throw new Error('unsupported egress scope');
+    result.egressScope = metadata.egressScope;
+  }
+  if (metadata?.source !== undefined) {
+    const source = String(metadata.source).trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(source)) throw new Error('unsupported route source');
+    result.source = source;
+  }
+  return result;
+}
+
 export function isAllowedTarget(value) {
   const target = value instanceof URL ? value : new URL(value);
   if (target.protocol !== 'https:' || target.username || target.password) {
@@ -50,19 +65,19 @@ export function isAllowedTarget(value) {
   return ALLOWED_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
 }
 
-export function createSignedTarget(url, secret, ttlSeconds = DEFAULT_TTL_SECONDS, now = Math.floor(Date.now() / 1000)) {
+export function createSignedTarget(url, secret, ttlSeconds = DEFAULT_TTL_SECONDS, now = Math.floor(Date.now() / 1000), metadata = {}) {
   const target = new URL(url);
   if (!isAllowedTarget(target)) {
     throw new Error('target host is not allowed');
   }
-  const payload = encode(JSON.stringify({ url: target.toString(), exp: now + ttlSeconds }));
+  const payload = encode(JSON.stringify({ url: target.toString(), exp: now + ttlSeconds, ...routeMetadata(metadata) }));
   const signature = createHmac('sha256', secret).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
 
-export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now() / 1000)) {
+export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now() / 1000), metadata = {}) {
   const expiresAt = (Math.floor(now / MEDIA_CACHE_TTL_SECONDS) + 1) * MEDIA_CACHE_TTL_SECONDS;
-  return createSignedTarget(url, secret, expiresAt - now, now);
+  return createSignedTarget(url, secret, expiresAt - now, now, metadata);
 }
 
 export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000)) {
@@ -76,10 +91,12 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
     throw new Error('invalid target signature');
   }
   const data = JSON.parse(decode(payload));
-  if (!Number.isInteger(data.exp) || data.exp <= now || !isAllowedTarget(data.url)) {
+  if (!data || typeof data !== 'object'
+    || Object.keys(data).some((key) => !['url', 'exp', 'egressScope', 'source'].includes(key))
+    || !Number.isInteger(data.exp) || data.exp <= now || !isAllowedTarget(data.url)) {
     throw new Error('target expired or disallowed');
   }
-  return data;
+  return { url: new URL(data.url).toString(), exp: data.exp, ...routeMetadata(data) };
 }
 
-export { ALLOWED_HOSTS };
+export { ALLOWED_HOSTS, EGRESS_SCOPES };

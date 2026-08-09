@@ -50,8 +50,8 @@ function localUrl(baseUrl, kind, target, options) {
     return target;
   }
   const token = kind === 'media'
-    ? createMediaSignedTarget(target, options.secret, options.now)
-    : createSignedTarget(target, options.secret, options.ttlSeconds, options.now);
+    ? createMediaSignedTarget(target, options.secret, options.now, options.signedTargetMetadata)
+    : createSignedTarget(target, options.secret, options.ttlSeconds, options.now, options.signedTargetMetadata);
   return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
 }
 
