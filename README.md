@@ -58,6 +58,14 @@ The foundation exposes only safe transport behavior to modules: target allowlist
 
 Telegram public post details use Telegram's content-bearing embed page. X, Instagram, and Iwara preserve their canonical detail URLs and provide a safe gateway page when an HTML detail request fails instead of rendering an upstream login or error shell.
 
+## Session-aware egress
+
+Public Iwara, Telegram, X, Instagram, E-Hentai ranking, gallery, and media requests start without a source Cookie, token, or `Authorization` header. They are distributed across the public Mihomo pool. A request is upgraded to an authenticated session only after the upstream explicitly signals an authentication challenge: `401`, `403`, a login redirect, or an HTML login page. Timeouts, `429`, and `5xx` responses remain public retry failures and never leak credentials into the public pool.
+
+When a configured source credential is required, the gateway derives an HMAC fingerprint and assigns it to one stable `SESSION_LANE_01..12` listener. The raw credential, its fingerprint, and node names are neither logged nor included in RSS, HTML, signed links, or Git. Session assignment survives a restart through the persistent application cache, while a failed session lane is replaced only after an explicit health failure.
+
+Signed reader links, item pages, media links, and cache entries retain their egress scope. Public cache data is isolated from each `session:<fingerprint>` namespace, preventing anonymous and authenticated responses from being reused across one another. RSS readers keep using their existing RSSHub URL through this gateway; no per-reader proxy configuration or extra subscription is required.
+
 ## EhViewer Rankings
 
 The gateway provides public E-Hentai rankings without adding a separate subscription-management step:
