@@ -1,0 +1,43 @@
+services:
+  gateway:
+    build: .
+    container_name: rsshub-gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_SECRET_FILE: /run/secrets/gateway_secret
+      GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
+      GATEWAY_CACHE_MAX_BYTES: "5368709120"
+      GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES: "33554432"
+      EH_PREFETCH_CONCURRENCY: "8"
+      EH_PREFETCH_MAX_CONCURRENCY: "36"
+      EH_MEDIA_PREFETCH_CONCURRENCY: "6"
+      EH_MEDIA_PREFETCH_MIN_CONCURRENCY: "3"
+      EH_MEDIA_PREFETCH_MAX_CONCURRENCY: "48"
+      EH_MEDIA_PREFETCH_PER_ORIGIN: "48"
+      EGRESS_CONTROLLER_URL: http://127.0.0.1:9090
+      EGRESS_PROXY_BASE_URL: http://127.0.0.1
+      EGRESS_LANE_COUNT: "12"
+      EGRESS_MIN_CONCURRENCY_PER_LANE: "3"
+      EGRESS_MAX_CONCURRENCY_PER_LANE: "6"
+      EGRESS_MAX_TOTAL_CONCURRENCY: "48"
+      EGRESS_REFRESH_INTERVAL_MS: "60000"
+      EGRESS_PROBE_URL: https://e-hentai.org/
+      EGRESS_PROBE_TIMEOUT_MS: "5000"
+      EGRESS_PROBE_CACHE_MS: "300000"
+      RSSHUB_URL: http://rsshub:1200
+      SOURCE_CONFIG_FILE: /app/config/sources.json
+    ports:
+      - 127.0.0.1:1300:1300
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/gateway-cache:/var/cache/rsshub-gateway
+      - ./config/sources.json:/app/config/sources.json:ro
+      - ./secrets/gateway_secret:/run/secrets/gateway_secret:ro
+    networks:
+      1panel-network:
+        aliases:
+          - rsshub-gateway
+
+networks:
+  1panel-network:
+    external: true
