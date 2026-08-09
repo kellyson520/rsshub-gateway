@@ -4,7 +4,7 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './
 
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
-const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 8;
+const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_VARIANT_WIDTHS = [1280, 1920, 2560];
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
 

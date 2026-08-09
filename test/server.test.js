@@ -182,6 +182,28 @@ test('keeps one E-Hentai image request at first-paint priority', async () => {
   assert.equal((body.match(/loading="eager"/g) || []).length, 1);
 });
 
+test('allows the E-Hentai first-paint count to exceed the background warm count', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    ehFirstPaintCount: 2,
+    ehMediaForegroundWarmCount: 1,
+    fetchExternal: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/fast-shell/')) {
+        return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      }
+      return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/fast-shell/', 'secret');
+
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal((body.match(/<link rel="preload" as="image"/g) || []).length, 2);
+  assert.equal((body.match(/loading="eager"/g) || []).length, 2);
+});
+
 test('keeps E-Hentai background detail and media warming off foreground egress', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-priority-'));
   const requests = [];
@@ -213,6 +235,78 @@ test('keeps E-Hentai background detail and media warming off foreground egress',
       && (await cache.peek('https://page.example.hath.network/h/two.webp', 'media')).hit);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('serves foreground E-Hentai media without waiting for a background cache fill', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-foreground-cache-'));
+  let releaseBackground;
+  let foreground;
+  const backgroundGate = new Promise((resolve) => { releaseBackground = resolve; });
+  let notifyBackgroundStarted;
+  const backgroundStarted = new Promise((resolve) => { notifyBackgroundStarted = resolve; });
+  let mediaRequests = 0;
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    ehMediaForegroundWarmCount: 1,
+    ehMediaForegroundWarmConcurrency: 1,
+    fetchExternal: async (url, request = {}) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/gallery/')) {
+        return new Response('<html><body><div id="gn">Gallery</div><div id="gdt"><a href="https://e-hentai.org/s/first/123-1">Page 1</a></div></body></html>', {
+          headers: { 'content-type': 'text/html' },
+        });
+      }
+      if (value.endsWith('/s/first/123-1')) {
+        return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      }
+      mediaRequests += 1;
+      if (request.priority === 'background' && mediaRequests === 1) {
+        notifyBackgroundStarted();
+        await backgroundGate;
+      }
+      return new Response('image-bytes', { headers: { 'content-type': 'image/webp', 'content-length': '11' } });
+    },
+  });
+  try {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const headers = { 'x-forwarded-proto': 'http' };
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    const reader = await fetch(`http://127.0.0.1:${port}/_gateway/item/${token}`, { headers });
+    const body = await reader.text();
+    const mediaUrl = body.match(/<img[^>]+src="([^"]*\/_gateway\/media\/[^\"]+)"/)?.[1];
+
+    assert.equal(reader.status, 200);
+    assert.ok(mediaUrl);
+    await backgroundStarted;
+    foreground = fetch(mediaUrl, { headers }).then(async (response) => ({
+      status: response.status,
+      body: await response.text(),
+    }));
+    const outcome = await Promise.race([
+      foreground,
+      new Promise((resolve) => setTimeout(() => resolve({ pending: true }), 100)),
+    ]);
+
+    assert.equal(outcome.pending, undefined);
+    assert.equal(outcome.status, 200);
+    assert.equal(outcome.body, 'image-bytes');
+    assert.equal(mediaRequests, 2);
+  } finally {
+    releaseBackground?.();
+    await foreground?.catch(() => {});
+    await new Promise((resolve) => server.close(resolve));
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await rm(root, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOTEMPTY' || attempt === 19) throw error;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
   }
 });
 
