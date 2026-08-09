@@ -62,11 +62,14 @@ export function createResponseCache({
   const indexPath = path.join(cacheRoot, 'index.json');
   const entries = new Map();
   const inflight = new Map();
+  const storeInflight = new Map();
+  const loadStates = new Map();
   const ttl = { ...DEFAULT_TTL_SECONDS, ...ttlSeconds };
   const byteLimit = positiveNumber(maxBytes, DEFAULT_MAX_BYTES);
   let totalBytes = 0;
   let persistChain = Promise.resolve();
   let touchTimer;
+  let operationSequence = 0;
 
   async function writeIndex() {
     const payload = JSON.stringify({ version: 1, entries: [...entries.values()] });
@@ -196,6 +199,35 @@ export function createResponseCache({
     }
   }
 
+  function beginLoad(key) {
+    const state = loadStates.get(key) || { active: 0, lastForegroundCompletion: 0 };
+    state.active += 1;
+    loadStates.set(key, state);
+    return { state, startedAt: ++operationSequence };
+  }
+
+  function finishLoad(key, state) {
+    state.active -= 1;
+    if (state.active === 0 && !storeInflight.has(key)) loadStates.delete(key);
+  }
+
+  async function storeInOrder(key, storeTask, shouldSkip) {
+    const previous = storeInflight.get(key) || Promise.resolve();
+    const current = previous.catch(() => {}).then(async () => {
+      if (!shouldSkip()) await storeTask();
+    });
+    storeInflight.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (storeInflight.get(key) === current) {
+        storeInflight.delete(key);
+        const state = loadStates.get(key);
+        if (state?.active === 0) loadStates.delete(key);
+      }
+    }
+  }
+
   async function getOrLoad(url, kind, loader, {
     allowStale = true,
     namespace = 'public',
@@ -207,12 +239,20 @@ export function createResponseCache({
     const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
     const key = keyFor(url, kind, cacheNamespace);
     if (!bypassInflight && inflight.has(key)) return inflight.get(key);
+    const loadOrder = beginLoad(key);
 
     const operation = (async () => {
       try {
         const loaded = await loader();
         if (loaded?.refreshFailed && stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
-        if (loaded?.status >= 200 && loaded.status < 300) await store(url, kind, cacheNamespace, loaded);
+        if (loaded?.status >= 200 && loaded.status < 300) {
+          if (bypassInflight) loadOrder.state.lastForegroundCompletion = ++operationSequence;
+          await storeInOrder(
+            key,
+            () => store(url, kind, cacheNamespace, loaded),
+            () => !bypassInflight && loadOrder.state.lastForegroundCompletion > loadOrder.startedAt,
+          );
+        }
         return { ...loaded, state: 'MISS' };
       } catch (error) {
         if (stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
@@ -224,6 +264,7 @@ export function createResponseCache({
       return await operation;
     } finally {
       if (!bypassInflight && inflight.get(key) === operation) inflight.delete(key);
+      finishLoad(key, loadOrder.state);
     }
   }
 

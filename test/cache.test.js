@@ -92,6 +92,40 @@ test('coalesces concurrent loads for one cache key', async () => {
   });
 });
 
+test('does not let a background completion overwrite a foreground cache result', async () => {
+  let releaseBackground;
+  let notifyBackgroundStarted;
+  const backgroundGate = new Promise((resolve) => { releaseBackground = resolve; });
+  const backgroundStarted = new Promise((resolve) => { notifyBackgroundStarted = resolve; });
+  await withCache({}, async (cache) => {
+    const url = 'https://page.example.hath.network/h/ordered.webp';
+    const background = cache.getOrLoad(url, 'media', async () => {
+      notifyBackgroundStarted();
+      await backgroundGate;
+      return { status: 200, headers: { 'content-type': 'image/webp' }, body: 'background-body' };
+    });
+
+    await backgroundStarted;
+    const foreground = await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'foreground-body',
+    }), { bypassInflight: true });
+
+    assert.equal(foreground.body, 'foreground-body');
+    releaseBackground();
+    await background;
+
+    const cached = await cache.getOrLoad(url, 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'image/webp' },
+      body: 'unexpected-reload',
+    }));
+    assert.equal(cached.state, 'HIT');
+    assert.equal(cached.body, 'foreground-body');
+  });
+});
+
 test('does not retain successful responses marked non-cacheable', async () => {
   let loads = 0;
   await withCache({}, async (cache) => {

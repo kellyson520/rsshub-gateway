@@ -145,7 +145,10 @@ async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl = requ
       cacheable: response.ok && cacheable,
       refreshFailed: [408, 425, 429].includes(response.status) || response.status >= 500,
     };
-  }, { allowStale: cacheKind !== 'eh-image' });
+  }, {
+    allowStale: cacheKind !== 'eh-image',
+    bypassInflight: request?.priority === 'foreground',
+  });
   cacheStateLog(cacheUrl, cacheKind, result.state);
   return responseFromCachedDocument(result);
 }
@@ -235,12 +238,13 @@ function createConcurrencyLimiter(limit) {
   };
 }
 
-async function loadCachedMedia({ cache, fetcher, target, range, maxBytes }) {
+async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, request }) {
+  const requestOptions = { ...request, range, circuit: false };
   if (!cache || range) {
-    return { response: await fetcher(target, { range, circuit: false }), cacheState: 'BYPASS' };
+    return { response: await fetcher(target, requestOptions), cacheState: 'BYPASS' };
   }
   const result = await cache.getOrLoad(target, 'media', async () => {
-    const remote = await fetcher(target, { range, circuit: false });
+    const remote = await fetcher(target, requestOptions);
     const contentType = remote.headers.get('content-type') || '';
     const contentLength = Number.parseInt(remote.headers.get('content-length') || '', 10);
     const cacheable = remote.ok
@@ -257,7 +261,7 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes }) {
       body: await readBinaryLimited(remote, maxBytes),
       cacheable: true,
     };
-  });
+  }, { bypassInflight: request?.priority === 'foreground' });
   cacheStateLog(target, 'media', result.state);
   return {
     response: result.passthrough || responseFromCachedDocument(result),
@@ -1088,13 +1092,14 @@ export function createGatewayServer(options = {}) {
             adapter,
             egressScope: routeMetadata.egressScope || 'public',
             response: gatewayMatch[1] === 'item'
-              ? await fetchExternalDocument(adapter.readerTarget(target), { range: req.headers.range }, 'html')
+              ? await fetchExternalDocument(adapter.readerTarget(target), { range: req.headers.range, priority: 'foreground' }, 'html')
               : await fetchCachedMedia({
                 cache,
                 fetcher: fetchExternal,
                 target,
                 range: req.headers.range,
                 maxBytes: mediaCacheMaxFileBytes,
+                request: { priority: 'foreground' },
               }),
           };
         if (routed.unavailable) {

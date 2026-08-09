@@ -234,7 +234,15 @@ test('keeps E-Hentai background detail and media warming off foreground egress',
     await waitFor(async () => (await cache.peek('https://page.example.hath.network/h/one.webp', 'media')).hit
       && (await cache.peek('https://page.example.hath.network/h/two.webp', 'media')).hit);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await rm(root, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOTEMPTY' || attempt === 19) throw error;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
   }
 });
 
@@ -416,7 +424,15 @@ test('reuses cached E-Hentai source documents across refreshed signed item URLs'
     assert.equal(requested.filter((url) => new URL(url).hostname === 'e-hentai.org').length, 3);
     assert.match(results[1].body, /已加载 2 \/ 2 页/);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await rm(root, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOTEMPTY' || attempt === 19) throw error;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
   }
 });
 
@@ -547,7 +563,7 @@ test('fetches signed media without the shared host circuit', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(requests, [{
     url: 'https://ehgt.org/w/01/002/thumbnail.webp',
-    request: { range: undefined, circuit: false },
+    request: { range: undefined, circuit: false, priority: 'foreground' },
   }]);
 });
 
@@ -1007,6 +1023,46 @@ test('renders an adapter fallback page for a failed HTML detail response', async
   assert.match(body, /X 内容暂时无法读取/);
   assert.match(body, /_gateway\/item/);
   assert.doesNotMatch(body, /login required|<script>/i);
+});
+
+test('keeps fallback gateway details at foreground priority', async () => {
+  const requests = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    fetchExternal: async (_url, requestOptions) => {
+      requests.push(requestOptions);
+      return new Response('<html><body>Readable detail</body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+    },
+  });
+  const token = createSignedTarget('https://v2ex.com/t/1', 'secret');
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.match(body, /Readable detail/);
+  assert.equal(requests[0].priority, 'foreground');
+});
+
+test('keeps fallback gateway media at foreground priority', async () => {
+  const requests = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    fetchExternal: async (_url, requestOptions) => {
+      requests.push(requestOptions);
+      return new Response('image-bytes', {
+        headers: { 'content-type': 'image/webp', 'content-length': '11' },
+      });
+    },
+  });
+  const token = createSignedTarget('https://v2ex.com/image.webp', 'secret');
+  const { response, body } = await request(server, `/_gateway/media/${token}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(body, 'image-bytes');
+  assert.equal(requests[0].priority, 'foreground');
 });
 
 test('renders an X fallback page for a successful login shell', async () => {
