@@ -364,6 +364,19 @@ async function discoverEhGallery({
   };
 }
 
+function initialEhGalleryManifest({ adapter, target, initialHtml, maxPages }) {
+  const imageUrls = adapter.imagePageUrls(initialHtml, target).slice(0, maxPages);
+  return {
+    galleryUrls: adapter.galleryPageUrls(initialHtml, target),
+    imageUrls,
+    failures: [],
+    truncated: false,
+    totalPages: imageUrls.length,
+    status: 200,
+    title: extractEhGalleryTitle({ url: target, html: initialHtml }),
+  };
+}
+
 async function prefetchEhGallery({
   adapter,
   target,
@@ -811,6 +824,23 @@ export function createGatewayServer(options = {}) {
     return { ...routed, response: await cacheGatewayDocument(target, 'html', namespace, routed.response, { bypassInflight }) };
   }
 
+  async function discoverCachedEhGallery({ adapter, target, initialHtml, concurrency, maxPages, namespace }) {
+    if (!cache) return null;
+    const discovery = await discoverEhGallery({
+      adapter,
+      target,
+      initialHtml,
+      fetchExternal: async (url) => {
+        const cached = await readCachedGatewayDocument(url, 'html', namespace);
+        if (!cached) throw new Error('gallery cache miss');
+        return cached;
+      },
+      concurrency,
+      maxPages,
+    });
+    return discovery.failures.length ? null : discovery;
+  }
+
   async function cacheGatewayMedia(target, namespace, response, { bypassInflight = false } = {}) {
     if (!cache) return response;
     const contentType = response.headers.get('content-type') || '';
@@ -1183,28 +1213,46 @@ export function createGatewayServer(options = {}) {
           && remote.ok
           && contentType.includes('html');
         if (shouldPrefetchGallery) {
-          const discovery = await discoverEhGallery({
+          const initial = initialEhGalleryManifest({
             adapter,
             target,
             initialHtml: body,
-            fetchExternal: fetchExternalDocument,
-            concurrency: currentEhPrefetchConcurrency(),
             maxPages: ehMaxPrefetchPages,
           });
+          const cachedDiscovery = await discoverCachedEhGallery({
+            adapter,
+            target,
+            initialHtml: body,
+            concurrency: currentEhPrefetchConcurrency(),
+            maxPages: ehMaxPrefetchPages,
+            namespace: cacheNamespaceFor(routed.egressScope, routed.session),
+          });
+          const discovery = cachedDiscovery || (initial.imageUrls.length
+            ? null
+            : await discoverEhGallery({
+              adapter,
+              target,
+              initialHtml: body,
+              fetchExternal: fetchExternalDocument,
+              concurrency: currentEhPrefetchConcurrency(),
+              maxPages: ehMaxPrefetchPages,
+            }));
+          const pageTargets = discovery?.selectedImageUrls || initial.imageUrls;
+          const gallery = discovery || initial;
           prefetchedGallery = {
-            title: discovery.title,
-            pages: discovery.selectedImageUrls.map((mediaTarget, index) => ({
+            title: gallery.title,
+            pages: pageTargets.map((mediaTarget, index) => ({
               pageNumber: index + 1,
               mediaTarget,
               alt: `第 ${index + 1} 页`,
             })),
-            failures: discovery.failures,
-            totalPages: discovery.totalPages,
-            truncated: discovery.truncated,
+            failures: gallery.failures,
+            totalPages: gallery.totalPages,
+            truncated: gallery.truncated,
             preloadCount: ehFirstPaintCount,
-            status: discovery.status,
+            status: gallery.status,
           };
-          unavailableStatus = discovery.status;
+          unavailableStatus = gallery.status;
           void (async () => {
             const resolvedGallery = await prefetchEhGallery({
               adapter,
@@ -1218,7 +1266,7 @@ export function createGatewayServer(options = {}) {
               secret,
               concurrency: currentEhPrefetchConcurrency(),
               maxPages: ehMaxPrefetchPages,
-              discovery,
+              discovery: discovery || undefined,
               onPage: (page) => {
                 recordMetric('gallery_detail_completed', { source: adapter.name, count: 1 });
                 if (page.pageNumber > ehMediaForegroundWarmCount && page.mediaTarget) {

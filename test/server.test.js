@@ -477,26 +477,77 @@ test('keeps the E-Hentai reader available while a detail page fails in the backg
   assert.doesNotMatch(body, /第 2 页暂时无法读取/);
 });
 
-test('fetches E-Hentai gallery pagination before rendering all image pages', async () => {
-  const requested = [];
+test('returns the initial gallery page before assembling cached pagination', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-cold-pagination-'));
+  try {
+    const requested = [];
+    const cache = createResponseCache({ root });
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      fetchExternal: async (url) => {
+        requested.push(String(url));
+        if (url.endsWith('/g/123/gallery/')) return new Response(galleryPageWithPagination, { headers: { 'content-type': 'text/html' } });
+        if (url.endsWith('/g/123/gallery/?p=1')) return new Response(galleryPageTwo, { headers: { 'content-type': 'text/html' } });
+        if (url.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+        if (url.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+        return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+      },
+    });
+    const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
+    const first = await request(server, `/_gateway/item/${token}`);
+
+    assert.equal(first.response.status, 200);
+    assert.equal(requested.includes('https://e-hentai.org/g/123/gallery/?p=1'), true);
+    assert.match(first.body, /第 1 页/);
+    assert.doesNotMatch(first.body, /第 3 页/);
+
+    await waitFor(async () => (await cache.peek('https://e-hentai.org/g/123/gallery/?p=1', 'html')).hit
+      && (await cache.peek('https://e-hentai.org/s/third/123-3', 'eh-image')).hit, 2_000);
+    const second = await request(server, `/_gateway/item/${token}`);
+    assert.equal(second.response.status, 200);
+    assert.match(second.body, /第 3 页/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('returns the cold reader before delayed gallery pagination completes', async () => {
+  const paginationUrl = 'https://e-hentai.org/g/123/fast-pagination/?p=1';
+  const gallery = `<html><body><div id="gn">Fast pagination</div><div class="gtb"><a href="${paginationUrl}">2</a></div><div id="gdt"><a href="https://e-hentai.org/s/first/123-1">Page 1</a></div></body></html>`;
+  let releasePagination;
+  const paginationGate = new Promise((resolve) => { releasePagination = resolve; });
+  let completed = false;
   const server = createGatewayServer({
     secret: 'secret',
+    cache: false,
     fetchExternal: async (url) => {
-      requested.push(String(url));
-      if (url.endsWith('/g/123/gallery/')) return new Response(galleryPageWithPagination, { headers: { 'content-type': 'text/html' } });
-      if (url.endsWith('/g/123/gallery/?p=1')) return new Response(galleryPageTwo, { headers: { 'content-type': 'text/html' } });
-      if (url.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
-      if (url.endsWith('/s/second/123-2')) return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
-      return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+      const value = String(url);
+      if (value.endsWith('/g/123/fast-pagination/')) return new Response(gallery, { headers: { 'content-type': 'text/html' } });
+      if (value === paginationUrl) {
+        await paginationGate;
+        return new Response('<html><body><div id="gdt"><a href="https://e-hentai.org/s/second/123-2">Page 2</a></div></body></html>', {
+          headers: { 'content-type': 'text/html' },
+        });
+      }
+      return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
     },
   });
-  const token = createSignedTarget('https://e-hentai.org/g/123/gallery/', 'secret');
-  const { response, body } = await request(server, `/_gateway/item/${token}`);
+  const token = createSignedTarget('https://e-hentai.org/g/123/fast-pagination/', 'secret');
+  const pending = request(server, `/_gateway/item/${token}`).then((result) => {
+    completed = true;
+    return result;
+  });
 
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const completedBeforeRelease = completed;
+  releasePagination();
+  const { response, body } = await pending;
+
+  assert.equal(completedBeforeRelease, true);
   assert.equal(response.status, 200);
-  assert.equal(requested.includes('https://e-hentai.org/g/123/gallery/?p=1'), true);
+  assert.match(body, /class="reader eh-image-page"/);
   assert.match(body, /第 1 页/);
-  assert.match(body, /第 3 页/);
 });
 
 test('keeps the gallery preview when view=gallery is requested', async () => {
