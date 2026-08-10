@@ -180,6 +180,39 @@ test('uses derived media candidates and render containment for later gallery pag
   assert.match(output, /<p class="eh-image-content eh-image-deferred"[^>]+content-visibility:auto[^>]+contain-intrinsic-size:1000px 1400px[^>]*><img[^>]+src="https:\/\/gateway\.example\.test\/_gateway\/media\/two"[^>]+loading="lazy"[^>]+decoding="async"/);
 });
 
+test('renders resolved and deferred media targets as Flare-safe continuous images', () => {
+  const output = renderEhImageSequence({
+    title: 'Gallery title',
+    pages: [
+      {
+        pageNumber: 1,
+        mediaTarget: 'https://page.example.hath.network/h/one.webp',
+        alt: 'first',
+      },
+      {
+        pageNumber: 2,
+        mediaTarget: 'https://e-hentai.org/s/two/gallery-2',
+        alt: 'second',
+      },
+    ],
+    totalPages: 2,
+    baseUrl: 'https://gateway.example.test',
+    secret: 'secret',
+  });
+  const images = [...output.matchAll(/<img[^>]+src="([^"]+)"[^>]*>/g)].map((match) => match[1]);
+  const targets = images.map((src) => verifySignedTarget(new URL(src).pathname.split('/').pop(), 'secret').url);
+
+  assert.deepEqual(targets, [
+    'https://page.example.hath.network/h/one.webp',
+    'https://e-hentai.org/s/two/gallery-2',
+  ]);
+  assert.doesNotMatch(output, /<a[^>]*>\s*<img/i);
+  assert.match(output, /<img[^>]+src="[^"]+"[^>]+loading="eager"[^>]+fetchpriority="high"/);
+  assert.match(output, /<p class="eh-image-content eh-image-deferred"[^>]*>\s*<img[^>]+loading="lazy"/);
+  assert.doesNotMatch(output, /src="https:\/\/page\.example\.hath\.network\//);
+  assert.doesNotMatch(output, /src="https:\/\/e-hentai\.org\//);
+});
+
 test('carries session scope into generated reader media URLs without exposing its fingerprint', () => {
   const output = renderReaderPage({
     url: 'https://x.com/example/status/1',
