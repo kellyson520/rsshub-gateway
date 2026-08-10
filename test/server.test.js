@@ -46,6 +46,14 @@ async function waitFor(predicate, timeout = 500) {
   assert.fail('timed out waiting for background work');
 }
 
+function signedMediaTargets(body, secret) {
+  return [...String(body).matchAll(/<img\b[^>]+src="([^"]+)"/g)].map((match) => {
+    const url = new URL(match[1]);
+    const token = url.pathname.split('/').pop();
+    return verifySignedTarget(token, secret).url;
+  });
+}
+
 test('forwards and transforms an RSSHub feed', async () => {
   const server = createGatewayServer({
     secret: 'secret',
@@ -144,8 +152,11 @@ test('returns the E-Hentai reader shell before slow image detail pages finish', 
       if (String(url).endsWith('/g/123/fast-shell/')) {
         return new Response(gallery, { headers: { 'content-type': 'text/html' } });
       }
+      if (String(url).endsWith('/s/first/123-1')) {
+        return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      }
       await new Promise((resolve) => setTimeout(resolve, 200));
-      return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
     },
   });
   const token = createSignedTarget('https://e-hentai.org/g/123/fast-shell/', 'secret');
@@ -202,6 +213,65 @@ test('allows the E-Hentai first-paint count to exceed the background warm count'
   assert.equal(response.status, 200);
   assert.equal((body.match(/<link rel="preload" as="image"/g) || []).length, 2);
   assert.equal((body.match(/loading="eager"/g) || []).length, 2);
+});
+
+test('resolves the first E-Hentai image detail into a direct media target', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/direct-first/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/direct-first/', 'secret');
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
+  const targets = signedMediaTargets(body, 'secret');
+
+  assert.equal(response.status, 200);
+  assert.equal(targets[0], 'https://page.example.hath.network/h/one.webp');
+  assert.equal(targets[1], 'https://e-hentai.org/s/second/123-2');
+});
+
+test('falls back to the deferred first-image resolver when foreground detail resolution times out', async () => {
+  let releaseFirstDetail;
+  let notifyDetailStart;
+  const firstDetailGate = new Promise((resolve) => { releaseFirstDetail = resolve; });
+  const detailStarted = new Promise((resolve) => { notifyDetailStart = resolve; });
+  const firstDetailPriorities = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    ehFirstDetailBudgetMs: 100,
+    fetchExternal: async (url, request = {}) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/slow-first/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      if (value.endsWith('/s/first/123-1')) {
+        firstDetailPriorities.push(request.priority);
+        notifyDetailStart();
+        await firstDetailGate;
+        return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      }
+      return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/slow-first/', 'secret');
+  const pending = request(server, `/_gateway/item/${token}`);
+
+  await detailStarted;
+  const early = await Promise.race([
+    pending.then(() => ({ pending: false })),
+    new Promise((resolve) => setTimeout(() => resolve({ pending: true }), 150)),
+  ]);
+  releaseFirstDetail();
+  const { response, body } = await pending;
+  const targets = signedMediaTargets(body, 'secret');
+
+  assert.equal(firstDetailPriorities.includes('foreground'), true);
+  assert.equal(early.pending, false);
+  assert.equal(response.status, 200);
+  assert.equal(targets[0], 'https://e-hentai.org/s/first/123-1');
 });
 
 test('keeps E-Hentai background detail and media warming off foreground egress', async () => {
@@ -384,7 +454,7 @@ test('forwards every E-Hentai image page number as a gallery egress shard', asyn
     secret: 'secret',
     fetchExternal: async (url, request) => {
       if (String(url).endsWith('/g/123/sharded/')) return new Response(gallery, { headers: { 'content-type': 'text/html' } });
-      shards.push(request?.galleryShard);
+      shards.push({ shard: request?.galleryShard, priority: request?.priority || 'unspecified' });
       return new Response('<html><body><div id="i1"><h1>Sharded gallery</h1></div><img id="img" src="https://page.example.hath.network/h/shard.webp"></body></html>', {
         headers: { 'content-type': 'text/html' },
       });
@@ -395,7 +465,11 @@ test('forwards every E-Hentai image page number as a gallery egress shard', asyn
   const { response } = await request(server, `/_gateway/item/${token}`);
 
   assert.equal(response.status, 200);
-  assert.deepEqual(shards.sort((left, right) => left - right), [0, 1, 2, 3]);
+  assert.deepEqual(shards.filter((entry) => entry.priority === 'foreground').map((entry) => entry.shard), [0]);
+  assert.deepEqual(
+    shards.filter((entry) => entry.priority === 'background').map((entry) => entry.shard).sort((left, right) => left - right),
+    [0, 1, 2, 3],
+  );
 });
 
 test('reuses cached E-Hentai source documents across refreshed signed item URLs', async () => {

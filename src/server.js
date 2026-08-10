@@ -25,6 +25,12 @@ import {
   DEFAULT_HTML_BROTLI_QUALITY,
   encodeHtmlResponse,
 } from './http-encoding.js';
+import {
+  DEFAULT_FIRST_DETAIL_BUDGET_MS,
+  createInitialReaderManifest,
+  mergeResolvedPage,
+  withForegroundDeadline,
+} from './reader-manifest.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -377,6 +383,39 @@ function initialEhGalleryManifest({ adapter, target, initialHtml, maxPages }) {
   };
 }
 
+async function resolveForegroundEhPage({
+  adapter,
+  imageUrl,
+  pageNumber,
+  fetchDocument,
+  baseUrl,
+  secret,
+  signedTargetMetadata,
+  budgetMs,
+}) {
+  const operation = (async () => {
+    const remote = await fetchDocument(adapter.readerTarget(imageUrl), {
+      galleryShard: pageNumber - 1,
+      priority: 'foreground',
+      timeout: budgetMs,
+    }, 'html');
+    const body = await readLimited(remote);
+    if (!remote.ok || !(remote.headers.get('content-type') || '').includes('html')) return null;
+    const page = extractEhImagePage({
+      url: imageUrl,
+      html: body,
+      baseUrl,
+      secret,
+      pageNumber,
+      signedTargetMetadata,
+    });
+    return page ? { ...page, detailTarget: imageUrl } : null;
+  })();
+  void operation.catch(() => {});
+  const result = await withForegroundDeadline(operation, budgetMs);
+  return result.timedOut || !result.value ? null : result.value;
+}
+
 async function prefetchEhGallery({
   adapter,
   target,
@@ -606,6 +645,15 @@ export function createGatewayServer(options = {}) {
     DEFAULT_EH_FIRST_PAINT_COUNT,
     1,
     24,
+  );
+  const ehColdStartEnabled = String(
+    options.ehColdStartEnabled ?? process.env.EH_COLD_START_ENABLED ?? 'true',
+  ).toLowerCase() !== 'false';
+  const ehFirstDetailBudgetMs = boundedInteger(
+    options.ehFirstDetailBudgetMs ?? process.env.EH_FIRST_DETAIL_BUDGET_MS,
+    DEFAULT_FIRST_DETAIL_BUDGET_MS,
+    100,
+    1_800,
   );
   const mediaCacheMaxFileBytes = boundedInteger(
     options.mediaCacheMaxFileBytes ?? process.env.GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES,
@@ -1227,17 +1275,42 @@ export function createGatewayServer(options = {}) {
             maxPages: ehMaxPrefetchPages,
             namespace: cacheNamespaceFor(routed.egressScope, routed.session),
           });
-          const discovery = cachedDiscovery || (initial.imageUrls.length
-            ? null
-            : await discoverEhGallery({
+          let discovery = cachedDiscovery;
+          if (!discovery && (!ehColdStartEnabled || !initial.imageUrls.length)) {
+            discovery = await discoverEhGallery({
               adapter,
               target,
               initialHtml: body,
               fetchExternal: fetchExternalDocument,
               concurrency: currentEhPrefetchConcurrency(),
               maxPages: ehMaxPrefetchPages,
-            }));
-          const pageTargets = discovery?.selectedImageUrls || initial.imageUrls;
+            });
+          }
+          let pageTargets = discovery?.selectedImageUrls || initial.imageUrls;
+          if (!discovery && ehColdStartEnabled && initial.imageUrls.length) {
+            const firstDetailStartedAt = Date.now();
+            recordMetric('eh_first_detail_started', { source: adapter.name });
+            const firstPage = await resolveForegroundEhPage({
+              adapter,
+              imageUrl: initial.imageUrls[0],
+              pageNumber: 1,
+              fetchDocument: fetchExternalDocument,
+              baseUrl: publicBaseUrl(req),
+              secret,
+              signedTargetMetadata: signedTargetMetadata(adapter, routed.egressScope),
+              budgetMs: ehFirstDetailBudgetMs,
+            });
+            recordMetric(firstPage ? 'eh_first_detail_resolved' : 'eh_first_detail_deferred', {
+              source: adapter.name,
+              durationMs: Date.now() - firstDetailStartedAt,
+            });
+            let manifest = createInitialReaderManifest({
+              imageUrls: initial.imageUrls,
+              maxPages: ehMaxPrefetchPages,
+            });
+            if (firstPage) manifest = mergeResolvedPage(manifest, firstPage);
+            pageTargets = manifest.pages.map((page) => page.mediaTarget);
+          }
           const gallery = discovery || initial;
           prefetchedGallery = {
             title: gallery.title,
