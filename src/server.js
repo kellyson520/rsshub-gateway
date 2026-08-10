@@ -1108,6 +1108,7 @@ export function createGatewayServer(options = {}) {
       writeText(res, 405, 'method not allowed\n');
       return;
     }
+    const requestStartedAt = Date.now();
     const requestUrl = new URL(req.url || '/', 'http://gateway.internal');
     if (requestUrl.pathname === '/healthz') {
       writeText(res, 200, 'ok\n');
@@ -1255,6 +1256,7 @@ export function createGatewayServer(options = {}) {
         let body = await readLimited(remote);
         let contentType = remote.headers.get('content-type') || '';
         let prefetchedGallery;
+        let readerState = 'standard';
         let unavailableStatus = remote.status;
         const shouldPrefetchGallery = requestUrl.searchParams.get('view') !== 'gallery'
           && adapter.isGalleryUrl(target)
@@ -1311,6 +1313,7 @@ export function createGatewayServer(options = {}) {
             if (firstPage) manifest = mergeResolvedPage(manifest, firstPage);
             pageTargets = manifest.pages.map((page) => page.mediaTarget);
           }
+          readerState = discovery ? 'complete' : 'cold';
           const gallery = discovery || initial;
           prefetchedGallery = {
             title: gallery.title,
@@ -1408,6 +1411,11 @@ export function createGatewayServer(options = {}) {
               durationMs: Date.now() - encodingStartedAt,
             });
           }
+          recordMetric('reader_html_emitted', {
+            source: adapter.name,
+            state: readerState,
+            durationMs: Date.now() - requestStartedAt,
+          });
           writeBuffer(res, status, encoded.body, 'text/html; charset=utf-8', encoded.headers);
         } else {
           writeText(res, status, page, contentType.includes('html') ? 'text/html; charset=utf-8' : contentType);

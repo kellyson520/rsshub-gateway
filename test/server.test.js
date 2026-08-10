@@ -234,6 +234,38 @@ test('resolves the first E-Hentai image detail into a direct media target', asyn
   assert.equal(targets[1], 'https://e-hentai.org/s/second/123-2');
 });
 
+test('reports cold reader HTML emission timing without source details', async () => {
+  const metrics = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    onMetric: (event) => metrics.push(event),
+    fetchExternal: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/g/123/metric/')) return new Response(galleryPage, { headers: { 'content-type': 'text/html' } });
+      if (value.endsWith('/s/first/123-1')) return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
+      return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
+    },
+  });
+  const token = createSignedTarget('https://e-hentai.org/g/123/metric/', 'secret');
+
+  const { response } = await request(server, `/_gateway/item/${token}`);
+  const emission = metrics.find((event) => event.metric === 'reader_html_emitted');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual({
+    metric: emission?.metric,
+    source: emission?.source,
+    state: emission?.state,
+    count: emission?.count,
+  }, {
+    metric: 'reader_html_emitted',
+    source: 'ehviewer',
+    state: 'cold',
+    count: 1,
+  });
+  assert.equal(Number.isInteger(emission?.durationMs), true);
+});
+
 test('falls back to the deferred first-image resolver when foreground detail resolution times out', async () => {
   let releaseFirstDetail;
   let notifyDetailStart;

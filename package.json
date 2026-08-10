@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "benchmark:gallery": "node scripts/benchmark-gallery.js"
+    "benchmark:gallery": "node scripts/benchmark-gallery.js",
+    "benchmark:cold-start": "node scripts/benchmark-cold-start.js"
   },
   "dependencies": {
     "cheerio": "^1.1.0",
