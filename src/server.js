@@ -43,6 +43,7 @@ import {
 import { createRequestService } from './infrastructure/request-service.js';
 import { createLeaseStore, createSignedChunk, verifySignedChunk } from './download-lease.js';
 import { createLeaseProxy } from './lease-proxy.js';
+import { createLeaseBackfillQueue } from './lease-backfill.js';
 import { createLogger } from './infrastructure/logger.js';
 import { createPoller } from './infrastructure/poller.js';
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
@@ -1202,7 +1203,29 @@ export function createGatewayServer(options = {}) {
     })
     : { enqueue: () => {} };
 
+  const leaseBackfillEnabled = String(
+    options.leaseBackfillEnabled ?? process.env.GATEWAY_LEASE_BACKFILL ?? 'true',
+  ).toLowerCase() !== 'false';
+  const leaseBackfillConcurrency = boundedInteger(
+    options.leaseBackfillConcurrency ?? process.env.GATEWAY_LEASE_BACKFILL_CONCURRENCY,
+    2,
+    0,
+    8,
+  );
   const leaseStore = options.leaseStore || createLeaseStore();
+  const leaseBackfillQueue = leaseBackfillEnabled ? createLeaseBackfillQueue({
+    mediaTransport,
+    fetchExternal,
+    resolveMediaUrl: resolveIwaraVideo,
+    leaseStore,
+    cache,
+    isVideoTarget: isIwaraVideoTarget,
+    probeSize: (lease) => mediaTransport.probeSize(lease.targetUrl, { namespace: 'public' }),
+    maxConcurrency: leaseBackfillConcurrency,
+    videoCacheMaxFileBytes,
+    logger,
+    ...(options.leaseBackfillOptions || {}),
+  }) : null;
   const leaseProxyPort = boundedInteger(
     options.leaseProxyPort ?? process.env.GATEWAY_LEASE_PROXY_PORT,
     0,
@@ -1239,6 +1262,7 @@ export function createGatewayServer(options = {}) {
       port: leaseProxyPort,
       host: '0.0.0.0',
       onEvent: (event) => {
+        if (event.event === 'lease_completed') leaseBackfillQueue?.cancel(event.username);
         if (event.event !== 'lease_proxy_listening') logger.info(String(event.event || 'lease_proxy'), event);
       },
     })
@@ -1295,6 +1319,7 @@ export function createGatewayServer(options = {}) {
           adapter: egressAdapter?.stats?.() || null,
         },
         leases: leaseStore.stats(),
+        leaseBackfill: leaseBackfillQueue ? leaseBackfillQueue.stats() : null,
         circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
         metrics: Object.fromEntries(metricCounts),
         limits: {
@@ -1479,6 +1504,11 @@ export function createGatewayServer(options = {}) {
           ttlMs: view.ttlMs,
           maxBytes: view.maxBytes,
         });
+        if (leaseBackfillQueue) {
+          leaseBackfillQueue.enqueue(lease).catch(() => {
+            // Backfill must never fail the lease response.
+          });
+        }
         writeJson(res, 200, view);
       } catch (error) {
         logger.error('lease_failure', { error: error.message });
@@ -1838,12 +1868,14 @@ export function createGatewayServer(options = {}) {
   const poller = options.poller || createPoller({ intervalMs: 60_000, logger });
   poller.register('lease-sweep', () => {
     const expired = leaseStore.revokeExpired();
+    for (const username of expired) leaseBackfillQueue?.cancel(username);
     if (expired.length) logger.info('lease_sweep', { count: expired.length });
   }, { interval: 60_000 });
   if (options.poller === undefined) poller.start();
 
   server.leaseProxy = leaseProxy;
   server.leaseStore = leaseStore;
+  server.leaseBackfillQueue = leaseBackfillQueue;
   server.browserFetch = browserFetch;
   server.poller = poller;
   return server;

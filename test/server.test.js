@@ -1779,3 +1779,35 @@ test('migrates a session lane after repeated blocked statuses', async () => {
   }
   assert.deepEqual(events, [['mark', 'session-lane-01'], ['affinity', 'session-lane-01']]);
 });
+
+test('lease creation triggers backfill and revoke cancels it', async () => {
+  const probe = new (await import('node:http')).Server();
+  await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const leasePort = probe.address().port;
+  await new Promise((resolve) => probe.close(resolve));
+  const server = createGatewayServer({
+    secret: 'secret',
+    leaseProxyPort: leasePort,
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+    fetchExternal: async () => new Response('blocked', { status: 403 }),
+    leaseBackfillOptions: {
+      isVideoTarget: () => true,
+      probeSize: async () => 8 * 1024 * 1024,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      maxConcurrency: 1,
+    },
+  });
+  const token = createSignedTarget('https://page.example.hath.network/h/video.mp4', 'secret');
+  const { response, body } = await request(server, `/_gateway/lease/${token}`);
+  assert.equal(response.status, 200);
+  const view = JSON.parse(body);
+  assert.ok(view.proxyUrl);
+  await waitFor(() => server.leaseBackfillQueue?.stats().completed === 1, 2_000);
+  server.leaseStore.revoke(view.username);
+  const { response: infraResponse, body: infraBody } = await request(server, '/_gateway/infra');
+  assert.equal(infraResponse.status, 200);
+  const payload = JSON.parse(infraBody);
+  assert.ok(payload.leaseBackfill);
+  assert.equal(typeof payload.leaseBackfill.completed, 'number');
+  await server.leaseProxy.close();
+});

@@ -511,7 +511,7 @@ git commit -m "feat: lease backfill queue fills video slices into the gateway ca
 - Modify: `src/server.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/server.test.js`：
 
@@ -545,12 +545,12 @@ test('lease creation triggers backfill and revoke cancels it', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/server.test.js`
 Expected: FAIL（`payload.leaseBackfill` undefined）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/server.js`：
 
@@ -612,17 +612,17 @@ for (const username of expired) leaseBackfillQueue?.cancel(username);
 leaseBackfill: leaseBackfillQueue ? leaseBackfillQueue.stats() : null,
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/server.test.js`
 Expected: PASS（新旧全过）。
 
-- [ ] **Step 5: 全量测试**
+- [x] **Step 5: 全量测试**
 
 Run: `npm test`
 Expected: `# fail 0`。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add src/server.js test/server.test.js
