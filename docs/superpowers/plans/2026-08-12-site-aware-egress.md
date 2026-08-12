@@ -264,7 +264,7 @@ git commit -m "feat: merge egress policy host lists from env; add pixiv public r
 - Modify: `src/mihomo-egress.js`
 - Test: `test/mihomo-egress.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/mihomo-egress.test.js`：
 
@@ -330,12 +330,12 @@ test('excludes lanes that fail the required public probe', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/mihomo-egress.test.js`
 Expected: FAIL（`healthyScopes` 不存在、`probeTargets` 选项被忽略）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 修改 `src/mihomo-egress.js`：
 
@@ -458,12 +458,12 @@ async function assignSessionLane(laneId, node) {
 
 5. `sessionSnapshot` 与 `refreshSessionLanes`：`sessionSnapshot` 增加 `healthyScopes: slot.healthyScopes ? [...slot.healthyScopes] : undefined`；`refreshSessionLanes` 中 `const assigned = await assignSessionLane(slot.id, node); if (assigned) { occupied.add(node); }`（当前代码直接调用并 add，需改为先判空）。`assignSessionLane` 成功后设置 `slot.healthyScopes = new Set(['sticky'])`，回滚/释放时置 `slot.healthyScopes = undefined`（`releaseSessionLane` 与 `markSessionLaneUnhealthy` 处）。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/mihomo-egress.test.js`
 Expected: PASS（新旧测试全过）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/mihomo-egress.js test/mihomo-egress.test.js

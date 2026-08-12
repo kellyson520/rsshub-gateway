@@ -287,3 +287,63 @@ test('replaces a session lane only after it is marked unhealthy', async () => {
   assert.notEqual(second.find((lane) => lane.id === first[0].id).proxyName, first[0].proxyName);
   assert.equal(requests.filter((request) => request.options.method === 'PUT').length, 3);
 });
+
+test('probes public and sticky scopes and records healthyScopes per lane', async () => {
+  const probes = [];
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    listenerBaseUrl: 'http://127.0.0.1',
+    laneCount: 2,
+    probeTargets: {
+      public: ['https://e-hentai.org/'],
+      sticky: ['https://www.iwara.tv/'],
+      hosts: {},
+    },
+    probeFetchImpl: async (url, options = {}) => {
+      probes.push({ url: String(url), proxyUrl: String(options.dispatcher?.proxyUrl || '') });
+      if (String(url).includes('iwara.tv') && String(options.dispatcher?.proxyUrl || '').includes('7901')) {
+        return new Response('blocked', { status: 403 });
+      }
+      return new Response(null, { status: 204 });
+    },
+    fetchImpl: async (url, options = {}) => {
+      if (options.method === 'PUT') return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({ proxies: {
+        PUBLIC: { type: 'LoadBalance', all: ['node-a', 'node-b'] },
+        'node-a': { type: 'Shadowsocks', alive: true },
+        'node-b': { type: 'Vmess', alive: true },
+      } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+
+  const lanes = await adapter.refresh();
+
+  assert.equal(lanes.length, 2);
+  const laneA = lanes.find((lane) => lane.proxyName === 'node-a');
+  const laneB = lanes.find((lane) => lane.proxyName === 'node-b');
+  assert.deepEqual([...laneA.healthyScopes].sort(), ['public', 'sticky']);
+  assert.deepEqual([...laneB.healthyScopes], ['public', 'sticky']);
+  assert.ok(probes.some((probe) => String(probe.url).includes('iwara.tv')));
+  assert.ok(probes.some((probe) => String(probe.url).includes('e-hentai.org')));
+});
+
+test('excludes lanes that fail the required public probe', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    listenerBaseUrl: 'http://127.0.0.1',
+    laneCount: 1,
+    probeTargets: { public: ['https://e-hentai.org/'], sticky: [], hosts: {} },
+    probeFetchImpl: async () => new Response('blocked', { status: 403 }),
+    fetchImpl: async (url, options = {}) => {
+      if (options.method === 'PUT') return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({ proxies: {
+        PUBLIC: { type: 'LoadBalance', all: ['node-a'] },
+        'node-a': { type: 'Shadowsocks', alive: true },
+      } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+
+  const lanes = await adapter.refresh();
+
+  assert.equal(lanes.length, 0);
+});

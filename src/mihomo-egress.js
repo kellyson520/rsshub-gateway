@@ -30,6 +30,30 @@ function boundedPositiveInteger(value, fallback, maximum) {
   return Math.min(parsed, maximum);
 }
 
+function toUrlList(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.map(String).filter(Boolean);
+}
+
+function normalizeProbeTargets(value, legacyProbeUrl) {
+  if (value && typeof value === 'object') {
+    return {
+      public: toUrlList(value.public),
+      sticky: toUrlList(value.sticky),
+      hosts: value.hosts && typeof value.hosts === 'object' ? value.hosts : {},
+    };
+  }
+  if (!legacyProbeUrl) {
+    return { public: [], sticky: [], hosts: {} };
+  }
+  return {
+    public: toUrlList(legacyProbeUrl),
+    sticky: [],
+    hosts: {},
+  };
+}
+
 function laneId(index) {
   return `lane-${String(index + 1).padStart(2, '0')}`;
 }
@@ -68,6 +92,7 @@ export function createMihomoEgressAdapter({
   sessionListenerBasePort = DEFAULT_SESSION_LISTENER_BASE_PORT,
   fetchImpl = fetch,
   probeUrl,
+  probeTargets,
   probeFetchImpl = fetch,
   probeTimeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
   probeCacheMs = DEFAULT_PROBE_CACHE_MS,
@@ -79,6 +104,9 @@ export function createMihomoEgressAdapter({
   const sessionLanesLimit = Math.max(1, Number.parseInt(sessionLaneCount, 10) || DEFAULT_SESSION_LANE_COUNT);
   const sessionPort = boundedPositiveInteger(sessionListenerBasePort, DEFAULT_SESSION_LISTENER_BASE_PORT, 65_535);
   const sourceProbeUrl = String(probeUrl || '').trim();
+  const sourceProbeTargets = normalizeProbeTargets(probeTargets, sourceProbeUrl);
+  const PROBE_SCOPES = ['public', 'sticky'].filter((scope) => (sourceProbeTargets[scope] || []).length);
+  const REQUIRED_PROBE_SCOPE = PROBE_SCOPES.includes('public') ? 'public' : PROBE_SCOPES[0];
   const sourceProbeTimeoutMs = boundedPositiveInteger(probeTimeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 30_000);
   const sourceProbeCacheMs = boundedPositiveInteger(probeCacheMs, DEFAULT_PROBE_CACHE_MS, 60 * 60_000);
   let lastLanes = [];
@@ -126,13 +154,15 @@ export function createMihomoEgressAdapter({
     });
   }
 
-  async function probeLane(lane) {
-    if (!sourceProbeUrl) return true;
-    const cached = probeResults.get(lane.proxyName);
+  async function probeLane(lane, scope) {
+    const targets = sourceProbeTargets[scope] || [];
+    if (!targets.length) return true;
+    const cacheKey = `${lane.proxyName}:${scope}`;
+    const cached = probeResults.get(cacheKey);
     if (cached && now() - cached.at < sourceProbeCacheMs) return cached.ok;
     let ok = false;
     try {
-      const response = await probeFetchImpl(sourceProbeUrl, {
+      const response = await probeFetchImpl(targets[0], {
         method: 'HEAD',
         dispatcher: lane.dispatcher,
         redirect: 'manual',
@@ -143,7 +173,7 @@ export function createMihomoEgressAdapter({
     } catch {
       ok = false;
     }
-    probeResults.set(lane.proxyName, { at: now(), ok });
+    probeResults.set(cacheKey, { at: now(), ok });
     return ok;
   }
 
@@ -158,10 +188,16 @@ export function createMihomoEgressAdapter({
       proxyName: node,
       proxyUrl: listenerUrl(listenerBaseUrl, index),
       dispatcher: new ProxyAgent(listenerUrl(listenerBaseUrl, index)),
+      healthyScopes: new Set(),
     };
-    if (await probeLane(lane)) return { lane, index };
-    await lane.dispatcher.close().catch(() => {});
-    return { lane: undefined, index };
+    for (const scope of PROBE_SCOPES) {
+      if (await probeLane(lane, scope)) lane.healthyScopes.add(scope);
+    }
+    if (PROBE_SCOPES.length && !lane.healthyScopes.has(REQUIRED_PROBE_SCOPE)) {
+      await lane.dispatcher.close().catch(() => {});
+      return { lane: undefined, index };
+    }
+    return { lane, index };
   }
 
   async function proxyCandidates() {
@@ -218,6 +254,7 @@ export function createMihomoEgressAdapter({
       proxyName: slot.proxyName,
       proxyUrl: slot.proxyUrl,
       dispatcher: slot.dispatcher,
+      healthyScopes: slot.healthyScopes ? [...slot.healthyScopes] : undefined,
     };
   }
 
@@ -240,9 +277,19 @@ export function createMihomoEgressAdapter({
       body: JSON.stringify({ name: proxyName }),
     });
     await slot.dispatcher?.close().catch(() => {});
+    const dispatcher = new ProxyAgent(slot.proxyUrl);
+    const healthy = await probeLane({ id: slot.id, proxyName, dispatcher }, 'sticky');
+    if (!healthy) {
+      await dispatcher.close().catch(() => {});
+      slot.proxyName = undefined;
+      slot.dispatcher = undefined;
+      slot.healthyScopes = undefined;
+      return undefined;
+    }
     slot.proxyName = proxyName;
-    slot.dispatcher = new ProxyAgent(slot.proxyUrl);
+    slot.dispatcher = dispatcher;
     slot.unhealthy = false;
+    slot.healthyScopes = new Set(['sticky']);
     unhealthySessionNodes.delete(proxyName);
     return sessionSnapshot(slot);
   }
@@ -257,8 +304,8 @@ export function createMihomoEgressAdapter({
         if (slot.proxyName && !slot.unhealthy) continue;
         const node = nodes.find((candidate) => !occupied.has(candidate) && !unhealthySessionNodes.has(candidate));
         if (!node) continue;
-        await assignSessionLane(slot.id, node);
-        occupied.add(node);
+        const assigned = await assignSessionLane(slot.id, node);
+        if (assigned) occupied.add(node);
       }
       safeEvent(onEvent, { state: 'session-refresh', lanes: sessionLanes().length });
       return sessionLanes();
@@ -273,6 +320,7 @@ export function createMihomoEgressAdapter({
     if (!slot) return false;
     if (slot.proxyName) unhealthySessionNodes.add(slot.proxyName);
     slot.unhealthy = true;
+    slot.healthyScopes = undefined;
     await slot.dispatcher?.close().catch(() => {});
     slot.proxyName = undefined;
     slot.dispatcher = undefined;
@@ -287,6 +335,7 @@ export function createMihomoEgressAdapter({
     slot.proxyName = undefined;
     slot.dispatcher = undefined;
     slot.unhealthy = false;
+    slot.healthyScopes = undefined;
     return true;
   }
 
