@@ -27,7 +27,7 @@
 - Create: `src/reader-manifest.js`
 - Test: `test/reader-manifest.test.js`
 
-- [ ] **Step 1: Write failing tests for the initial manifest and resolution merge**
+- [x] **Step 1: Write failing tests for the initial manifest and resolution merge**
 
 Create tests with this contract:
 
@@ -91,7 +91,7 @@ test('returns the completed value before the foreground budget and marks timeout
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify the expected failure**
+- [x] **Step 2: Run the focused test to verify the expected failure**
 
 Run:
 
@@ -101,7 +101,7 @@ npm test -- test/reader-manifest.test.js
 
 Expected: FAIL because `src/reader-manifest.js` does not exist.
 
-- [ ] **Step 3: Implement the smallest pure manifest module**
+- [x] **Step 3: Implement the smallest pure manifest module**
 
 Implement exactly these exports:
 
@@ -145,7 +145,7 @@ export async function withForegroundDeadline(promise, timeoutMs) {
 
 Attach a rejection handler to the input promise before racing it so a late upstream failure cannot become an unhandled rejection. Keep this module independent of HTTP, Cheerio, adapters, signed URLs, and cache state.
 
-- [ ] **Step 4: Run the focused test and inspect the output**
+- [x] **Step 4: Run the focused test and inspect the output**
 
 Run:
 
@@ -155,7 +155,7 @@ npm test -- test/reader-manifest.test.js
 
 Expected: all manifest tests pass with zero warnings.
 
-- [ ] **Step 5: Commit the domain contract**
+- [x] **Step 5: Commit the domain contract**
 
 ```bash
 git add src/reader-manifest.js test/reader-manifest.test.js
@@ -168,7 +168,7 @@ git commit -m "feat: add cold-start reader manifest contract"
 - Modify: `src/server.js:312-365`
 - Modify: `test/server.test.js:480-500`
 
-- [ ] **Step 1: Add a failing delayed-pagination regression**
+- [x] **Step 1: Add a failing delayed-pagination regression**
 
 Add a test with an initial gallery containing page 1 and a delayed `?p=1` pagination response. The request must complete before the delayed response is released, and the returned body must contain page 1 as a reader image. Use `cache: false`, a `fetchExternal` function that records requests, and a `releasePagination` promise so the test proves the response does not await pagination.
 
@@ -181,7 +181,7 @@ assert.match(body, /第 1 页/);
 assert.equal(requested.includes('https://e-hentai.org/g/123/gallery/?p=1'), true);
 ```
 
-- [ ] **Step 2: Run the focused server test and verify it fails**
+- [x] **Step 2: Run the focused server test and verify it fails**
 
 Run:
 
@@ -191,7 +191,7 @@ npm test -- test/server.test.js
 
 Expected: the new test fails because `discoverEhGallery` currently awaits every pagination document before the response is rendered.
 
-- [ ] **Step 3: Add an initial extraction helper in `server.js`**
+- [x] **Step 3: Add an initial extraction helper in `server.js`**
 
 Create a pure local helper beside `discoverEhGallery`:
 
@@ -212,13 +212,13 @@ function initialEhGalleryManifest({ adapter, target, initialHtml, maxPages }) {
 
 Keep `discoverEhGallery` for the background complete path. It must continue to use the existing bounded concurrency, gallery shard, page deduplication, page limit, and failure messages.
 
-- [ ] **Step 4: Start complete discovery after the initial response path is prepared**
+- [x] **Step 4: Start complete discovery after the initial response path is prepared**
 
 The item route must call `initialEhGalleryManifest` immediately after reading the initial HTML, create a deferred reader manifest from `imageUrls`, and only then start `prefetchEhGallery` in a detached promise. The detached promise must end in `.catch(() => recordMetric('gallery_background_prefetch_failed', ...))` as the current route does.
 
 Do not remove full discovery, page sorting, or media queue enqueueing. Change only the point at which they are awaited.
 
-- [ ] **Step 5: Run the focused server test and the existing gallery tests**
+- [x] **Step 5: Run the focused server test and the existing gallery tests**
 
 Run:
 
@@ -228,7 +228,7 @@ npm test -- test/server.test.js
 
 Expected: the delayed-pagination test passes; tests that explicitly require page 3 in the first cold response are updated to make a second request after background cache warming and assert the complete response there. The existing suite must not be bypassed.
 
-- [ ] **Step 6: Commit the initial/full discovery split**
+- [x] **Step 6: Commit the initial/full discovery split**
 
 ```bash
 git add src/server.js test/server.test.js
@@ -242,7 +242,7 @@ git commit -m "perf: return E-Hentai reader before pagination discovery"
 - Modify: `src/reader-manifest.js`
 - Modify: `test/server.test.js:138-183`
 
-- [ ] **Step 1: Add failing direct-media and timeout tests**
+- [x] **Step 1: Add failing direct-media and timeout tests**
 
 Add two server tests:
 
@@ -251,7 +251,7 @@ Add two server tests:
 
 Extract the first media token from the first `<img src="...">`, URL-decode its token path, and use `verifySignedTarget` to inspect the target. Do not assert raw signed tokens or private source data in logs.
 
-- [ ] **Step 2: Run the focused tests to verify failure**
+- [x] **Step 2: Run the focused tests to verify failure**
 
 Run:
 
@@ -261,7 +261,7 @@ npm test -- test/server.test.js
 
 Expected: the direct-media assertion fails because every cold reader page currently signs the image-detail URL, and the timeout test fails because the current request path does not have a foreground deadline.
 
-- [ ] **Step 3: Add bounded configuration and metric fields**
+- [x] **Step 3: Add bounded configuration and metric fields**
 
 In `createGatewayServer`, add:
 
@@ -279,7 +279,7 @@ const ehFirstDetailBudgetMs = boundedInteger(
 
 Use the feature flag to select the initial/foreground path. When false, retain the old full-discovery behavior for rollback. Record `eh_first_detail_started`, `eh_first_detail_resolved`, `eh_first_detail_deferred`, and `reader_html_emitted` with only source name, state, count, and duration.
 
-- [ ] **Step 4: Implement a foreground first-detail resolver**
+- [x] **Step 4: Implement a foreground first-detail resolver**
 
 Add a local function with this behavior:
 
@@ -319,7 +319,7 @@ async function resolveForegroundEhPage({
 
 Attach `operation.catch(() => {})` before the deadline race in the actual implementation so a late response is safely drained by the existing cache/fetch layer. A foreground timeout returns `null`; it must never throw a source HTML page into the reader.
 
-- [ ] **Step 5: Merge the resolved first page before rendering**
+- [x] **Step 5: Merge the resolved first page before rendering**
 
 After the initial gallery HTML is read:
 
@@ -331,7 +331,7 @@ After the initial gallery HTML is read:
 
 The resolved first page must carry `signedTargetMetadata` from the original route so session-scoped tokens and cache namespaces remain isolated. Deferred pages must continue to use their image-detail URL as their internal `mediaTarget`, which the existing E-Hentai media resolver understands.
 
-- [ ] **Step 6: Run focused tests and confirm the red/green transition**
+- [x] **Step 6: Run focused tests and confirm the red/green transition**
 
 Run:
 
@@ -341,7 +341,7 @@ npm test -- test/reader-manifest.test.js test/server.test.js
 
 Expected: direct first media and timeout fallback pass, all existing E-Hentai reader tests pass after their explicit cold/full expectations are updated, and no unhandled rejection is printed.
 
-- [ ] **Step 7: Commit the foreground resolver**
+- [x] **Step 7: Commit the foreground resolver**
 
 ```bash
 git add src/server.js src/reader-manifest.js test/server.test.js
@@ -355,7 +355,7 @@ git commit -m "perf: resolve first gallery media on foreground path"
 - Modify: `test/reader.test.js`
 - Modify: `test/server.test.js:249-319,570-640`
 
-- [ ] **Step 1: Add reader markup regressions**
+- [x] **Step 1: Add reader markup regressions**
 
 Add tests that call `renderEhImageSequence` with:
 
@@ -382,7 +382,7 @@ Assert that:
 - the first image is eager/high priority and later images remain lazy/deferred;
 - no external source URL occurs as a raw `src` value.
 
-- [ ] **Step 2: Run the focused reader tests and verify the expected failure**
+- [x] **Step 2: Run the focused reader tests and verify the expected failure**
 
 Run:
 
@@ -392,17 +392,17 @@ npm test -- test/reader.test.js
 
 Expected: the new direct/deferred assertions fail until the reader test fixture uses the same media-target contract as the server.
 
-- [ ] **Step 3: Make the existing renderer accept resolved and deferred targets**
+- [x] **Step 3: Make the existing renderer accept resolved and deferred targets**
 
 Keep `renderEhImageSequence` free of network calls. Its current `page.media || localUrl(... page.mediaTarget ...)` behavior is retained; ensure the manifest-to-page conversion sets `media` only for resolved pages and `mediaTarget` to the detail URL for deferred pages. Do not add client JavaScript, link wrappers, or external `<img src>` fallbacks.
 
 Keep one first-image preload and `loading="eager" fetchpriority="high"` for the direct media page. Preserve `content-visibility` only for deferred pages; the first page must not depend on it for layout or painting.
 
-- [ ] **Step 4: Verify foreground streaming is still independent of cache persistence**
+- [x] **Step 4: Verify foreground streaming is still independent of cache persistence**
 
 Retain the existing `cacheGatewayMedia` foreground behavior and add/keep a test where the cache body write is held behind a promise. Request the direct first-media token and assert the response body arrives before the cache write releases. Then release the write and assert the cache entry eventually appears.
 
-- [ ] **Step 5: Run all reader/server tests and commit**
+- [x] **Step 5: Run all reader/server tests and commit**
 
 ```bash
 npm test -- test/reader.test.js test/server.test.js
@@ -417,11 +417,11 @@ git commit -m "test: preserve Flare-compatible continuous media rendering"
 - Modify: `docker-compose.yml` only when an explicit default is required
 - Test/diagnostic: `scripts/benchmark-gallery.js` or a new test-only benchmark helper if the existing benchmark cannot measure cold first-detail timing
 
-- [ ] **Step 1: Add a failing configuration/documentation check only if a runtime manifest is used**
+- [x] **Step 1: Add a failing configuration/documentation check only if a runtime manifest is used**
 
 If Compose defines gateway environment variables, add a test or static assertion that the default is `EH_COLD_START_ENABLED=true` and `EH_FIRST_DETAIL_BUDGET_MS=1200`, with no secret or domain value. If Compose does not define defaults, document the process defaults in `README.md` and do not modify Compose.
 
-- [ ] **Step 2: Document the measured behavior**
+- [x] **Step 2: Document the measured behavior**
 
 Update the README to state:
 
@@ -433,7 +433,7 @@ Update the README to state:
 
 Do not include the production domain, IP addresses, proxy names, tokens, or credentials.
 
-- [ ] **Step 3: Run the complete automated suite**
+- [x] **Step 3: Run the complete automated suite**
 
 ```bash
 npm test
@@ -441,7 +441,7 @@ npm test
 
 Expected: all tests pass, including the new manifest, cold-start, reader, cache, egress, adapter, and upstream tests.
 
-- [ ] **Step 4: Run a fresh synthetic cold-start benchmark**
+- [x] **Step 4: Run a fresh synthetic cold-start benchmark**
 
 Use an uncached temporary cache and a controlled injected upstream with:
 
@@ -452,7 +452,7 @@ Use an uncached temporary cache and a controlled injected upstream with:
 
 Assert and print only durations and status/count fields. The expected result is reader HTML under 2,000 ms, the first signed media token resolves to the actual image target, and the delayed pagination request remains active after HTML response completion.
 
-- [ ] **Step 5: Verify the live process without exposing private data**
+- [x] **Step 5: Verify the live process without exposing private data**
 
 Run:
 
@@ -465,7 +465,7 @@ git status --short
 
 For a live gallery token, record only `status`, `time_starttransfer`, `time_total`, `content-length`, preload count, and media cache state. Redact the URL and token from any output. A source-unavailable response must be reported as an upstream availability result, not counted as a successful first-paint measurement.
 
-- [ ] **Step 6: Commit documentation and verification changes**
+- [x] **Step 6: Commit documentation and verification changes**
 
 ```bash
 git add README.md docker-compose.yml scripts test
@@ -474,12 +474,12 @@ git commit -m "docs: document Flare cold-start controls and verification"
 
 ## Final Review Checklist
 
-- [ ] The first cold reader response does not await gallery pagination.
-- [ ] The first detail page has a bounded foreground attempt.
-- [ ] A successful first detail produces a direct signed media target.
-- [ ] A timeout/failure safely falls back to the detail resolver.
-- [ ] Full discovery and media warming still run in the background with bounded multi-egress concurrency.
-- [ ] Foreground media streams before cache persistence completes.
-- [ ] Public/session namespaces, signed metadata, and privacy guarantees are unchanged.
-- [ ] Flare receives continuous-reader HTML with no client-side setup or external raw media URLs.
-- [ ] `npm test`, health, readiness, and fresh synthetic timing evidence are all green.
+- [x] The first cold reader response does not await gallery pagination.
+- [x] The first detail page has a bounded foreground attempt.
+- [x] A successful first detail produces a direct signed media target.
+- [x] A timeout/failure safely falls back to the detail resolver.
+- [x] Full discovery and media warming still run in the background with bounded multi-egress concurrency.
+- [x] Foreground media streams before cache persistence completes.
+- [x] Public/session namespaces, signed metadata, and privacy guarantees are unchanged.
+- [x] Flare receives continuous-reader HTML with no client-side setup or external raw media URLs.
+- [x] `npm test`, health, readiness, and fresh synthetic timing evidence are all green.
