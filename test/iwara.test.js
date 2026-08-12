@@ -78,6 +78,23 @@ test('renders an iwara feed with enclosures and thumbnails', () => {
   assert.doesNotMatch(feed, /Some <Title>/);
 });
 
+test('renders an iwara image feed with image links and thumbnail enclosures', () => {
+  const image = {
+    id: 'img1',
+    title: 'An Image',
+    rating: 'general',
+    numViews: 7,
+    createdAt: '2026-08-11T17:48:07.000Z',
+    thumbnail: { id: 'thumb-1', mime: 'image/jpeg', size: 2048 },
+    files: [{ id: 'file-1', mime: 'image/jpeg', size: 2048 }],
+  };
+  const feed = renderIwaraFeed({ username: 'kelpie', kind: 'image', videos: [image] });
+  assert.match(feed, /<link>https:\/\/iwara\.tv\/image\/img1<\/link>/);
+  assert.match(feed, /<enclosure url="https:\/\/i\.iwara\.tv\/image\/thumbnail\/thumb-1\/thumbnail-00\.jpg" type="image\/jpeg" length="2048"\/>/);
+  assert.match(feed, /<media:content url="https:\/\/i\.iwara\.tv\/image\/thumbnail\/thumb-1\/thumbnail-00\.jpg" type="image\/jpeg" medium="image"\/>/);
+  assert.doesNotMatch(feed, /video\/mp4/);
+});
+
 test('renders an iwara reader page with signed media routes', () => {
   const page = renderIwaraReaderPage({ video, baseUrl: 'https://example.com', secret: 'secret' });
   assert.match(page, /<video[^>]+controls/);
@@ -144,6 +161,7 @@ test('returns 404 for an unknown iwara user', async () => {
 test('resolves a renamed iwara user by display name when the profile lookup misses', async () => {
   const server = createGatewayServer({
     secret: 'secret',
+    cache: false,
     fetchdFetch: async (url) => {
       if (url.includes('/profile/kelpie')) {
         return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
@@ -174,9 +192,50 @@ test('resolves a renamed iwara user by display name when the profile lookup miss
   assert.match(body, /<title>kelpie&apos;s iwara<\/title>/);
 });
 
+test('serves an iwara user image feed through the images endpoint', async () => {
+  const fetchdCalls = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    fetchdFetch: async (url) => {
+      fetchdCalls.push(String(url));
+      if (url.includes('/profile/kelpie')) {
+        return {
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: Buffer.from(JSON.stringify({ user: { id: 'user-1', name: 'kelpie' } })),
+          json: async () => ({ user: { id: 'user-1', name: 'kelpie' } }),
+        };
+      }
+      if (url.includes('/images?user=user-1')) {
+        return {
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: Buffer.from(JSON.stringify({ results: [{ id: 'img1', title: 'An Image', thumbnail: { id: 'thumb-1', mime: 'image/jpeg', size: 2048 } }] })),
+          json: async () => ({ results: [{ id: 'img1', title: 'An Image', thumbnail: { id: 'thumb-1', mime: 'image/jpeg', size: 2048 } }] }),
+        };
+      }
+      return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
+    },
+  });
+  const { response, body } = await request(server, '/iwara/users/kelpie/image');
+  assert.equal(response.status, 200);
+  const itemToken = body.match(/<link>https:\/\/127\.0\.0\.1:\d+\/_gateway\/item\/([^<]+)<\/link>/)?.[1];
+  assert.ok(itemToken, 'image item gateway link missing');
+  assert.equal(verifySignedTarget(itemToken, 'secret').url, 'https://iwara.tv/image/img1');
+  const enclosureToken = body.match(/<enclosure url="https:\/\/127\.0\.0\.1:\d+\/_gateway\/media\/([^"]+)" type="image\/jpeg"/)?.[1];
+  assert.ok(enclosureToken, 'image enclosure media token missing');
+  assert.equal(verifySignedTarget(enclosureToken, 'secret').url, 'https://i.iwara.tv/image/thumbnail/thumb-1/thumbnail-00.jpg');
+  assert.ok(fetchdCalls.some((url) => url.includes('/images?user=user-1')));
+  assert.ok(!fetchdCalls.some((url) => url.includes('/videos?user=user-1')));
+});
+
 test('returns 404 when the iwara username cannot be resolved by profile or search', async () => {
   const server = createGatewayServer({
     secret: 'secret',
+    cache: false,
     fetchdFetch: async (url) => {
       if (url.includes('/autocomplete/users?query=nobody')) {
         return {

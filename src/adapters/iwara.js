@@ -85,16 +85,22 @@ function cdata(value) {
 
 export function renderIwaraFeed({ username = '', kind = 'video', videos = [], selfUrl = '' } = {}) {
   const entries = videos.map((video) => {
-    const file = video.file || {};
+    const isImage = kind === 'image';
+    const file = isImage ? (video.files?.[0] || video.thumbnail || {}) : (video.file || {});
     const title = video.title || video.id;
-    const link = iwaraVideoPageUrl(video);
-    const thumbnail = file.id ? iwaraThumbnailUrl(file.id, 0) : '';
-    const enclosure = isIwaraVideoTarget(link)
-      ? `<enclosure url="${escapeXml(link)}" type="video/mp4" length="${Number.parseInt(file.size, 10) || 0}"/>`
-      : '';
-    const media = isIwaraVideoTarget(link)
-      ? `<media:content url="${escapeXml(link)}" type="video/mp4" medium="video"/>`
-      : '';
+    const link = isImage ? `${SITE_BASE}/image/${video.id}` : iwaraVideoPageUrl(video);
+    const thumbnailId = isImage ? video.thumbnail?.id : file.id;
+    const thumbnail = thumbnailId ? iwaraThumbnailUrl(thumbnailId, 0) : '';
+    const enclosure = isImage
+      ? (thumbnail ? `<enclosure url="${escapeXml(thumbnail)}" type="${escapeXml(file.mime || 'image/jpeg')}" length="${Number.parseInt(file.size, 10) || 0}"/>` : '')
+      : (isIwaraVideoTarget(link)
+        ? `<enclosure url="${escapeXml(link)}" type="video/mp4" length="${Number.parseInt(file.size, 10) || 0}"/>`
+        : '');
+    const media = isImage
+      ? (thumbnail ? `<media:content url="${escapeXml(thumbnail)}" type="image/jpeg" medium="image"/>` : '')
+      : (isIwaraVideoTarget(link)
+        ? `<media:content url="${escapeXml(link)}" type="video/mp4" medium="video"/>`
+        : '');
     const description = [
       thumbnail ? `<p><img src="${escapeXml(thumbnail)}" alt="${escapeXml(title)}"/></p>` : '',
       `<p>${escapeXml(video.rating || '')}</p>`,
@@ -150,8 +156,8 @@ export async function fetchIwaraUser(fetchJson, username, { token } = {}) {
 
 export async function fetchIwaraVideos(fetchJson, userId, { kind = 'video', token } = {}) {
   const params = new URLSearchParams({ user: userId, limit: '32' });
-  if (kind === 'image') params.set('type', 'image');
-  const data = await fetchJson(`${API_BASE}/videos?${params}`, {
+  const endpoint = kind === 'image' ? '/images' : '/videos';
+  const data = await fetchJson(`${API_BASE}${endpoint}?${params}`, {
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
   return Array.isArray(data?.results) ? data.results : [];
