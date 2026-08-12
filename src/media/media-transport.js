@@ -402,13 +402,15 @@ export function createMediaTransport({
     return new Response(Readable.toWeb(Readable.from(bytes())), { status: 206, headers });
   }
 
-  async function fillVideoSlices(target, resolvedUrl, size, namespace, parsed, maxSliceBytes = videoCacheMaxFileBytes) {
+  async function fillVideoSlices(target, resolvedUrl, size, namespace, parsed, maxSliceBytes = videoCacheMaxFileBytes, options = {}) {
     if (!cache) return;
+    const { shouldStop } = options;
     const plan = sliceRanges(parsed.start, parsed.end, size, { sliceSize, lookahead: sliceLookaheadBytes });
     if (!plan.ranges.length || plan.ranges[0].start >= maxSliceBytes) return;
     const missing = [];
     for (const part of plan.ranges) {
       if (part.start >= maxSliceBytes) break;
+      if (shouldStop?.()) return;
       const existing = await cache.readRange(sliceKey(target, part.start), 'media', { namespace });
       if (!existing || existing.size !== part.end - part.start + 1) missing.push(part);
     }
@@ -416,6 +418,7 @@ export function createMediaTransport({
     let next = 0;
     async function worker() {
       while (next < missing.length) {
+        if (shouldStop?.()) return;
         const part = missing[next];
         next += 1;
         try {
@@ -607,6 +610,9 @@ export function createMediaTransport({
     probeSize,
     chunkManifest,
     imageVariantCacheUrl,
+    fillVideoSlices,
+    sliceKey,
+    rememberVideoSize,
   };
 }
 

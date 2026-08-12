@@ -294,3 +294,45 @@ test('chunkManifest signs independent chunk urls covering the full file', async 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('exposes fillVideoSlices, sliceKey and rememberVideoSize for lease backfill', () => {
+  const transport = createMediaTransport({ fetchExternal: async () => response('x') });
+  assert.equal(typeof transport.fillVideoSlices, 'function');
+  assert.equal(typeof transport.sliceKey, 'function');
+  assert.equal(typeof transport.rememberVideoSize, 'function');
+  assert.equal(transport.sliceKey('https://example.com/v.mp4', 0), 'https://example.com/v.mp4#slice=0');
+});
+
+test('fillVideoSlices stops early when shouldStop returns true', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-backfill-stop-'));
+  try {
+    const cache = createResponseCache({ root });
+    const fetched = [];
+    const transport = createMediaTransport({
+      cache,
+      sliceSize: 4 * 1024 * 1024,
+      sliceFillConcurrency: 2,
+      fetchExternal: async (url, options = {}) => {
+        fetched.push(String(options.range));
+        const match = String(options.range).match(/bytes=(\d+)-(\d+)/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        return new Response(Buffer.alloc(end - start + 1, 0x61), {
+          status: 206,
+          headers: { 'content-type': 'video/mp4', 'content-range': `bytes ${start}-${end}/100000000` },
+        });
+      },
+    });
+    let stopped = false;
+    await transport.fillVideoSlices('https://example.com/v.mp4', 'https://cdn.example.com/v.mp4', 100 * 1024 * 1024, 'public', { start: 0, end: 100 * 1024 * 1024 - 1 }, 256 * 1024 * 1024, { shouldStop: () => stopped });
+    const before = fetched.length;
+    assert.ok(before >= 1);
+    stopped = true;
+    await transport.fillVideoSlices('https://example.com/v.mp4', 'https://cdn.example.com/v.mp4', 100 * 1024 * 1024, 'public', { start: 0, end: 100 * 1024 * 1024 - 1 }, 256 * 1024 * 1024, { shouldStop: () => stopped });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const after = fetched.length;
+    assert.ok(after <= before + 2, `fetched grew ${before} -> ${after}`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

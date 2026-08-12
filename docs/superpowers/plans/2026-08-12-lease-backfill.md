@@ -18,7 +18,7 @@
 - Modify: `src/media/media-transport.js`
 - Test: `test/media-transport.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/media-transport.test.js`：
 
@@ -66,12 +66,12 @@ test('fillVideoSlices stops early when shouldStop returns true', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/media-transport.test.js`
 Expected: FAIL（`transport.fillVideoSlices` undefined）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/media/media-transport.js`：
 
@@ -136,12 +136,12 @@ async function fillVideoSlices(target, resolvedUrl, size, namespace, parsed, max
   };
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/media-transport.test.js`
 Expected: PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/media/media-transport.js test/media-transport.test.js
