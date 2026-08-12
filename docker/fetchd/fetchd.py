@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from curl_cffi import requests
 
 PROXY = os.environ.get("FETCHD_PROXY", "http://127.0.0.1:7890")
-IMPERSONATE = os.environ.get("FETCHD_IMPERSONATE", "chrome")
+IMPERSONATE = os.environ.get("FETCHD_IMPERSONATE", "chrome131")
 PORT = int(os.environ.get("FETCHD_PORT", "7899"))
 MAX_BODY = int(os.environ.get("FETCHD_MAX_BODY", str(4 * 1024 * 1024)))
 MAX_TIMEOUT = 60.0

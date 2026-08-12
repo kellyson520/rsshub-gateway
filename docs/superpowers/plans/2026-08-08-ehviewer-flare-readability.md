@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `test/reader.test.js`
 
-- [ ] **Step 1: Add the failing assertion**
+- [x] **Step 1: Add the failing assertion**
 
 Extend the existing E-Hentai image-page test with assertions for the desired Readability-safe structure:
 
@@ -28,7 +28,7 @@ assert.doesNotMatch(output, /<article class="reader eh-image-page">/);
 assert.doesNotMatch(output, /<figure class="eh-image-frame">/);
 ```
 
-- [ ] **Step 2: Run the focused test and verify the expected failure**
+- [x] **Step 2: Run the focused test and verify the expected failure**
 
 Run `node --test test/reader.test.js`.
 
@@ -40,7 +40,7 @@ Expected result: the existing image-page test fails on the first new assertion b
 - Modify: `src/reader.js`
 - Test: `test/reader.test.js`
 
-- [ ] **Step 1: Change the CSS selectors**
+- [x] **Step 1: Change the CSS selectors**
 
 Keep `.eh-image-page` as the layout container. Change the title and navigation rules to target paragraph elements:
 
@@ -50,7 +50,7 @@ Keep `.eh-image-page` as the layout container. Change the title and navigation r
 .eh-image-nav a{padding:5px 10px;border:1px solid #cbd5e1;border-radius:5px;background:#fff}
 ```
 
-- [ ] **Step 2: Replace the image-page markup**
+- [x] **Step 2: Replace the image-page markup**
 
 In `renderEhImagePage`, replace the current `article`/`section`/`figure` return value with:
 
@@ -63,7 +63,7 @@ return renderDocument(
 
 Keep `navigation` and all signed URL generation unchanged.
 
-- [ ] **Step 3: Run the focused tests and verify green**
+- [x] **Step 3: Run the focused tests and verify green**
 
 Run `node --test test/reader.test.js` and confirm every reader test passes, including the new structure assertions.
 
@@ -72,18 +72,18 @@ Run `node --test test/reader.test.js` and confirm every reader test passes, incl
 **Files:**
 - No additional source files.
 
-- [ ] **Step 1: Run the complete test suite**
+- [x] **Step 1: Run the complete test suite**
 
 Run `npm test` from `/home/ubuntu/.config/rsshub-gateway` and verify zero failures.
 
-- [ ] **Step 2: Rebuild the production gateway**
+- [x] **Step 2: Rebuild the production gateway**
 
 Run `sudo -n docker compose up -d --build gateway` from `/opt/1panel/apps/rsshub-gateway`.
 
-- [ ] **Step 3: Verify readiness and live HTML**
+- [x] **Step 3: Verify readiness and live HTML**
 
 Fetch `/readyz` and a fresh E-Hentai ranking item. Verify the item response contains the `div.eh-image-page`, three `p` blocks, and a signed `/_gateway/media/` image URL.
 
-- [ ] **Step 4: Verify Flare's request path**
+- [x] **Step 4: Verify Flare's request path**
 
 Inspect OpenResty access logs after a Flare refresh. A successful client-side extraction must be followed by a media request with Flare's `ktor-client` user agent; a detail-only request indicates the old page was cached or the client did not refresh.

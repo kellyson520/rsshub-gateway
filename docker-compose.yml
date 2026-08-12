@@ -61,6 +61,7 @@ services:
       FETCHD_PROXY: http://rsshub-gateway:7890
       FETCHD_PORT: "7899"
       FETCHD_MAX_BODY: "4194304"
+      FETCHD_IMPERSONATE: chrome131
     networks:
       1panel-network:
         aliases:

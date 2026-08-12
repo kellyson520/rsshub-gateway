@@ -16,7 +16,7 @@
 - Modify: `src/adapters/ehviewer.js`
 - Test: `test/ehviewer.test.js`
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Add tests using a synthetic E-Hentai gallery with two gallery-page links and duplicate image links:
 
@@ -39,13 +39,13 @@ test('collects E-Hentai gallery pages and ordered unique image pages', () => {
 
 Keep the existing `firstImagePageUrl` test and implement it by returning the first result from the new ordered image parser.
 
-- [ ] **Step 2: Run the focused adapter test and verify it fails for the missing exports**
+- [x] **Step 2: Run the focused adapter test and verify it fails for the missing exports**
 
 Run: `node --test test/ehviewer.test.js`
 
 Expected: FAIL because `galleryPageUrls` and `imagePageUrls` do not yet exist.
 
-- [ ] **Step 3: Implement the minimal adapter helpers**
+- [x] **Step 3: Implement the minimal adapter helpers**
 
 Add these exported functions in `src/adapters/ehviewer.js`:
 
@@ -89,13 +89,13 @@ export function imagePageUrls(html, galleryUrl) {
 
 Exporting the parsers keeps source-specific selectors out of the server coordinator. `firstImagePageUrl` should call `imagePageUrls(html, galleryUrl)[0] || ''` so existing callers and tests remain compatible.
 
-- [ ] **Step 4: Run the focused adapter tests and the existing related tests**
+- [x] **Step 4: Run the focused adapter tests and the existing related tests**
 
 Run: `node --test test/ehviewer.test.js test/server.test.js`
 
 Expected: the new parser test and all existing adapter/server tests pass before the server behavior is changed.
 
-- [ ] **Step 5: Commit the parser boundary**
+- [x] **Step 5: Commit the parser boundary**
 
 Run:
 
@@ -110,7 +110,7 @@ git commit -m "feat: parse ordered E-Hentai gallery pages"
 - Modify: `src/reader.js`
 - Test: `test/reader.test.js`
 
-- [ ] **Step 1: Write the failing continuous-reader test**
+- [x] **Step 1: Write the failing continuous-reader test**
 
 Add a test for a renderer input containing two parsed image records and one failure:
 
@@ -141,13 +141,13 @@ test('renders an ordered E-Hentai image sequence without navigation links', () =
 });
 ```
 
-- [ ] **Step 2: Run the focused reader test and verify the expected failure**
+- [x] **Step 2: Run the focused reader test and verify the expected failure**
 
 Run: `node --test test/reader.test.js`
 
 Expected: FAIL because `renderEhImageSequence` is not yet exported.
 
-- [ ] **Step 3: Implement the minimal sequence renderer**
+- [x] **Step 3: Implement the minimal sequence renderer**
 
 Add CSS for `.eh-image-summary`, `.eh-image-label`, and `.eh-image-warning`. Export `renderEhImageSequence({ title, pages, totalPages, failures, truncated })` and render one `div.reader.eh-image-page` containing:
 
@@ -163,7 +163,7 @@ const failureBlocks = failures.map((failure) =>
 
 Append a truncation warning when `truncated` is true. Do not emit any `<a>` around page images or any previous/next navigation in this renderer. Keep `renderEhImagePage` for direct `/s/` URLs and update its tests only where the gallery path now uses the sequence renderer.
 
-- [ ] **Step 4: Add an image-page extraction helper**
+- [x] **Step 4: Add an image-page extraction helper**
 
 Export `extractEhImagePage({ url, html, baseUrl, secret, pageNumber })` from `src/reader.js`. Move the existing image/title/counter/media parsing from `renderEhImagePage` into this helper and return:
 
@@ -179,13 +179,13 @@ Export `extractEhImagePage({ url, html, baseUrl, secret, pageNumber })` from `sr
 
 Return `null` when no allowed image can be found. This keeps network orchestration out of the reader while ensuring all media URLs are signed consistently.
 
-- [ ] **Step 5: Run reader tests and verify green**
+- [x] **Step 5: Run reader tests and verify green**
 
 Run: `node --test test/reader.test.js`
 
 Expected: all reader tests pass, including the no-navigation sequence test.
 
-- [ ] **Step 6: Commit the reader boundary**
+- [x] **Step 6: Commit the reader boundary**
 
 Run:
 
@@ -201,7 +201,7 @@ git commit -m "feat: render E-Hentai images as one continuous reader"
 - Modify: `src/adapters/index.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: Replace the single-page server test with a full-gallery red test**
+- [x] **Step 1: Replace the single-page server test with a full-gallery red test**
 
 Change the existing `opens an E-Hentai gallery item as a single signed image page` test to provide one gallery response and two distinct image-page responses. Assert that the request includes the gallery plus both image pages, the body contains both media URLs in page order, and it does not contain single-page navigation:
 
@@ -217,13 +217,13 @@ assert.match(body, /第 2 页/);
 
 Add a second test where the second image response is a 503 and assert that the first image remains, the response includes `第 2 页暂时无法读取`, and the response is still 200. Add a pagination test where the initial gallery links to `?p=1` and the second gallery page contributes a new image URL.
 
-- [ ] **Step 2: Run the focused server tests and verify the expected failures**
+- [x] **Step 2: Run the focused server tests and verify the expected failures**
 
 Run: `node --test test/server.test.js`
 
 Expected: the new full-gallery assertions fail because `server.js` still fetches only `firstImagePageUrl` and renders single-page navigation.
 
-- [ ] **Step 3: Add bounded concurrency helpers in `src/server.js`**
+- [x] **Step 3: Add bounded concurrency helpers in `src/server.js`**
 
 Add constants and an injectable coordinator configuration:
 
@@ -253,7 +253,7 @@ async function mapWithConcurrency(items, concurrency, worker) {
 
 Read `options.ehPrefetchConcurrency` and `options.ehMaxPrefetchPages`, falling back to `EH_PREFETCH_CONCURRENCY` and `EH_MAX_PREFETCH_PAGES` environment variables and then the defaults. Clamp concurrency to 1–8 and the page limit to 1–300.
 
-- [ ] **Step 4: Implement gallery collection and partial-failure handling**
+- [x] **Step 4: Implement gallery collection and partial-failure handling**
 
 Add a server-local `prefetchEhGallery` coordinator that:
 
@@ -266,17 +266,17 @@ Add a server-local `prefetchEhGallery` coordinator that:
 
 Use the input order as the stable sort key. Do not use completion order, source title text, or token text as the sort key. Do not include raw upstream error messages in the rendered page.
 
-- [ ] **Step 5: Replace the default gallery branch**
+- [x] **Step 5: Replace the default gallery branch**
 
 In the `/_gateway/item/` branch, keep `?view=gallery` on the existing preview path. For a normal E-Hentai gallery URL, stop calling `firstImagePageUrl`; instead call `prefetchEhGallery`, then pass its structured result into `renderReaderPage` through a `prefetchedGallery` argument so `renderEhImageSequence` produces the final HTML. Keep direct `/s/` requests on the existing single-page renderer. If prefetch returns no successful page, use `renderUnavailablePage` with the E-Hentai adapter message and the existing upstream status behavior.
 
-- [ ] **Step 6: Run focused server tests and verify green**
+- [x] **Step 6: Run focused server tests and verify green**
 
 Run: `node --test test/server.test.js`
 
 Expected: the full-gallery, pagination, partial-failure, preview-mode, and existing error-mapping tests pass.
 
-- [ ] **Step 7: Commit the server coordinator**
+- [x] **Step 7: Commit the server coordinator**
 
 Run:
 
@@ -291,7 +291,7 @@ git commit -m "feat: prefetch complete E-Hentai galleries"
 - Verify: `src/adapters/ehviewer.js`, `src/reader.js`, `src/server.js`
 - Production sync: `/opt/1panel/apps/rsshub-gateway/src/reader.js`, `/opt/1panel/apps/rsshub-gateway/src/server.js`, `/opt/1panel/apps/rsshub-gateway/src/adapters/ehviewer.js`
 
-- [ ] **Step 1: Run formatting and complete tests**
+- [x] **Step 1: Run formatting and complete tests**
 
 Run:
 
@@ -302,11 +302,11 @@ npm test
 
 Expected: exit code 0 and 60 or more passing tests with no failures.
 
-- [ ] **Step 2: Sync only the three changed production source files**
+- [x] **Step 2: Sync only the three changed production source files**
 
 Compare each workspace source file against its `/opt/1panel` counterpart, then apply only the corresponding patches. Do not overwrite `config/mihomo/cache.db`, secrets, `sources.json`, or unrelated production files.
 
-- [ ] **Step 3: Rebuild the gateway container**
+- [x] **Step 3: Rebuild the gateway container**
 
 Run from `/opt/1panel/apps/rsshub-gateway`:
 
@@ -314,7 +314,7 @@ Run from `/opt/1panel/apps/rsshub-gateway`:
 sudo -n docker compose up -d --build gateway
 ```
 
-- [ ] **Step 4: Verify production readiness and container behavior**
+- [x] **Step 4: Verify production readiness and container behavior**
 
 Run:
 
@@ -325,11 +325,11 @@ sudo -n docker ps --filter name=rsshub-gateway
 
 Use a fresh signed gallery URL and verify the response contains one `reader eh-image-page`, multiple `eh-image-content` paragraphs, ordered `/_gateway/media/` URLs, and no image anchors or `上一页`/`下一页` links.
 
-- [ ] **Step 5: Verify Flare's actual media requests**
+- [x] **Step 5: Verify Flare's actual media requests**
 
 After a Flare refresh, inspect `/var/log/openresty/access.log`. Confirm the client makes a gallery detail request followed by multiple `/_gateway/media/` requests with the `ktor-client` user agent. A single-page item request or browser-only navigation indicates a stale RSS token or cached old feed and must be refreshed before diagnosing the new implementation.
 
-- [ ] **Step 6: Review the final diff and preserve unrelated user changes**
+- [x] **Step 6: Review the final diff and preserve unrelated user changes**
 
 Run:
 

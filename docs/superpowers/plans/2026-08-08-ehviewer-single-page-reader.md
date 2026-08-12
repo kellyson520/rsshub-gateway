@@ -28,7 +28,7 @@
 - Test: `test/ehviewer.test.js`
 - Test: `test/adapters.test.js`
 
-- [ ] **Step 1: Write the failing adapter tests**
+- [x] **Step 1: Write the failing adapter tests**
 
 Append these tests to `test/ehviewer.test.js` and `test/adapters.test.js`:
 
@@ -57,7 +57,7 @@ test('recognizes E-Hentai gallery URLs for single-page resolution', () => {
 
 Import `firstImagePageUrl` from `src/adapters/ehviewer.js` alongside the existing ranking exports. The `adapterForUrl` test must use the already registered `ehviewer` adapter.
 
-- [ ] **Step 2: Run the focused tests and verify the expected failure**
+- [x] **Step 2: Run the focused tests and verify the expected failure**
 
 Run:
 
@@ -67,7 +67,7 @@ node --test test/ehviewer.test.js test/adapters.test.js
 
 Expected: the new tests fail because `firstImagePageUrl` and `isGalleryUrl` do not exist, while the existing ranking and adapter tests continue to pass.
 
-- [ ] **Step 3: Implement the smallest adapter contract**
+- [x] **Step 3: Implement the smallest adapter contract**
 
 In `src/adapters/ehviewer.js`, add the path constants and exports below near `readerTarget`:
 
@@ -109,7 +109,7 @@ export function firstImagePageUrl(html, galleryUrl) {
 
 Add `isGalleryUrl` and `firstImagePageUrl` to the generic adapter in `src/adapters/index.js` as functions returning `false` and `''`, so the server can call the contract without source-name conditionals. Do not broaden host allowlists or change RSSHub behavior.
 
-- [ ] **Step 4: Run the focused tests and verify green**
+- [x] **Step 4: Run the focused tests and verify green**
 
 Run:
 
@@ -119,7 +119,7 @@ node --test test/ehviewer.test.js test/adapters.test.js
 
 Expected: all focused tests pass and malformed, cross-host, gallery, and image URLs remain separated by the adapter contract.
 
-- [ ] **Step 5: Commit the adapter contract**
+- [x] **Step 5: Commit the adapter contract**
 
 ```sh
 git add src/adapters/ehviewer.js src/adapters/index.js test/ehviewer.test.js test/adapters.test.js
@@ -133,7 +133,7 @@ git commit -m "feat: resolve EhViewer gallery first page"
 - Modify: `src/server.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: Write the failing gateway tests**
+- [x] **Step 1: Write the failing gateway tests**
 
 Add these fixtures and tests to `test/server.test.js`:
 
@@ -187,7 +187,7 @@ test('keeps the gallery preview when view=gallery is requested', async () => {
 
 The image fixture must include a valid `hath.network` URL because the existing signed media allowlist is intentionally narrow.
 
-- [ ] **Step 2: Run the focused tests and verify the expected failure**
+- [x] **Step 2: Run the focused tests and verify the expected failure**
 
 Run:
 
@@ -197,7 +197,7 @@ node --test test/server.test.js
 
 Expected: the new default-route test receives the gallery renderer, so it fails the `eh-image-page` assertion and records only the gallery request. The explicit preview test remains green because the current route has no `view=gallery` special handling but already renders the gallery.
 
-- [ ] **Step 3: Implement server-side single-page resolution**
+- [x] **Step 3: Implement server-side single-page resolution**
 
 In the `/_gateway/item|media` branch of `src/server.js`, change the current `const remote` declaration to `let remote`, retain the verified original `target`, and make the response variables mutable:
 
@@ -225,7 +225,7 @@ if (shouldOpenSinglePage) {
 
 Keep the existing media branch before this logic. Use `readerUrl` and the resolved `body` when calling `renderReaderPage`; continue passing the original `target` to `renderUnavailablePage` so errors point back to the signed gallery source. Let typed failures from the second fetch follow the existing error mapping. If extraction returns an empty string, render the original gallery page exactly as before.
 
-- [ ] **Step 4: Run the focused and full tests**
+- [x] **Step 4: Run the focused and full tests**
 
 Run:
 
@@ -236,7 +236,7 @@ npm test
 
 Expected: the new tests pass, the complete suite reports 0 failures, and existing media requests still receive `circuit: false` with their range header.
 
-- [ ] **Step 5: Commit the routing behavior**
+- [x] **Step 5: Commit the routing behavior**
 
 ```sh
 git add src/server.js test/server.test.js
@@ -250,7 +250,7 @@ git commit -m "fix: open EhViewer entries in single-page mode"
 - Modify: `README.md` - document the new default and explicit gallery preview query.
 - Runtime: `/opt/1panel/apps/rsshub-gateway/src/server.js`, `/opt/1panel/apps/rsshub-gateway/src/adapters/ehviewer.js`, `/opt/1panel/apps/rsshub-gateway/src/adapters/index.js`
 
-- [ ] **Step 1: Document the reader modes**
+- [x] **Step 1: Document the reader modes**
 
 Add this paragraph to the EhViewer ranking section in `README.md` after the ranking URL list:
 
@@ -258,7 +258,7 @@ Add this paragraph to the EhViewer ranking section in `README.md` after the rank
 Ranking item links open the first full-size page by default and keep `上一页`/`下一页` inside the signed gateway. Append `?view=gallery` to a signed item URL when a browser thumbnail overview is needed; RSS subscription links do not require this option.
 ```
 
-- [ ] **Step 2: Run local verification**
+- [x] **Step 2: Run local verification**
 
 Run:
 
@@ -270,7 +270,7 @@ npm test
 
 Expected: no whitespace or syntax errors and 0 failed tests.
 
-- [ ] **Step 3: Synchronize only the changed source files to production**
+- [x] **Step 3: Synchronize only the changed source files to production**
 
 Run from the source repository:
 
@@ -283,7 +283,7 @@ sudo -n docker compose up -d --build gateway
 
 Run Docker Compose from `/opt/1panel/apps/rsshub-gateway` so the production secret file remains a file and is not replaced by a source-tree directory mount.
 
-- [ ] **Step 4: Perform live acceptance checks**
+- [x] **Step 4: Perform live acceptance checks**
 
 Run:
 
@@ -294,7 +294,7 @@ curl -k -fsS https://gateway.example.test/readyz
 
 Then request a fresh `/ehviewer/ranking/all` feed, take one signed gallery item URL, and verify that its response contains exactly one reader image frame and the signed image navigation links. Request the same URL with `?view=gallery` and verify it contains `eh-gallery` and does not trigger a second upstream page request in the gateway logs. Verify one signed media URL still responds with its image content type and range support.
 
-- [ ] **Step 5: Review final repository state**
+- [x] **Step 5: Review final repository state**
 
 Run:
 

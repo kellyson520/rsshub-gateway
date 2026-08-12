@@ -16,11 +16,11 @@
 - Create: `docs/superpowers/specs/2026-08-08-unified-gateway-cache-design.md`
 - Create: `docs/superpowers/plans/2026-08-08-unified-gateway-cache.md`
 
-- [ ] **Step 1: Review the existing cache boundary**
+- [x] **Step 1: Review the existing cache boundary**
 
 Confirm that `/opt/1panel/www/conf.d/rsshub-gateway-cache.conf` already owns `/_gateway/media/` with `max_size=5g`, `inactive=7d`, `proxy_cache_lock`, stale fallback, and Range bypass. Keep that boundary in the implementation.
 
-- [ ] **Step 2: Commit the approved design and plan**
+- [x] **Step 2: Commit the approved design and plan**
 
 Run:
 
@@ -35,7 +35,7 @@ git commit -m "docs: plan unified gateway cache"
 - Create: `src/cache.js`
 - Create: `test/cache.test.js`
 
-- [ ] **Step 1: Write failing cache behavior tests**
+- [x] **Step 1: Write failing cache behavior tests**
 
 Use a unique temporary directory per test and inject `now()` so time does not sleep. Cover these behaviors:
 
@@ -83,13 +83,13 @@ test('evicts least-recently-used entries over the byte budget', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the cache tests and confirm the expected red state**
+- [x] **Step 2: Run the cache tests and confirm the expected red state**
 
 Run: `node --test test/cache.test.js`
 
 Expected: FAIL because `src/cache.js` does not exist.
 
-- [ ] **Step 3: Implement the minimal cache API**
+- [x] **Step 3: Implement the minimal cache API**
 
 Export `createResponseCache({ root, maxBytes, ttlSeconds, now })`. Its `getOrLoad(url, kind, loader)` returns `{ state, status, headers, body }`, where `state` is `HIT`, `MISS`, or `STALE`. Use `sha256(kind + '\n' + new URL(url).toString())` for the body filename and keep metadata in `index.json`. Store successful string/Buffer bodies through a temp file and atomic rename. Ignore corrupt index records and missing body files.
 
@@ -102,13 +102,13 @@ const DEFAULT_MAX_BYTES = 5 * 1024 ** 3;
 
 The cache must catch filesystem errors, remove failed temporary files, and let the loader result pass through unchanged. Do not persist request headers or signed tokens.
 
-- [ ] **Step 4: Run cache tests and verify green**
+- [x] **Step 4: Run cache tests and verify green**
 
 Run: `node --test test/cache.test.js`
 
 Expected: all cache tests pass, including red/green coverage for single-flight, stale fallback, and eviction.
 
-- [ ] **Step 5: Commit the cache module**
+- [x] **Step 5: Commit the cache module**
 
 Run:
 
@@ -123,23 +123,23 @@ git commit -m "feat: add bounded gateway response cache"
 - Modify: `src/server.js`
 - Modify: `test/server.test.js`
 
-- [ ] **Step 1: Add failing server cache tests**
+- [x] **Step 1: Add failing server cache tests**
 
 Pass an injected cache and a counting `fetchExternal` into `createGatewayServer`. Request the same E-Hentai gallery item twice with different fresh signed tokens and assert that the second request does not refetch the gallery or image-detail HTML. Add a stale fallback test where the cached loader is expired and the second upstream call throws, asserting that the reader still contains the cached page and no raw upstream error.
 
-- [ ] **Step 2: Run the focused server tests and verify they fail**
+- [x] **Step 2: Run the focused server tests and verify they fail**
 
 Run: `node --test test/server.test.js`
 
 Expected: the new call-count assertions fail because each request currently fetches all source documents again.
 
-- [ ] **Step 3: Add route-aware cached fetch helpers**
+- [x] **Step 3: Add route-aware cached fetch helpers**
 
 In `src/server.js`, create `fetchCachedDocument(url, request, kind)` around the injected `fetchExternal`. For successful HTML/XML responses, read the bounded body, cache it, and reconstruct a `Response` with status and safe response headers. On a fresh cache hit, return the reconstructed response without calling upstream. On refresh error, return the expired entry with state `STALE` and log only URL host, kind, and state.
 
 Use `kind: 'html'` for E-Hentai ranking HTML, gallery pagination, and image pages, and `kind: 'rss'` for RSSHub route responses. Do not cache `/readyz`, non-OK responses, or media bodies in Node.
 
-- [ ] **Step 4: Replace source document fetches**
+- [x] **Step 4: Replace source document fetches**
 
 Use the helper for:
 
@@ -152,13 +152,13 @@ RSSHub route -> fetchCachedDocument(rsshubTarget, ..., 'rss')
 
 Keep the initial gallery response on the same helper path, preserve custom `fetchExternal` test injection, and continue passing current `baseUrl`/secret so cached source HTML produces fresh signed media URLs.
 
-- [ ] **Step 5: Run focused server tests and verify green**
+- [x] **Step 5: Run focused server tests and verify green**
 
 Run: `node --test test/server.test.js`
 
 Expected: all existing behavior plus cache-hit and stale-fallback tests pass.
 
-- [ ] **Step 6: Commit the integration**
+- [x] **Step 6: Commit the integration**
 
 Run:
 
@@ -174,7 +174,7 @@ git commit -m "feat: cache E-Hentai source documents"
 - Modify: `README.md`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Add the persistent cache mount**
+- [x] **Step 1: Add the persistent cache mount**
 
 Add:
 
@@ -187,7 +187,7 @@ volumes:
 
 Keep the existing Mihomo volume separate. Add `config/gateway-cache/` to `.gitignore` and include a `.gitkeep` only if the directory must be created in a fresh checkout.
 
-- [ ] **Step 2: Document policy and diagnostics**
+- [x] **Step 2: Document policy and diagnostics**
 
 Document the TTLs, 5 GB limit, stale fallback, cache key rule, and the fact that OpenResty owns media cache/range behavior. Include operational commands:
 
@@ -196,7 +196,7 @@ docker exec rsshub-gateway du -sh /var/cache/rsshub-gateway
 docker compose logs gateway | grep gateway_cache
 ```
 
-- [ ] **Step 3: Run final local verification**
+- [x] **Step 3: Run final local verification**
 
 Run:
 
@@ -207,7 +207,7 @@ npm test
 
 Expected: 0 whitespace errors and all tests pass.
 
-- [ ] **Step 4: Commit deployment configuration**
+- [x] **Step 4: Commit deployment configuration**
 
 Run:
 
@@ -221,15 +221,15 @@ git commit -m "ops: persist gateway cache volume"
 **Files:**
 - Production sync: `/opt/1panel/apps/rsshub-gateway/src/cache.js`, `src/server.js`, `docker-compose.yml`, and any changed docs/config.
 
-- [ ] **Step 1: Sync only tracked implementation files**
+- [x] **Step 1: Sync only tracked implementation files**
 
 Use validated `sudo -n patch` for root-owned production files. Do not overwrite `src/signed-target.js`, `test/signed-target.test.js`, or `config/mihomo/cache.db`.
 
-- [ ] **Step 2: Prepare the cache directory**
+- [x] **Step 2: Prepare the cache directory**
 
 Create the explicit production directory `/opt/1panel/apps/rsshub-gateway/config/gateway-cache` and ensure the container user can write it.
 
-- [ ] **Step 3: Rebuild the gateway**
+- [x] **Step 3: Rebuild the gateway**
 
 Run:
 
@@ -237,7 +237,7 @@ Run:
 sudo -n docker compose up -d --build gateway
 ```
 
-- [ ] **Step 4: Verify readiness and cache mount**
+- [x] **Step 4: Verify readiness and cache mount**
 
 Run:
 
@@ -246,6 +246,6 @@ curl -ksS --fail https://gateway.example.test/readyz
 sudo -n docker exec rsshub-gateway sh -c 'test -d /var/cache/rsshub-gateway && test -w /var/cache/rsshub-gateway'
 ```
 
-- [ ] **Step 5: Verify E-Hentai cache hit**
+- [x] **Step 5: Verify E-Hentai cache hit**
 
 Generate two fresh signed item URLs for the same still-available gallery and request both. Confirm the second request returns the same ordered reader content while gateway logs show cache hits and no second upstream page fetch. Verify an image request still returns `X-Cache: HIT` on its second public request through OpenResty.

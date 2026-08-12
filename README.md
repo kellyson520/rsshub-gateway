@@ -58,6 +58,8 @@ Each feed item includes a signed thumbnail, an `enclosure`/`media:content` point
 
 An optional iwara account token in `config/sources.json` (`{"iwara": {"token": "<refresh token>"}}`) is sent as `Authorization: Bearer` for metadata and R18 video detail requests; it is never logged or committed. Without a token the feed still lists public videos.
 
+The fetchd sidecar impersonates a Chrome browser via `curl_cffi`; the impersonation target is set with `FETCHD_IMPERSONATE` (default `chrome`, configured as `chrome131` in `docker-compose.yml`). Cloudflare escalates bot detection against old fingerprints, and iwara challenges the default `chrome` alias on user/profile API paths, so the newer `chrome131` fingerprint is required to keep user feeds working.
+
 ## Verification
 
 
@@ -73,6 +75,23 @@ sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml up
 ```
 
 `/healthz` is a liveness check and does not call dependencies. `/readyz` checks the local RSSHub instance and reports the currently open source circuits. Mihomo's runtime `AUTO` health target is `https://t.me`, so Telegram access selects nodes that can reach the actual source rather than a generic connectivity endpoint. For a cold-start check, use an uncached test gallery with delayed pagination and record only status, HTML emission duration, first-media target kind, and the number of requests still active after HTML emission. A source `403`, `404`, `429`, or timeout is an upstream availability result and must not be counted as a successful client first-paint measurement. Do not put live signed URLs, tokens, cookies, proxy names, or private network addresses into logs or bug reports.
+
+## OpenResty media layer
+
+The public host routes `/_gateway/media/` through a dedicated OpenResty location (see `/www/sites/kellson.dpdns.org/proxy/root.conf` on the gateway host) that adds an image cache and must forward range requests explicitly:
+
+```nginx
+location ^~ /_gateway/media/ {
+    proxy_pass http://127.0.0.1:1300;
+    proxy_set_header Range $http_range;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache rsshub_gateway_images;
+    proxy_cache_bypass $http_range;
+    proxy_no_cache $http_range $rsshub_gateway_skip_image_cache;
+}
+```
+
+Without `proxy_set_header Range $http_range;`, the range header is dropped at the proxy and the gateway answers every partial request with a full `200` body instead of `206`, which breaks video seeking and forces full downloads on capped links. After editing, run `openresty -t` and reload.
 
 ## Upstream behavior
 

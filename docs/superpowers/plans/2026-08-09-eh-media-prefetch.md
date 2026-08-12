@@ -16,7 +16,7 @@
 - Create: `test/media-prefetch.test.js`
 - Reference: `src/media-prefetch.js` (在本任务中尚不存在，测试必须先失败)
 
-- [ ] **Step 1: 写入最小测试工具和并发上限测试**
+- [x] **Step 1: 写入最小测试工具和并发上限测试**
 
 在 `test/media-prefetch.test.js` 中加入以下测试骨架，使用受控 Promise 记录 active/maxActive：
 
@@ -72,13 +72,13 @@ test('ramps successful prefetches without exceeding the configured maximum', asy
 });
 ```
 
-- [ ] **Step 2: 运行测试确认它因模块不存在而失败**
+- [x] **Step 2: 运行测试确认它因模块不存在而失败**
 
 Run: `node --test test/media-prefetch.test.js`
 
 Expected: FAIL with `ERR_MODULE_NOT_FOUND` for `../src/media-prefetch.js`.
 
-- [ ] **Step 3: 写入退避、源隔离、去重和持久化测试**
+- [x] **Step 3: 写入退避、源隔离、去重和持久化测试**
 
 继续在同一测试文件加入四个独立测试：
 
@@ -174,7 +174,7 @@ test('expires abandoned persisted targets after the queue TTL', async () => {
 });
 ```
 
-- [ ] **Step 4: 只运行新测试确认四组行为均按预期失败**
+- [x] **Step 4: 只运行新测试确认四组行为均按预期失败**
 
 Run: `node --test test/media-prefetch.test.js`
 
@@ -186,21 +186,21 @@ Expected: the test file loads only after the module exists; before implementatio
 - Create: `src/media-prefetch.js`
 - Test: `test/media-prefetch.test.js`
 
-- [ ] **Step 1: 实现队列公共接口和状态**
+- [x] **Step 1: 实现队列公共接口和状态**
 
 导出 `createMediaPrefetchQueue(options)`，提供 `enqueue(targets)`, `idle()`, `ready()`, `stats()`。默认值为 `initialConcurrency=4`, `minConcurrency=2`, `maxConcurrency=6`, `perOriginConcurrency=2`, `maxRetries=2`, `successRampAfter=6`, `queueTtlMs=24*60*60*1000`。调度器只接受 HTTPS H@H 媒体目标，由调用方负责签名目标校验。
 
 每个持久化项使用 `{ target, enqueuedAt, attempts }`，队列文件通过临时文件写入后 rename；读取失败按空队列处理，过期项直接丢弃。文件只保存上游媒体地址和时间，不保存签名 token、Cookie 或源站凭据。
 
-- [ ] **Step 2: 实现按 origin 的有限 worker 调度**
+- [x] **Step 2: 实现按 origin 的有限 worker 调度**
 
 从 pending 队列中选择未达到 `perOriginConcurrency` 的任务；全局 active 数量达到当前 concurrency 时暂停。每个任务完成后从 `queued` 集合删除并持久化队列文件。所有 worker 结束且 pending 为空时 resolve `idle()` 等待者。
 
-- [ ] **Step 3: 实现单一反馈规则**
+- [x] **Step 3: 实现单一反馈规则**
 
 将 `200–299` 视为成功；将 `408`, `425`, `429` 和 `500–599` 视为可退避失败；其他 HTTP 状态只记录最终失败，不重试。可退避失败在 `attempts <= maxRetries` 时重新入队，等待 `min(2000, 250 * 2 ** attempts + jitter)` 毫秒。可退避失败立即将全局并发减 1，最低不低于 `minConcurrency`；连续 `successRampAfter` 个缓存未命中成功后将并发加 1，最高不超过 `maxConcurrency`。缓存 HIT 不参与升速，避免缓存命中掩盖上游状态。
 
-- [ ] **Step 4: 运行调度器测试确认全绿**
+- [x] **Step 4: 运行调度器测试确认全绿**
 
 Run: `node --test test/media-prefetch.test.js`
 
@@ -214,11 +214,11 @@ Expected: all scheduler tests pass with zero failures.
 - Modify: `README.md:15-23`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: 为缓存媒体加载拆出带状态的内部结果**
+- [x] **Step 1: 为缓存媒体加载拆出带状态的内部结果**
 
 将当前 `fetchCachedMedia` 的实现拆为 `loadCachedMedia`，返回 `{ response, cacheState }`，并保留 `fetchCachedMedia` 返回 `Response` 的现有调用契约。缓存命中、MISS、STALE 的状态只传给后台队列，不改变 HTTP 路由响应头或 Range 行为。
 
-- [ ] **Step 2: 用自适应队列替换固定预热队列**
+- [x] **Step 2: 用自适应队列替换固定预热队列**
 
 删除 `server.js` 内固定 `pending/queued/active` 的 `createMediaPreloadQueue`，导入 `createMediaPrefetchQueue`。创建队列时传入：
 
@@ -240,7 +240,7 @@ const mediaPreloadQueue = createMediaPrefetchQueue({
 
 队列只在 E-Hentai 画廊成功解析出媒体目标后 `enqueue`，请求返回不等待后台队列。所有请求路径仍使用同一个 `loadCachedMedia`，确保按需请求和预热请求共享缓存及 in-flight 合并。
 
-- [ ] **Step 3: 读取并限制运行参数**
+- [x] **Step 3: 读取并限制运行参数**
 
 在 `server.js` 使用现有 `boundedInteger` 读取以下参数并限制范围：
 
@@ -253,11 +253,11 @@ EH_MEDIA_PREFETCH_PER_ORIGIN        2 (1..3)
 
 在 `docker-compose.yml` 中写入 `4/2/6/2`，保持 `GATEWAY_CACHE_MAX_BYTES=5368709120`、媒体单文件 32MiB 和详情并发 8 不变。
 
-- [ ] **Step 4: 增加网关级回归测试**
+- [x] **Step 4: 增加网关级回归测试**
 
 在 `test/server.test.js` 增加测试：一个画廊产生 4 个不同 H@H 媒体目标，`fetchExternal` 返回图片响应；请求详情页后等待 `mediaCalls === 4`，断言所有媒体请求完成且 HTML 仍包含全部图片。另加一个 429 后 200 的媒体 loader，断言后台重试不会影响详情页 HTTP 200。
 
-- [ ] **Step 5: 更新缓存说明并运行完整测试**
+- [x] **Step 5: 更新缓存说明并运行完整测试**
 
 README 将媒体后台预热说明改为自适应 2–6 路、每源最多 2 路、失败退避和持久化队列；随后运行 `npm test`，预期所有测试通过。
 
@@ -267,7 +267,7 @@ README 将媒体后台预热说明改为自适应 2–6 路、每源最多 2 路
 - Production: `/opt/1panel/apps/rsshub-gateway/docker-compose.yml`
 - Verification target: `https://gateway.example.test/_gateway/item/<fresh-token>`
 
-- [ ] **Step 1: 构建生产镜像并检查容器状态**
+- [x] **Step 1: 构建生产镜像并检查容器状态**
 
 Run from `/opt/1panel/apps/rsshub-gateway`:
 
@@ -279,7 +279,7 @@ sudo -n docker compose ps
 
 Expected: readiness JSON contains `"ready":true`, `"rsshub":"ok"`, and the gateway container is `Up` rather than restarting.
 
-- [ ] **Step 2: 验证完整画廊响应**
+- [x] **Step 2: 验证完整画廊响应**
 
 使用容器内 secret 为目标画廊生成 15 分钟 fresh token，请求公网详情页并统计：
 
@@ -291,15 +291,15 @@ class="eh-image-content" 计数为 143
 class="eh-image-warning" 计数为 0
 ```
 
-- [ ] **Step 3: 验证媒体缓存和首尾图片**
+- [x] **Step 3: 验证媒体缓存和首尾图片**
 
 从详情 HTML 提取第 1–3 页和第 141–143 页媒体地址，逐一通过公网网关 GET，预期每个响应为 HTTP 200、`content-type=image/webp` 或其他 `image/*`，且 `content-length` 大于 0。重复请求同一媒体，日志应从 `MISS` 变为 `HIT`。
 
-- [ ] **Step 4: 验证自适应行为和持久化队列**
+- [x] **Step 4: 验证自适应行为和持久化队列**
 
 检查 `docker logs rsshub-gateway` 中只出现不含完整 URL/token 的 `eh_media_prefetch` 事件；确认事件包含并发变化、重试和最终状态。检查 `/var/cache/rsshub-gateway/media-prefetch.json` 在任务完成后为空或不存在，容器连续运行至少 30 秒。
 
-- [ ] **Step 5: 提交代码变更**
+- [x] **Step 5: 提交代码变更**
 
 ```bash
 git add src/media-prefetch.js src/server.js test/media-prefetch.test.js test/server.test.js docker-compose.yml README.md

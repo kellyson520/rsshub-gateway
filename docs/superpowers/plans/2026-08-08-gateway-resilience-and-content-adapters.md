@@ -36,7 +36,7 @@
 - Create: `src/circuit-breaker.js`
 - Test: `test/circuit-breaker.test.js`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create a `CircuitBreaker` with injected clock and the following public methods:
 
@@ -84,7 +84,7 @@ test('success clears consecutive failures without affecting another source', () 
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify the expected failure**
+- [x] **Step 2: Run the focused test and verify the expected failure**
 
 Run:
 
@@ -94,11 +94,11 @@ npm test -- test/circuit-breaker.test.js
 
 Expected: the test file fails because `src/circuit-breaker.js` does not exist yet.
 
-- [ ] **Step 3: Implement the minimal breaker**
+- [x] **Step 3: Implement the minimal breaker**
 
 Implement `CircuitBreaker` with a `Map` keyed by source name. Store `{ state, failures, openedAt, probeInFlight }`. `canRequest` returns false for an open circuit before cooldown, changes an eligible open circuit to half-open, and allows only one half-open probe. `recordFailure` opens at the threshold and releases a half-open probe back to open. `recordSuccess` deletes the entry. Do not add persistence, timers, or background work.
 
-- [ ] **Step 4: Run the focused test and the existing suite**
+- [x] **Step 4: Run the focused test and the existing suite**
 
 Run:
 
@@ -109,7 +109,7 @@ npm test
 
 Expected: the new breaker tests and all pre-existing tests pass.
 
-- [ ] **Step 5: Commit the isolated component**
+- [x] **Step 5: Commit the isolated component**
 
 ```sh
 git add src/circuit-breaker.js test/circuit-breaker.test.js
@@ -124,7 +124,7 @@ git commit -m "feat: add source circuit breaker"
 - Modify: `src/upstream.js`
 - Test: `test/upstream.test.js`
 
-- [ ] **Step 1: Write failure-classification and retry tests**
+- [x] **Step 1: Write failure-classification and retry tests**
 
 Inject `fetchImpl`, `sleep`, and `now` into `createUpstreamClient`. Use `Response` objects and counters rather than real network calls. Cover:
 
@@ -180,7 +180,7 @@ test('validates every manual redirect target', async () => {
 
 Add a timeout test using an injected `AbortSignal` observer and a `timeoutMs` option, asserting the final error has code `UPSTREAM_TIMEOUT` and status `504`.
 
-- [ ] **Step 2: Run the focused tests to verify they fail for the missing policy**
+- [x] **Step 2: Run the focused tests to verify they fail for the missing policy**
 
 Run:
 
@@ -190,11 +190,11 @@ npm test -- test/upstream.test.js
 
 Expected: the new file fails because the typed errors, retry injection, and retry behavior are not present.
 
-- [ ] **Step 3: Add typed errors and status classifiers**
+- [x] **Step 3: Add typed errors and status classifiers**
 
 In `src/upstream-errors.js`, define `GatewayUpstreamError` with `{ code, source, status, attempts, retryAfter }`, plus constructors or subclasses for `UPSTREAM_TIMEOUT`, `UPSTREAM_RETRY_EXHAUSTED`, and `UPSTREAM_CIRCUIT_OPEN`. Export `isRetryableStatus(status)` for `408`, `425`, `429`, and `500` through `599`.
 
-- [ ] **Step 4: Implement bounded retries in `upstream.js`**
+- [x] **Step 4: Implement bounded retries in `upstream.js`**
 
 Extend `createUpstreamClient` options with:
 
@@ -211,7 +211,7 @@ Use the source hostname for external requests and the literal key `rsshub` for l
 
 Implement `fetchRssHub` with the same retry policy but without the external-target allowlist, because its fixed target is the local `RSSHUB_URL`. Keep its existing request headers and manual redirect behavior.
 
-- [ ] **Step 5: Run upstream tests and the full suite**
+- [x] **Step 5: Run upstream tests and the full suite**
 
 Run:
 
@@ -222,7 +222,7 @@ npm test
 
 Expected: retry counts, typed errors, redirect rejection, and all existing tests pass.
 
-- [ ] **Step 6: Commit the request policy**
+- [x] **Step 6: Commit the request policy**
 
 ```sh
 git add src/upstream.js src/upstream-errors.js test/upstream.test.js
@@ -236,7 +236,7 @@ git commit -m "feat: add resilient upstream requests"
 - Modify: `src/server.js`
 - Modify: `test/server.test.js`
 
-- [ ] **Step 1: Write failing server tests**
+- [x] **Step 1: Write failing server tests**
 
 Add tests that inject `fetchRssHub` and `fetchExternal` errors and assert:
 
@@ -277,7 +277,7 @@ test('maps an open circuit to 503 with bounded Retry-After', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm the expected failures**
+- [x] **Step 2: Run the focused tests and confirm the expected failures**
 
 Run:
 
@@ -287,13 +287,13 @@ npm test -- test/server.test.js
 
 Expected: readiness and typed-error assertions fail because `/readyz` and error response mapping do not exist.
 
-- [ ] **Step 3: Implement readiness and response mapping**
+- [x] **Step 3: Implement readiness and response mapping**
 
 Add a JSON writer and a `writeGatewayError` helper. Keep malformed/expired token failures at `403`. For typed upstream errors, use the error status, `Retry-After` when present, `X-Gateway-Source`, and `X-Gateway-Attempts`. Log one JSON object per failed request with source, code, status, attempts, and duration; never log the target URL or request headers. Add `/readyz` before gateway-token routing and return the exact JSON shape in the test.
 
 Use the source adapter for `readerTarget` before `fetchExternal`, while retaining the original verified URL for the “原始来源” link and fallback title.
 
-- [ ] **Step 4: Run the server tests and full suite**
+- [x] **Step 4: Run the server tests and full suite**
 
 ```sh
 npm test -- test/server.test.js
@@ -302,7 +302,7 @@ npm test
 
 Expected: all server and existing tests pass with correct statuses and no sensitive values in response bodies.
 
-- [ ] **Step 5: Commit the server boundary changes**
+- [x] **Step 5: Commit the server boundary changes**
 
 ```sh
 git add src/server.js test/server.test.js
@@ -323,7 +323,7 @@ git commit -m "feat: expose gateway readiness and upstream errors"
 - Create: `test/reader.test.js`
 - Modify: `test/server.test.js`
 
-- [ ] **Step 1: Write failing adapter and reader tests**
+- [x] **Step 1: Write failing adapter and reader tests**
 
 Add a Telegram adapter test:
 
@@ -337,7 +337,7 @@ test('uses the Telegram embed endpoint for public post details', () => {
 
 Add a reader test that passes a source-specific unavailable message containing a source title and original URL, then asserts that scripts, iframes, and event-handler attributes are absent while the message and HTTPS link remain.
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 ```sh
 npm test -- test/adapters.test.js test/reader.test.js
@@ -345,21 +345,21 @@ npm test -- test/adapters.test.js test/reader.test.js
 
 Expected: the new adapter methods and unavailable renderer are missing.
 
-- [ ] **Step 3: Implement the adapter contract**
+- [x] **Step 3: Implement the adapter contract**
 
 Create a default adapter with identity `readerTarget`, source-neutral headers, and a generic unavailable message. Add Telegram matching for `t.me` and `readerTarget` logic that only changes `/channel/message-id` paths with a numeric message ID. Preserve existing optional cookies and X token headers. Add `unavailableMessage` to Iwara, X, and Instagram without printing credentials.
 
 Update `adapterForUrl` to include Telegram and return the default adapter for allowlisted hosts with no specialized policy. Remove the Telegram URL helper from `server.js`; the server asks the adapter for the target.
 
-- [ ] **Step 4: Implement safe unavailable-page rendering**
+- [x] **Step 4: Implement safe unavailable-page rendering**
 
 Add `renderUnavailablePage({ url, title, message, baseUrl, secret })` to `reader.js`. Reuse the existing page shell and `escapeHtml`, render only a paragraph, the source-specific message, and the signed/localized original link. Do not pass source HTML through the renderer for this path.
 
-- [ ] **Step 5: Connect adapter fallbacks in the server**
+- [x] **Step 5: Connect adapter fallbacks in the server**
 
 When a source response is a final non-success HTML response, use the adapter fallback renderer while preserving the upstream status. When the response is successful, keep the existing sanitizer and media/link rewriting. Ensure the original verified URL, not the adapter’s `?embed=1` URL, is displayed as the source link.
 
-- [ ] **Step 6: Run focused and full tests**
+- [x] **Step 6: Run focused and full tests**
 
 ```sh
 npm test -- test/adapters.test.js test/reader.test.js test/server.test.js
@@ -368,7 +368,7 @@ npm test
 
 Expected: Telegram detail tests still render actual post text, source credentials remain header-only, and all tests pass.
 
-- [ ] **Step 7: Commit the adapter work**
+- [x] **Step 7: Commit the adapter work**
 
 ```sh
 git add src/adapters src/reader.js src/server.js test/adapters.test.js test/reader.test.js test/server.test.js
@@ -382,7 +382,7 @@ git commit -m "feat: add source reader adapters"
 - Modify: `README.md`
 - No source change: `/opt/1panel/apps/rsshub-gateway/config/mihomo/config.yaml` remains runtime-only.
 
-- [ ] **Step 1: Update the runtime documentation**
+- [x] **Step 1: Update the runtime documentation**
 
 Document the following commands in `README.md`:
 
@@ -396,7 +396,7 @@ sudo docker compose -f /opt/1panel/apps/rsshub-gateway/docker-compose.yml up -d 
 
 State that `healthz` is liveness-only, `readyz` depends on RSSHub, and the Mihomo health target is `https://t.me`. Keep provider URLs, cookies, and gateway secrets out of the repository.
 
-- [ ] **Step 2: Run local verification before deployment**
+- [x] **Step 2: Run local verification before deployment**
 
 ```sh
 git diff --check
@@ -405,7 +405,7 @@ npm test
 
 Expected: clean diff check and zero failed tests.
 
-- [ ] **Step 3: Validate and deploy the runtime configuration**
+- [x] **Step 3: Validate and deploy the runtime configuration**
 
 Run the configuration test, rebuild the gateway, and wait for the health endpoint:
 
@@ -418,11 +418,11 @@ curl -fsS http://127.0.0.1:1300/readyz
 
 Expected: Mihomo syntax is successful, the container is running, and both probes report ready.
 
-- [ ] **Step 4: Perform production acceptance checks**
+- [x] **Step 4: Perform production acceptance checks**
 
 Use the public Telegram channel URL and verify the transformed feed is XML, the first three item links return HTML containing real body text, and a media URL accepts a one-byte range request with `206`. Also request one X, Instagram, and Iwara feed route already configured in RSSHub and record the returned status and content type.
 
-- [ ] **Step 5: Commit the documentation and verify repository state**
+- [x] **Step 5: Commit the documentation and verify repository state**
 
 ```sh
 git add README.md
@@ -434,12 +434,12 @@ Expected: the working tree is clean; runtime-only configuration remains untracke
 
 ## Completion Checklist
 
-- [ ] Circuit breaker tests pass with deterministic time.
-- [ ] Retry policy tests prove both retry and no-retry classes.
-- [ ] Error responses distinguish invalid tokens, unavailable sources, and timeouts.
-- [ ] `/healthz` and `/readyz` have independent tests.
-- [ ] Telegram behavior is adapter-owned and no longer hard-coded in `server.js`.
-- [ ] X, Instagram, and Iwara retain credential safety and readable fallback pages.
-- [ ] Existing feed XML, signed target, media range, and cache behavior remain green.
-- [ ] Production deployment and three consecutive Telegram detail checks pass.
-- [ ] No secrets or provider subscription URLs enter Git.
+- [x] Circuit breaker tests pass with deterministic time.
+- [x] Retry policy tests prove both retry and no-retry classes.
+- [x] Error responses distinguish invalid tokens, unavailable sources, and timeouts.
+- [x] `/healthz` and `/readyz` have independent tests.
+- [x] Telegram behavior is adapter-owned and no longer hard-coded in `server.js`.
+- [x] X, Instagram, and Iwara retain credential safety and readable fallback pages.
+- [x] Existing feed XML, signed target, media range, and cache behavior remain green.
+- [x] Production deployment and three consecutive Telegram detail checks pass.
+- [x] No secrets or provider subscription URLs enter Git.
