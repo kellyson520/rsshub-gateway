@@ -36,6 +36,18 @@ test('rewrites entity-encoded RSS description media', () => {
   assert.doesNotMatch(output, /https:\/\/i\.iwara\.tv\/image\/demo\.jpg/);
 });
 
+test('rewrites lazy-load and srcset media attributes', () => {
+  const lazy = `<?xml version="1.0"?><rss><channel><item><link>https://www.iwara.tv/video/abc</link><description><![CDATA[
+    <img src="https://i.iwara.tv/image/placeholder.jpg" data-original="https://i.iwara.tv/image/demo.jpg" data-src="https://i.iwara.tv/image/demo2.jpg">
+    <img srcset="https://i.iwara.tv/image/demo3.jpg 480w, https://i.iwara.tv/image/demo4.jpg 960w">
+  ]]></description></item></channel></rss>`;
+  const output = transformFeed(lazy, options);
+  assert.match(output, /data-original="https:\/\/gateway\.example\.test\/_gateway\/media\//);
+  assert.match(output, /data-src="https:\/\/gateway\.example\.test\/_gateway\/media\//);
+  assert.match(output, /srcset="https:\/\/gateway\.example\.test\/_gateway\/media\/[^"]+ 480w, https:\/\/gateway\.example\.test\/_gateway\/media\/[^"]+ 960w"/);
+  assert.doesNotMatch(output, /i\.iwara\.tv\/image\/demo\.jpg|i\.iwara\.tv\/image\/demo2\.jpg|i\.iwara\.tv\/image\/demo3\.jpg|i\.iwara\.tv\/image\/demo4\.jpg/);
+});
+
 test('rewrites V2EX item links to the gateway reader', () => {
   const v2ex = `<?xml version="1.0"?><rss><channel><item><title>V2EX topic</title><link>https://v2ex.com/t/123456</link></item></channel></rss>`;
   const output = transformFeed(v2ex, options);

@@ -67,8 +67,8 @@ function rewriteHtml(html, options) {
       // Preserve relative and malformed links in feed content.
     }
   });
-  $('img[src],video[src],video[poster],audio[src],source[src],source[poster]').each((_, element) => {
-    for (const attribute of ['src', 'poster']) {
+  $('img,video,audio,source').each((_, element) => {
+    for (const attribute of ['src', 'poster', 'data-original', 'data-src', 'data-lazy-src', 'data-lazy']) {
       const value = $(element).attr(attribute);
       if (!value) continue;
       try {
@@ -76,6 +76,20 @@ function rewriteHtml(html, options) {
       } catch {
         // Preserve relative and malformed media URLs.
       }
+    }
+    const srcset = $(element).attr('srcset');
+    if (srcset) {
+      const rewritten = String(srcset).split(',').map((candidate) => {
+        const parts = candidate.trim().split(/\s+/);
+        if (!parts.length) return candidate;
+        try {
+          parts[0] = localUrl(options.baseUrl, 'media', new URL(parts[0]).toString(), options);
+        } catch {
+          // Preserve unparseable srcset candidates.
+        }
+        return parts.join(' ');
+      }).join(', ');
+      $(element).attr('srcset', rewritten);
     }
   });
   return $.root().html() ?? '';
