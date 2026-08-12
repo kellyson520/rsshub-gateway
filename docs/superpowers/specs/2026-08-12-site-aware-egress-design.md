@@ -22,7 +22,7 @@
 {
   public: ['https://e-hentai.org/'],                    // 公共作用域代表站点
   sticky: ['https://www.iwara.tv/', 'https://x.com/'],  // 固定作用域代表站点
-  hosts: { 'i.iwara.tv': 'https://www.iwara.tv/' },     // 可选：具体 host → 探测 URL 覆盖
+  hosts: { 'i.iwara.tv': 'sticky' },                     // 可选：host → 作用域覆盖（选择 lane 时生效）
 }
 ```
 
@@ -40,6 +40,7 @@ siteHealth: Map<host, { failures: number, until: number, blocked: boolean }>
 ```
 
 - `chooseLane({ host, scope })`：
+  0. 若 `probeTargets.hosts[host]` 存在，用它覆盖请求作用域；
   1. 候选 = 并发可用 且 cooldown 结束 且 未对该 host 标记 blocked 的 lane；
   2. 若 `scope === 'public'`，额外要求 lane 的 `healthyScopes` 含 public；`sticky`/`session` 要求含 sticky；
   3. 无候选时**降级**：忽略站点 blocked 但保留并发/scope 条件再选一次，并 emit `{ state: 'site-degraded', host }`；
