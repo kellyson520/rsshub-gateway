@@ -156,7 +156,7 @@ git commit -m "feat: expose video slice fill pipeline for lease backfill"
 - Create: `src/lease-backfill.js`
 - Test: `test/lease-backfill.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `test/lease-backfill.test.js`：
 
@@ -355,12 +355,12 @@ test('skips when the cache has no headroom for the expected size', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/lease-backfill.test.js`
 Expected: FAIL（`ERR_MODULE_NOT_FOUND` / `createLeaseBackfillQueue` 不存在）。
 
-- [ ] **Step 3: 实现 `src/lease-backfill.js`**
+- [x] **Step 3: 实现 `src/lease-backfill.js`**
 
 ```js
 const DEFAULT_MAX_CONCURRENCY = 2;
@@ -491,12 +491,12 @@ export function createLeaseBackfillQueue({
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/lease-backfill.test.js`
 Expected: PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/lease-backfill.js test/lease-backfill.test.js
