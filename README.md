@@ -125,9 +125,25 @@ Gateway detail routes retain `403` for invalid signed targets. Typed upstream fa
 
 ## Shared outbound foundation
 
-All site adapters use the gateway's injected `fetchExternal(url, options)` transport. They do not create their own `ProxyAgent`, select Mihomo nodes, or manage retry/concurrency state. Public targets are leased from the adaptive egress pool; sticky targets continue through the fixed authenticated path. The pool filters subscription metadata, validates public lanes against E-Hentai on refresh with a five-minute probe cache, and stripes gallery detail pages across the healthy lane set before falling back to least-loaded routing. This keeps E-Hentai, X, Instagram, Iwara, and Telegram modules on one reusable outbound foundation and allows RSSHub upgrades without source changes.
+All site adapters use the gateway's injected `fetchExternal(url, options)` transport. They do not create their own `ProxyAgent`, select Mihomo nodes, or manage retry/concurrency state. Public targets are leased from the adaptive egress pool; sticky targets continue through the fixed authenticated path. The pool filters subscription metadata, probes every lane against the configured public and sticky probe targets on refresh (five-minute probe cache), and only accepts lanes that pass their required scope. Gallery detail pages stripe across the healthy lane set before falling back to least-loaded routing, and lanes are filtered by per-lane `healthyScopes` plus optional per-host scope overrides. This keeps E-Hentai, X, Instagram, Iwara, Telegram, and Pixiv modules on one reusable outbound foundation and allows RSSHub upgrades without source changes.
 
 The foundation exposes only safe transport behavior to modules: target allowlisting, source headers, timeout/retry, circuit policy, egress selection, and response-body lease release. Mihomo Controller details and proxy names remain infrastructure concerns.
+
+### Site-aware egress
+
+Egress health is judged per site, not globally. Each lease records the upstream host on release; repeated `401/403/407/429` responses from one host slide a failure window and temporarily remove the lane from that host's candidate set (emitting `site-blocked`), while a success resets the counter. When every eligible lane is blocked for a host, the pool degrades to the remaining lanes and logs `site-degraded` instead of failing the request. Diagnostics expose per-lane `siteBlocked` host lists and `healthyScopes` on `GET /_gateway/infra`.
+
+Probe targets and failure tuning are configurable:
+
+| Environment | Default | Meaning |
+| --- | --- | --- |
+| `EGRESS_PROBE_TARGETS` | `{"public":["https://e-hentai.org/"],"sticky":["https://www.iwara.tv/","https://x.com/"]}` | JSON object with `public`/`sticky` URL lists and optional `hosts` scope overrides (e.g. `{"i.iwara.tv":"sticky"}`) |
+| `EGRESS_SITE_FAILURE_THRESHOLD` | `3` | Blocked responses within the window that trip a lane for a host |
+| `EGRESS_SITE_FAILURE_WINDOW_MS` | `60000` | Sliding failure window |
+| `EGRESS_SITE_BLOCK_COOLDOWN_MS` | `60000` | How long a tripped lane stays excluded for that host |
+| `EGRESS_BLOCKED_STATUSES` | `401,403,407,429` | Statuses counted as site blocks |
+| `EGRESS_PUBLIC_HOSTS` | — | Extra hosts for the public egress policy (comma-separated or JSON array) |
+| `EGRESS_PUBLIC_REQUEST_HOSTS` | — | Extra hosts for the public request policy |
 
 Telegram public post details use Telegram's content-bearing embed page. X, Instagram, and Iwara preserve their canonical detail URLs and provide a safe gateway page when an HTML detail request fails instead of rendering an upstream login or error shell.
 
@@ -135,7 +151,7 @@ Telegram public post details use Telegram's content-bearing embed page. X, Insta
 
 Public Iwara, Telegram, X, Instagram, E-Hentai ranking, gallery, and media requests start without a source Cookie, token, or `Authorization` header. They are distributed across the public Mihomo pool. A request is upgraded to an authenticated session only after the upstream explicitly signals an authentication challenge: `401`, `403`, a login redirect, or an HTML login page. Timeouts, `429`, and `5xx` responses remain public retry failures and never leak credentials into the public pool.
 
-When a configured source credential is required, the gateway derives an HMAC fingerprint and assigns it to one stable `SESSION_LANE_01..12` listener. The raw credential, its fingerprint, and node names are neither logged nor included in RSS, HTML, signed links, or Git. Session assignment survives a restart through the persistent application cache, while a failed session lane is replaced only after an explicit health failure.
+When a configured source credential is required, the gateway derives an HMAC fingerprint and assigns it to one stable `SESSION_LANE_01..12` listener. The raw credential, its fingerprint, and node names are neither logged nor included in RSS, HTML, signed links, or Git. Session assignment survives a restart through the persistent application cache, while a failed session lane is replaced only after an explicit health failure. Session lanes are also site-aware: blocked statuses from a session response are tracked per (lane, host) with the same threshold and window, and a tripped lane is marked unhealthy, evicted from affinity, and replaced on the next session refresh.
 
 Signed reader links, item pages, media links, and cache entries retain their egress scope. Public cache data is isolated from each `session:<fingerprint>` namespace, preventing anonymous and authenticated responses from being reused across one another. RSS readers keep using their existing RSSHub URL through this gateway; no per-reader proxy configuration or extra subscription is required.
 

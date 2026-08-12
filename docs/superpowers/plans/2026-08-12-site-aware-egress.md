@@ -984,11 +984,11 @@ git commit -m "feat: wire site-aware egress options and session lane migration i
 - Modify: `README.md`
 - Modify: `/opt/1panel/apps/rsshub-gateway/docker-compose.yml`（生产）
 
-- [ ] **Step 1: README 多出口段落更新**
+- [x] **Step 1: README 多出口段落更新**
 
 在 README 的 egress 相关段落追加站点级自适应说明（probe targets、失败阈值、会话迁移、env 配置表）。
 
-- [ ] **Step 2: 生产同步与重建**
+- [x] **Step 2: 生产同步与重建**
 
 ```bash
 for f in src/infrastructure/site-failure-tracker.js src/egress-policy.js src/mihomo-egress.js src/egress-pool.js src/server.js; do
@@ -1000,7 +1000,7 @@ curl -sk http://127.0.0.1:1300/healthz
 ```
 Expected: `ok`。
 
-- [ ] **Step 3: 生产验证**
+- [x] **Step 3: 生产验证**
 
 ```bash
 curl -sk http://127.0.0.1:1300/_gateway/infra | python3 -m json.tool | grep -A 12 '"egress"'
@@ -1017,7 +1017,7 @@ docker logs --since 3m rsshub-gateway 2>&1 | grep -E 'mihomo_egress|egress_site'
 ```
 Expected: `mihomo_egress refresh` 正常、无 `site-blocked` 风暴（若真实上游 403，属于预期行为并记录）。
 
-- [ ] **Step 4: 提交并推送**
+- [x] **Step 4: 提交并推送**
 
 ```bash
 cd /home/ubuntu/.config/rsshub-gateway
