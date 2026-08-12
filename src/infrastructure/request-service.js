@@ -56,12 +56,20 @@ export function createRequestService({
     });
   }
 
+  function fetchRssHubInstrumented(path, request) {
+    const startedAt = Date.now();
+    return resolvedFetchRssHub(path, request).then((response) => {
+      logger.debug('request_rsshub', { path, status: response?.status, durationMs: Date.now() - startedAt });
+      return response;
+    });
+  }
+
   return {
     client: upstreamClient,
     browserFetch: browser,
     fetchdFetch: resolvedFetchdFetch,
     fetchExternal: fetchExternalInstrumented,
-    fetchRssHub: resolvedFetchRssHub,
+    fetchRssHub: fetchRssHubInstrumented,
     fetchJsonViaFetchd,
     openCircuits: () => upstreamClient.openCircuits?.(),
   };

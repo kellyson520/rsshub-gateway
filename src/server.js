@@ -1196,6 +1196,31 @@ export function createGatewayServer(options = {}) {
       }
       return;
     }
+    if (requestUrl.pathname === '/_gateway/infra') {
+      const memory = process.memoryUsage();
+      writeJson(res, 200, {
+        uptimeMs: Math.round(process.uptime() * 1000),
+        memory: {
+          rss: memory.rss,
+          heapUsed: memory.heapUsed,
+          heapTotal: memory.heapTotal,
+        },
+        poller: poller.stats(),
+        cache: cache ? cache.stats() : null,
+        egress: egressPool.stats(),
+        leases: leaseStore.stats(),
+        circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
+        metrics: Object.fromEntries(metricCounts),
+        limits: {
+          leaseTtlMs,
+          leaseMaxBytes,
+          leaseMaxConcurrency,
+          mediaCacheMaxFileBytes,
+          videoCacheMaxFileBytes,
+        },
+      });
+      return;
+    }
     const rankingMatch = requestUrl.pathname.match(/^\/ehviewer\/ranking(?:\/(month|year|all))?$/);
     if (rankingMatch) {
       const period = rankingMatch[1] || 'day';

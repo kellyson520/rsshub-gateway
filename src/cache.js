@@ -68,6 +68,15 @@ export function createResponseCache({
   const ttl = { ...DEFAULT_TTL_SECONDS, ...ttlSeconds };
   const byteLimit = positiveNumber(maxBytes, DEFAULT_MAX_BYTES);
   let totalBytes = 0;
+  const counters = {
+    hits: 0,
+    staleHits: 0,
+    misses: 0,
+    bytesStored: 0,
+    rangeReads: 0,
+    rangeBytes: 0,
+    storeFailures: 0,
+  };
   let persistChain = Promise.resolve();
   let touchTimer;
   let operationSequence = 0;
@@ -193,9 +202,11 @@ export function createResponseCache({
       };
       entries.set(key, entry);
       totalBytes += entry.size;
+      counters.bytesStored += entry.size;
       await evict();
       await persistIndex();
     } catch {
+      counters.storeFailures += 1;
       await fsp.rm(tempPath, { force: true }).catch(() => {});
     }
   }
@@ -243,13 +254,19 @@ export function createResponseCache({
     const cacheNamespace = normalizedNamespace(namespace);
     const key = keyFor(url, kind, cacheNamespace);
     const fresh = ignoreFresh ? null : await readEntry(url, kind, cacheNamespace, false);
-    if (fresh) return resultFromEntry(fresh.entry, fresh.body, 'HIT');
+    if (fresh) {
+      counters.hits += 1;
+      return resultFromEntry(fresh.entry, fresh.body, 'HIT');
+    }
     if (bypassInflight) {
       const pendingForegroundStore = loadStates.get(key)?.foregroundStore;
       if (pendingForegroundStore) {
         await pendingForegroundStore.catch(() => {});
         const stored = await readEntry(url, kind, cacheNamespace, false);
-        if (stored) return resultFromEntry(stored.entry, stored.body, 'HIT');
+        if (stored) {
+          counters.hits += 1;
+          return resultFromEntry(stored.entry, stored.body, 'HIT');
+        }
       }
     }
     const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
@@ -259,7 +276,10 @@ export function createResponseCache({
     const operation = (async () => {
       try {
         const loaded = await loader();
-        if (loaded?.refreshFailed && stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
+        if (loaded?.refreshFailed && stale) {
+          counters.staleHits += 1;
+          return resultFromEntry(stale.entry, stale.body, 'STALE');
+        }
         if (loaded?.status >= 200 && loaded.status < 300) {
           if (bypassInflight) loadOrder.state.lastForegroundCompletion = ++operationSequence;
           const storeTask = async () => {
@@ -282,9 +302,13 @@ export function createResponseCache({
           }
           else await storeInOrder(key, storeTask, shouldSkip);
         }
+        counters.misses += 1;
         return { ...loaded, state: 'MISS' };
       } catch (error) {
-        if (stale) return resultFromEntry(stale.entry, stale.body, 'STALE');
+        if (stale) {
+          counters.staleHits += 1;
+          return resultFromEntry(stale.entry, stale.body, 'STALE');
+        }
         throw error;
       }
     })();
@@ -310,6 +334,7 @@ export function createResponseCache({
     if (!entry || now() >= entry.expiresAt) return null;
     entry.lastAccessAt = now();
     scheduleTouchPersist();
+    counters.hits += 1;
     return {
       entry,
       size: entry.size,
@@ -317,6 +342,8 @@ export function createResponseCache({
         const rangeStart = Math.max(0, Number(start) || 0);
         const rangeEnd = Number.isInteger(end) ? Math.min(end, entry.size - 1) : entry.size - 1;
         if (rangeStart > rangeEnd) return null;
+        counters.rangeReads += 1;
+        counters.rangeBytes += Math.min(rangeEnd, entry.size - 1) - rangeStart + 1;
         try {
           return fs.createReadStream(path.join(cacheRoot, entry.file), { start: rangeStart, end: rangeEnd });
         } catch {
@@ -326,7 +353,20 @@ export function createResponseCache({
     };
   }
 
-  return { getOrLoad, peek, readRange, keyFor, root: cacheRoot };
+  function stats() {
+    return {
+      entries: entries.size,
+      bytes: totalBytes,
+      byteLimit,
+      counters: { ...counters },
+      inflight: inflight.size,
+      storeInflight: storeInflight.size,
+      activeLoads: [...loadStates.values()].reduce((sum, state) => sum + state.active, 0),
+      root: cacheRoot,
+    };
+  }
+
+  return { getOrLoad, peek, readRange, keyFor, stats, root: cacheRoot };
 }
 
 export { DEFAULT_MAX_BYTES, DEFAULT_TTL_SECONDS };

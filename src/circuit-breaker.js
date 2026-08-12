@@ -46,4 +46,12 @@ export class CircuitBreaker {
       .map(([key]) => key)
       .sort();
   }
+
+  stats() {
+    const byState = { closed: 0, open: 0, 'half-open': 0 };
+    for (const [key, entry] of this.entries.entries()) {
+      byState[this.state(key)] += 1;
+    }
+    return { byState, open: byState.open, openKeys: this.openKeys() };
+  }
 }

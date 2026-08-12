@@ -67,6 +67,26 @@ test('forwards and transforms an RSSHub feed', async () => {
   assert.equal(verifySignedTarget(token, 'secret').egressScope, 'public');
 });
 
+test('exposes aggregated infrastructure stats at /_gateway/infra', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+    fetchExternal: async () => new Response('nope', { status: 404 }),
+  });
+  const { response, body } = await request(server, '/_gateway/infra');
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(body);
+  assert.equal(typeof payload.uptimeMs, 'number');
+  assert.ok(payload.memory.rss > 0);
+  assert.ok(Array.isArray(payload.poller.tasks));
+  assert.ok(payload.poller.tasks.some((task) => task.name === 'lease-sweep'));
+  assert.ok(Array.isArray(payload.egress.lanes));
+  assert.equal(typeof payload.leases.leases, 'number');
+  assert.ok('circuits' in payload);
+  assert.ok('metrics' in payload);
+  assert.ok(payload.limits.leaseMaxBytes > 0);
+});
+
 test('serves the EhViewer daily ranking as transformed RSS', async () => {
   const requested = [];
   const server = createGatewayServer({

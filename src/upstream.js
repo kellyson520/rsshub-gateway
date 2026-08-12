@@ -359,7 +359,12 @@ export function createUpstreamClient({
     return requestWithPolicy(target, { headers, timeout: timeout ?? totalTimeoutMs, source: 'rsshub', useProxy: false, allowTarget: false, recordResponseFailures: false });
   }
 
-  return { fetchExternal, fetchRssHub, openCircuits: () => breaker.openKeys() };
+  return {
+    fetchExternal,
+    fetchRssHub,
+    openCircuits: () => breaker.openKeys(),
+    circuitStats: () => breaker.stats(),
+  };
 }
 
 export { sourceHeaders };

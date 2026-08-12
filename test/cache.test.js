@@ -36,6 +36,51 @@ test('returns a fresh cached response without calling the loader twice', async (
   });
 });
 
+test('tracks hit, miss and stale counters in stats', async () => {
+  let now = 1_000;
+  await withCache({ now: () => now, ttlSeconds: { html: 10 }, maxBytes: 1024 }, async (cache) => {
+    const loader = async () => ({ status: 200, headers: { 'content-type': 'text/html' }, body: 'abc' });
+    assert.equal((await cache.getOrLoad('https://e-hentai.org/g/1/a/', 'html', loader)).state, 'MISS');
+    assert.equal((await cache.getOrLoad('https://e-hentai.org/g/1/a/', 'html', loader)).state, 'HIT');
+    now = 12_000;
+    assert.equal((await cache.getOrLoad('https://e-hentai.org/g/1/a/', 'html', async () => {
+      throw new Error('offline');
+    })).state, 'STALE');
+    const stats = cache.stats();
+    assert.equal(stats.counters.hits, 1);
+    assert.equal(stats.counters.misses, 1);
+    assert.equal(stats.counters.staleHits, 1);
+    assert.equal(stats.entries, 1);
+    assert.equal(stats.bytes, 3);
+    assert.equal(stats.counters.bytesStored, 3);
+    assert.ok(stats.byteLimit > 0);
+  });
+});
+
+test('counts byte ranges served from cache', async () => {
+  await withCache({ maxBytes: 4096 }, async (cache) => {
+    await cache.getOrLoad('https://cdn.example/video.mp4', 'media', async () => ({
+      status: 200,
+      headers: { 'content-type': 'video/mp4', 'content-length': '10' },
+      body: '0123456789',
+    }));
+    const ranged = await cache.readRange('https://cdn.example/video.mp4', 'media');
+    assert.ok(ranged);
+    const stream = ranged.createStream(2, 5);
+    assert.ok(stream);
+    await new Promise((resolve, reject) => {
+      const chunks = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+    const stats = cache.stats();
+    assert.equal(stats.counters.rangeReads, 1);
+    assert.equal(stats.counters.rangeBytes, 4);
+    assert.equal(stats.counters.hits, 1);
+  });
+});
+
 test('serves an expired document only when refresh fails', async () => {
   let now = 1_000;
   await withCache({ now: () => now, ttlSeconds: { html: 10 } }, async (cache) => {
