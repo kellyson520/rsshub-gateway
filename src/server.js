@@ -41,7 +41,10 @@ import {
   renderIwaraReaderPage,
   resolveIwaraVideoStream,
 } from './adapters/iwara.js';
-import { createFetchdClient, fetchdJson } from './fetchd.js';
+import { fetchdJson } from './fetchd.js';
+import { createBrowserFetchClient } from './browser-fetch.js';
+import { chunkSizeFor, createLeaseStore, createSignedChunk, verifySignedChunk } from './download-lease.js';
+import { createLeaseProxy } from './lease-proxy.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -78,6 +81,18 @@ function writeBuffer(res, status, body, contentType, headers = {}) {
 
 function writeJson(res, status, payload) {
   writeText(res, status, JSON.stringify(payload), 'application/json; charset=utf-8');
+}
+
+function mediaFileName(target, contentType) {
+  try {
+    const pathname = new URL(target).pathname;
+    const base = pathname.split('/').pop() || 'download';
+    if (base.includes('.')) return base;
+    const extension = String(contentType || '').split('/')[1] || 'bin';
+    return `${base}.${extension}`;
+  } catch {
+    return 'download.bin';
+  }
 }
 
 function writeGatewayError(res, error) {
@@ -788,7 +803,8 @@ export function createGatewayServer(options = {}) {
     kind,
   });
 
-  const fetchdFetch = options.fetchdFetch || createFetchdClient();
+  const browserFetch = options.browserFetch || createBrowserFetchClient();
+  const fetchdFetch = options.fetchdFetch || browserFetch.fetchdFetch;
   const fetchJsonViaFetchd = (url, request) => fetchdJson(fetchdFetch, url, request);
   const iwaraAccessToken = { value: null, expiresAt: 0 };
   const iwaraResolutionCache = new Map();
@@ -850,6 +866,29 @@ export function createGatewayServer(options = {}) {
     if (!remote.ok) return { adapter, egressScope: 'public', response: remote };
     const source = { adapter, egressScope: 'public', response: await cacheGatewayMedia(target, 'public', remote, { bypassInflight: true }) };
     return source;
+  }
+
+  async function mediaSizeFor(target) {
+    if (cache) {
+      const ranged = await cache.readRange(target, 'media', { namespace: 'public' });
+      if (ranged) return ranged.size;
+    }
+    try {
+      const probeUrl = isIwaraVideoTarget(target)
+        ? (await resolveIwaraVideo(target))?.url
+        : target;
+      if (!probeUrl) return null;
+      const probe = await fetchExternal(probeUrl, {
+        range: 'bytes=0-0',
+        circuit: false,
+        priority: 'background',
+      });
+      const contentRange = probe.headers.get('content-range') || '';
+      const match = contentRange.match(/\/(\d+)\s*$/);
+      return match ? Number(match[1]) : null;
+    } catch {
+      return null;
+    }
   }
   function sessionCredentialsFor(adapter) {
     const credentials = sourceConfig[adapter.name];
@@ -1246,7 +1285,56 @@ export function createGatewayServer(options = {}) {
     })
     : { enqueue: () => {} };
 
-  return http.createServer(async (req, res) => {
+  const leaseStore = options.leaseStore || createLeaseStore();
+  const leaseProxyPort = boundedInteger(
+    options.leaseProxyPort ?? process.env.GATEWAY_LEASE_PROXY_PORT,
+    0,
+    0,
+    65_535,
+  );
+  const leaseProxyPublicUrl = String(
+    options.leaseProxyPublicUrl ?? process.env.GATEWAY_LEASE_PROXY_PUBLIC_URL ?? '',
+  );
+  const leaseTtlMs = boundedInteger(
+    options.leaseTtlMs ?? process.env.GATEWAY_LEASE_TTL_MS,
+    30 * 60_000,
+    60_000,
+    24 * 60 * 60_000,
+  );
+  const leaseMaxBytes = boundedInteger(
+    options.leaseMaxBytes ?? process.env.GATEWAY_LEASE_MAX_BYTES,
+    2 * 1024 ** 3,
+    1024 * 1024,
+    64 * 1024 ** 3,
+  );
+  const leaseMaxConcurrency = boundedInteger(
+    options.leaseMaxConcurrency ?? process.env.GATEWAY_LEASE_MAX_CONCURRENCY,
+    8,
+    1,
+    32,
+  );
+  let leaseProxyBoundPort = leaseProxyPort;
+  const leaseProxy = (options.leaseProxy !== undefined || leaseProxyPort > 0)
+    ? createLeaseProxy({
+      leaseStore,
+      upstreamProxyHost: '127.0.0.1',
+      upstreamProxyPort: 7890,
+      port: leaseProxyPort,
+      host: '0.0.0.0',
+      onEvent: (event) => {
+        if (event.event !== 'lease_proxy_listening') console.log(JSON.stringify(event));
+      },
+    })
+    : null;
+  if (leaseProxy && !options.leaseProxy) {
+    leaseProxy.listen().then((boundPort) => {
+      leaseProxyBoundPort = boundPort;
+    }).catch((error) => {
+      console.log(JSON.stringify({ event: 'lease_proxy_failed', error: error.message }));
+    });
+  }
+
+  const server = http.createServer(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       writeText(res, 405, 'method not allowed\n');
       return;
@@ -1364,6 +1452,98 @@ export function createGatewayServer(options = {}) {
       }
       return;
     }
+    const chunkMatch = requestUrl.pathname.match(/^\/_gateway\/chunk\/(.+)$/);
+    if (chunkMatch) {
+      let chunk;
+      try {
+        chunk = verifySignedChunk(chunkMatch[1], secret);
+      } catch {
+        writeText(res, 403, 'resource unavailable\n');
+        return;
+      }
+      try {
+        const routed = await fetchGatewayMedia(
+          chunk.url,
+          { range: `bytes=${chunk.start}-${chunk.end}`, circuit: false, priority: 'foreground' },
+          { egressScope: chunk.egressScope || 'public', source: chunk.source },
+          undefined,
+        );
+        if (routed.unavailable) {
+          writeText(res, 503, 'source unavailable\n');
+          return;
+        }
+        const remote = routed.response;
+        const headers = {};
+        for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
+          const value = remote.headers.get(name);
+          if (value) headers[name] = value;
+        }
+        headers['content-disposition'] = `attachment; filename="chunk-${chunk.start}-${chunk.end}.bin"`;
+        res.writeHead(remote.status, headers);
+        if (req.method === 'HEAD') return res.end();
+        if (remote.body) Readable.fromWeb(remote.body).pipe(res);
+        else res.end();
+      } catch (error) {
+        if (error instanceof GatewayUpstreamError) {
+          writeGatewayError(res, error);
+        } else {
+          writeText(res, 502, 'upstream unavailable\n');
+        }
+      }
+      return;
+    }
+    const leaseMatch = requestUrl.pathname.match(/^\/_gateway\/lease\/(.+)$/);
+    if (leaseMatch) {
+      let verified;
+      try {
+        verified = verifySignedTarget(leaseMatch[1], secret);
+      } catch {
+        writeText(res, 403, 'resource unavailable\n');
+        return;
+      }
+      if (!leaseProxy) {
+        writeText(res, 503, 'lease proxy disabled\n');
+        return;
+      }
+      try {
+        const target = verified.url;
+        let resolvedUrl = target;
+        let allowHosts = [new URL(target).hostname];
+        if (isIwaraVideoTarget(target)) {
+          const resolved = await resolveIwaraVideo(target);
+          if (!resolved?.url) throw new Error('video resolution unavailable');
+          resolvedUrl = resolved.url;
+          allowHosts = [new URL(resolvedUrl).hostname];
+        }
+        const lease = leaseStore.createLease({
+          targetUrl: target,
+          resolvedUrl,
+          allowHosts,
+          ttlMs: leaseTtlMs,
+          maxBytes: leaseMaxBytes,
+          maxConcurrency: leaseMaxConcurrency,
+          metadata: { source: verified.source || 'unknown' },
+        });
+        const requestHost = (req.headers.host || 'localhost:1300').split(':')[0];
+        const view = leaseStore.publicView(lease, {
+          proxyHost: requestHost,
+          proxyPort: leaseProxyBoundPort,
+          proxyUrl: leaseProxyPublicUrl || undefined,
+        });
+        console.log(JSON.stringify({
+          event: 'lease_created',
+          username: lease.username,
+          host: allowHosts[0],
+          ttlMs: view.ttlMs,
+          maxBytes: view.maxBytes,
+        }));
+        writeJson(res, 200, view);
+      } catch (error) {
+        console.log(JSON.stringify({ event: 'lease_failure', error: error.message }));
+        writeText(res, 502, 'lease unavailable\n');
+      }
+      return;
+    }
     const gatewayMatch = requestUrl.pathname.match(/^\/_gateway\/(item|media)\/(.+)$/);
     if (gatewayMatch) {
       const mediaVariant = gatewayMatch[1] === 'media'
@@ -1381,6 +1561,31 @@ export function createGatewayServer(options = {}) {
         routeMetadata = { egressScope: verified.egressScope, source: verified.source };
       } catch {
         writeText(res, 403, 'resource unavailable\n');
+        return;
+      }
+      const chunksParam = gatewayMatch[1] === 'media' ? requestUrl.searchParams.get('chunks') : null;
+      if (chunksParam !== null && chunksParam !== '') {
+        const wanted = Number.parseInt(chunksParam, 10);
+        const size = await mediaSizeFor(target);
+        if (!size) {
+          writeText(res, 503, 'size unavailable\n');
+          return;
+        }
+        const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
+        const urls = [];
+        for (let index = 0; index < count; index += 1) {
+          const start = index * chunkSize;
+          const end = Math.min(size - 1, start + chunkSize - 1);
+          const token = createSignedChunk({
+            url: target,
+            start,
+            end,
+            secret,
+            metadata: { egressScope: routeMetadata.egressScope, source: routeMetadata.source },
+          });
+          urls.push(`${publicBaseUrl(req)}/_gateway/chunk/${token}`);
+        }
+        writeJson(res, 200, { size, chunkSize, count, urls });
         return;
       }
       try {
@@ -1451,6 +1656,9 @@ export function createGatewayServer(options = {}) {
           for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
             const value = remote.headers.get(name);
             if (value) headers[name] = value;
+          }
+          if (requestUrl.searchParams.get('download') === '1') {
+            headers['content-disposition'] = `attachment; filename="${mediaFileName(target, remote.headers.get('content-type') || '')}"`;
           }
           const mediaContentType = remote.headers.get('content-type') || '';
           if (remote.ok && mediaContentType.toLowerCase().startsWith('image/')) {
@@ -1686,6 +1894,10 @@ export function createGatewayServer(options = {}) {
       writeText(res, 502, 'upstream unavailable\n');
     }
   });
+  server.leaseProxy = leaseProxy;
+  server.leaseStore = leaseStore;
+  server.browserFetch = browserFetch;
+  return server;
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {

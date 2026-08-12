@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  chunkSizeFor,
+  createLeaseStore,
+  createSignedChunk,
+  verifySignedChunk,
+} from '../src/download-lease.js';
+
+test('lease store creates, verifies, revokes and expires leases', () => {
+  let now = 1_000_000;
+  const store = createLeaseStore({ now: () => now });
+  const lease = store.createLease({
+    targetUrl: 'https://acheron.iwara.tv/video/abc.mp4',
+    resolvedUrl: 'https://acheron.iwara.tv/v/abc.mp4?token=x',
+    allowHosts: ['acheron.iwara.tv'],
+    ttlMs: 60_000,
+    maxBytes: 1024,
+    maxConcurrency: 4,
+  });
+  assert.ok(lease.username.length >= 16);
+  assert.ok(lease.password.length >= 16);
+  assert.equal(store.verify(lease.username, lease.password), lease);
+  assert.equal(store.verify(lease.username, 'wrong'), null);
+  assert.equal(store.verify('nobody', 'nothing'), null);
+  now += 61_000;
+  assert.equal(store.verify(lease.username, lease.password), null);
+  now -= 61_000;
+  const lease2 = store.createLease({ targetUrl: 'https://x.example/a', allowHosts: ['x.example'], ttlMs: 60_000 });
+  store.revoke(lease2.username);
+  assert.equal(store.verify(lease2.username, lease2.password), null);
+  assert.equal(store.stats().leases >= 1, true);
+  store.revokeExpired();
+});
+
+test('lease public view includes proxy url and one-time semantics', () => {
+  const store = createLeaseStore();
+  const lease = store.createLease({
+    targetUrl: 'https://filesq.iwara.tv/f.mp4',
+    allowHosts: ['filesq.iwara.tv'],
+    metadata: { source: 'iwara' },
+  });
+  const view = store.publicView(lease, { proxyHost: 'gateway.example', proxyPort: 1301 });
+  assert.equal(view.once, true);
+  assert.ok(view.proxyUrl.startsWith(`http://${lease.username}:${lease.password}@gateway.example:1301`));
+  const publicView = store.publicView(lease, { proxyUrl: 'https://gateway.example:81' });
+  assert.ok(publicView.proxyUrl.startsWith(`https://${lease.username}:${lease.password}@gateway.example:81`));
+  assert.equal(publicView.proxyUrl.endsWith('/'), false);
+  assert.equal(view.url, 'https://filesq.iwara.tv/f.mp4');
+  assert.deepEqual(view.allowHosts, ['filesq.iwara.tv']);
+  assert.equal(view.maxConcurrency >= 1, true);
+  assert.equal(view.ttlMs > 0, true);
+});
+
+test('chunk size calculation respects bounds and counts', () => {
+  assert.deepEqual(chunkSizeFor(10 * 1024 * 1024, 8), { count: 8, size: 1310720 });
+  const tiny = chunkSizeFor(100 * 1024, 8);
+  assert.equal(tiny.size, 256 * 1024);
+  assert.equal(tiny.count, 1);
+  const huge = chunkSizeFor(200 * 1024 * 1024, 4);
+  assert.equal(huge.size, 16 * 1024 * 1024);
+  assert.equal(huge.count, 4);
+  assert.deepEqual(chunkSizeFor(0, 4), { count: 1, size: 1024 * 1024 });
+});
+
+test('signed chunks verify and reject tampering', () => {
+  const secret = 'test-secret';
+  const token = createSignedChunk({
+    url: 'https://acheron.iwara.tv/video/abc.mp4',
+    start: 0,
+    end: 1_048_575,
+    secret,
+    metadata: { egressScope: 'public', source: 'iwara' },
+  });
+  const data = verifySignedChunk(token, secret);
+  assert.equal(data.start, 0);
+  assert.equal(data.end, 1_048_575);
+  assert.equal(data.egressScope, 'public');
+  assert.equal(data.source, 'iwara');
+  assert.throws(() => verifySignedChunk(token, 'other-secret'));
+  assert.throws(() => verifySignedChunk('not-a-token', secret));
+  const [payload, signature] = token.split('.');
+  const tampered = `${payload}.${signature.slice(0, -1)}a`;
+  assert.throws(() => verifySignedChunk(tampered, secret));
+});

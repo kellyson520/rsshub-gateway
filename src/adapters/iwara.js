@@ -127,10 +127,25 @@ export function renderIwaraReaderPage({ video = {}, baseUrl = '', secret }) {
 }
 
 export async function fetchIwaraUser(fetchJson, username, { token } = {}) {
-  const data = await fetchJson(`${API_BASE}/profile/${encodeURIComponent(username)}`, {
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-  });
-  return data?.user || null;
+  const headers = token ? { authorization: `Bearer ${token}` } : {};
+  let data = null;
+  try {
+    data = await fetchJson(`${API_BASE}/profile/${encodeURIComponent(username)}`, { headers });
+  } catch (error) {
+    if (error?.status !== 404) throw error;
+  }
+  if (data?.user?.id) return data.user;
+  const needle = String(username).toLowerCase();
+  let results = [];
+  try {
+    const search = await fetchJson(`${API_BASE}/autocomplete/users?query=${encodeURIComponent(username)}`, { headers });
+    results = Array.isArray(search?.results) ? search.results : [];
+  } catch {
+    return null;
+  }
+  return results.find((user) => user?.username && String(user.username).toLowerCase() === needle)
+    || results.find((user) => user?.name && String(user.name).trim().toLowerCase() === needle)
+    || null;
 }
 
 export async function fetchIwaraVideos(fetchJson, userId, { kind = 'video', token } = {}) {

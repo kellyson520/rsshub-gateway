@@ -141,6 +141,60 @@ test('returns 404 for an unknown iwara user', async () => {
   assert.match(body, /user not found/);
 });
 
+test('resolves a renamed iwara user by display name when the profile lookup misses', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchdFetch: async (url) => {
+      if (url.includes('/profile/kelpie')) {
+        return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
+      }
+      if (url.includes('/autocomplete/users?query=kelpie')) {
+        return {
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: Buffer.from(JSON.stringify({ results: [{ id: 'user-9', username: 'rotawier', name: 'kelpie' }] })),
+          json: async () => ({ results: [{ id: 'user-9', username: 'rotawier', name: 'kelpie' }] }),
+        };
+      }
+      if (url.includes('/videos?user=user-9')) {
+        return {
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: Buffer.from(JSON.stringify({ results: [video] })),
+          json: async () => ({ results: [video] }),
+        };
+      }
+      return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
+    },
+  });
+  const { response, body } = await request(server, '/iwara/users/kelpie/video');
+  assert.equal(response.status, 200);
+  assert.match(body, /<title>kelpie&apos;s iwara<\/title>/);
+});
+
+test('returns 404 when the iwara username cannot be resolved by profile or search', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchdFetch: async (url) => {
+      if (url.includes('/autocomplete/users?query=nobody')) {
+        return {
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: Buffer.from(JSON.stringify({ results: [] })),
+          json: async () => ({ results: [] }),
+        };
+      }
+      return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
+    },
+  });
+  const { response, body } = await request(server, '/iwara/users/nobody/video');
+  assert.equal(response.status, 404);
+  assert.match(body, /user not found/);
+});
+
 test('caches and serves iwara video media with range support', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-iwara-media-'));
   try {

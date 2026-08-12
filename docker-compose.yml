@@ -39,10 +39,11 @@ services:
       EGRESS_PROBE_TIMEOUT_MS: "5000"
       EGRESS_PROBE_CACHE_MS: "300000"
       RSSHUB_URL: http://rsshub:1200
-      IWARA_FETCHD_URL: http://iwara-fetchd:7899
       SOURCE_CONFIG_FILE: /app/config/sources.json
+      GATEWAY_LEASE_PROXY_PORT: "1301"
     ports:
       - 127.0.0.1:1300:1300
+      - 1301:1301
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/gateway-cache:/var/cache/rsshub-gateway
@@ -52,20 +53,6 @@ services:
       1panel-network:
         aliases:
           - rsshub-gateway
-
-  iwara-fetchd:
-    build: ./docker/fetchd
-    container_name: iwara-fetchd
-    restart: unless-stopped
-    environment:
-      FETCHD_PROXY: http://rsshub-gateway:7890
-      FETCHD_PORT: "7899"
-      FETCHD_MAX_BODY: "4194304"
-      FETCHD_IMPERSONATE: chrome131
-    networks:
-      1panel-network:
-        aliases:
-          - iwara-fetchd
 
 networks:
   1panel-network:

@@ -1597,3 +1597,112 @@ test('does not cache videos larger than the video cache cap', async () => {
   assert.equal(calls, 2, 'oversized video bypasses the cache');
   await rm(root, { recursive: true, force: true });
 });
+
+test('serves chunk manifests and signed chunk ranges for media', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-chunks-'));
+  const mediaBytes = Buffer.alloc(1024 * 1024, 7);
+  const target = 'https://page.example.hath.network/h/video.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), target);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    const manifest = await request(server, `/_gateway/media/${token}?chunks=4`);
+    assert.equal(manifest.response.status, 200);
+    const payload = JSON.parse(manifest.body);
+    assert.equal(payload.size, 1024 * 1024);
+    assert.equal(payload.count, 4);
+    assert.equal(payload.urls.length, 4);
+    const firstChunk = await request(server, new URL(payload.urls[0]).pathname + new URL(payload.urls[0]).search);
+    assert.equal(firstChunk.response.status, 206);
+    assert.equal(firstChunk.response.headers.get('content-range'), `bytes 0-262143/${1024 * 1024}`);
+    assert.equal(firstChunk.response.headers.get('content-disposition'), 'attachment; filename="chunk-0-262143.bin"');
+    const secondChunk = await request(server, new URL(payload.urls[1]).pathname + new URL(payload.urls[1]).search);
+    assert.equal(secondChunk.response.status, 206);
+    assert.equal(secondChunk.response.headers.get('content-range'), `bytes 262144-524287/${1024 * 1024}`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('media download mode adds content-disposition', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-download-'));
+  const mediaBytes = Buffer.alloc(1024, 7);
+  const target = 'https://page.example.hath.network/h/video.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    fetchExternal: async () => new Response(mediaBytes, {
+      status: 200,
+      headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+    }),
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    const result = await request(server, `/_gateway/media/${token}?download=1`);
+    assert.equal(result.response.status, 200);
+    assert.equal(result.response.headers.get('content-disposition'), 'attachment; filename="video.mp4"');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('issues one-time download leases for signed media targets', async () => {
+  const { createServer: createNetServer } = await import('node:net');
+  const probe = createNetServer();
+  await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const leasePort = probe.address().port;
+  await new Promise((resolve) => probe.close(resolve));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-lease-'));
+  const target = 'https://page.example.hath.network/h/video.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    leaseProxyPort: leasePort,
+    leaseTtlMs: 60_000,
+    fetchExternal: async () => new Response('bytes', { headers: { 'content-type': 'video/mp4' } }),
+  });
+  try {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const token = createSignedTarget(target, 'secret');
+    const response = await fetch(`http://127.0.0.1:${port}/_gateway/lease/${token}`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.once, true);
+    assert.equal(payload.url, target);
+    assert.deepEqual(payload.allowHosts, ['page.example.hath.network']);
+    assert.ok(payload.username.length >= 16);
+    assert.ok(payload.password.length >= 16);
+    assert.ok(payload.proxyUrl.startsWith(`http://${payload.username}:${payload.password}@127.0.0.1:`));
+    assert.equal(payload.maxConcurrency >= 1, true);
+    assert.equal(payload.ttlMs > 0, true);
+    await new Promise((resolve) => server.close(resolve));
+    await server.leaseProxy.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
