@@ -478,7 +478,7 @@ git commit -m "feat: site-scoped egress probes with healthyScopes per lane"
 - Modify: `src/egress-pool.js`
 - Test: `test/egress-pool.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/egress-pool.test.js`：
 
@@ -544,12 +544,12 @@ test('filters lanes by healthyScopes and applies host scope overrides', async ()
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/egress-pool.test.js`
 Expected: FAIL（`site-blocked` 事件、`siteBlocked` 统计、scope 过滤不存在）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 修改 `src/egress-pool.js`：
 
@@ -728,12 +728,12 @@ lanes: [...laneStates.values()].map((lane) => ({
 })),
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/egress-pool.test.js`
 Expected: PASS（新旧测试全过）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/egress-pool.js test/egress-pool.test.js

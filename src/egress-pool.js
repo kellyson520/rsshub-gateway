@@ -1,3 +1,5 @@
+import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
+
 const DEFAULT_MIN_CONCURRENCY_PER_LANE = 3;
 const DEFAULT_MAX_CONCURRENCY_PER_LANE = 6;
 const DEFAULT_SUCCESS_RAMP_AFTER = 6;
@@ -31,8 +33,18 @@ export function createEgressPool(options = {}) {
   const successRampAfter = Math.max(1, Number.parseInt(options.successRampAfter, 10) || DEFAULT_SUCCESS_RAMP_AFTER);
   const cooldownMs = Math.max(0, Number.parseInt(options.cooldownMs, 10) || DEFAULT_COOLDOWN_MS);
   const backgroundReservePerLane = Math.max(0, Number.parseInt(options.backgroundReservePerLane, 10) || DEFAULT_BACKGROUND_RESERVE_PER_LANE);
+  const blockedStatuses = new Set([...(options.blockedStatuses || [401, 403, 407, 429])].map(Number));
+  const siteFailureThreshold = Math.max(1, Number.parseInt(options.siteFailureThreshold, 10) || 3);
+  const siteFailureWindowMs = Math.max(1_000, Number.parseInt(options.siteFailureWindowMs, 10) || 60_000);
+  const siteBlockCooldownMs = Math.max(0, Number.parseInt(options.siteBlockCooldownMs, 10) || 60_000);
+  const scopeOverrides = options.scopeOverrides && typeof options.scopeOverrides === 'object' ? options.scopeOverrides : {};
   const now = options.now || (() => Date.now());
   const onEvent = options.onEvent;
+  const siteTracker = options.siteTracker || createSiteFailureTracker({
+    threshold: siteFailureThreshold,
+    windowMs: siteFailureWindowMs,
+    now,
+  });
   const laneStates = new Map();
   const waiters = [];
   let cursor = 0;
@@ -43,6 +55,8 @@ export function createEgressPool(options = {}) {
       previous.proxyName = String(lane.proxyName || lane.id);
       previous.proxyUrl = String(lane.proxyUrl || '');
       previous.dispatcher = lane.dispatcher;
+      if (lane.healthyScopes && previous.healthyScopes === null) previous.healthyScopes = new Set(lane.healthyScopes);
+      if (!previous.siteHealth) previous.siteHealth = new Map();
       return previous;
     }
     return {
@@ -54,6 +68,8 @@ export function createEgressPool(options = {}) {
       targetConcurrency: minConcurrencyPerLane,
       successStreak: 0,
       cooldownUntil: 0,
+      siteHealth: new Map(),
+      healthyScopes: lane.healthyScopes ? new Set(lane.healthyScopes) : null,
     };
   }
 
@@ -82,17 +98,41 @@ export function createEgressPool(options = {}) {
     return [...laneStates.values()].filter((lane) => lane.active < Math.max(0, lane.targetConcurrency - reserve) && lane.cooldownUntil <= timestamp);
   }
 
-  function chooseLane({ priority = 'foreground', galleryShard } = {}) {
-    const lanes = availableLanes(priority);
+  function effectiveScope(host, scope) {
+    if (host && scopeOverrides[String(host).toLowerCase()]) {
+      return scopeOverrides[String(host).toLowerCase()];
+    }
+    return scope || 'public';
+  }
+
+  function laneHealthyForScope(lane, scope) {
+    if (!lane.healthyScopes || lane.healthyScopes.has(scope)) return true;
+    return false;
+  }
+
+  function chooseLane({ priority = 'foreground', galleryShard, host, scope } = {}) {
+    const requestScope = effectiveScope(host, scope);
+    const timestamp = now();
+    const hostKey = String(host || '').toLowerCase();
+    const lanes = availableLanes(priority).filter((lane) => laneHealthyForScope(lane, requestScope));
     if (!lanes.length) return undefined;
+    const unblocked = lanes.filter((lane) => {
+      const until = lane.siteHealth.get(hostKey);
+      return until === undefined || until <= timestamp;
+    });
+    let candidates = unblocked;
+    if (!unblocked.length) {
+      candidates = lanes;
+      emit({ state: 'site-degraded', host: hostKey, scope: requestScope });
+    }
     if (Number.isInteger(galleryShard) && galleryShard >= 0) {
       const allLanes = [...laneStates.values()].filter((lane) => lane.cooldownUntil <= now());
       const hinted = allLanes[galleryShard % allLanes.length];
-      if (hinted && lanes.includes(hinted)) return hinted;
+      if (hinted && candidates.includes(hinted)) return hinted;
     }
-    lanes.sort((left, right) => left.active - right.active || left.id.localeCompare(right.id));
-    const leastActive = lanes[0].active;
-    const tied = lanes.filter((lane) => lane.active === leastActive);
+    candidates.sort((left, right) => left.active - right.active || left.id.localeCompare(right.id));
+    const leastActive = candidates[0].active;
+    const tied = candidates.filter((lane) => lane.active === leastActive);
     const lane = tied[cursor % tied.length];
     cursor = (cursor + 1) % Math.max(1, tied.length);
     return lane;
@@ -113,7 +153,12 @@ export function createEgressPool(options = {}) {
 
   function recordResult(lane, result = {}) {
     const status = Number(result.status);
+    const hostKey = result.host ? String(result.host).toLowerCase() : undefined;
     if (isSuccess(status)) {
+      if (hostKey) {
+        siteTracker.reset(lane.id, hostKey);
+        lane.siteHealth.delete(hostKey);
+      }
       lane.successStreak += 1;
       if (lane.successStreak >= successRampAfter) {
         lane.targetConcurrency = Math.min(maxConcurrencyPerLane, lane.targetConcurrency + 1);
@@ -128,9 +173,15 @@ export function createEgressPool(options = {}) {
       lane.cooldownUntil = now() + cooldownMs;
       emit({ state: 'backoff', laneId: lane.id, status: Number.isInteger(status) ? status : 504, targetConcurrency: lane.targetConcurrency });
     }
+    if (hostKey && blockedStatuses.has(status)) {
+      if (siteTracker.record(lane.id, hostKey, status)) {
+        lane.siteHealth.set(hostKey, now() + siteBlockCooldownMs);
+        emit({ state: 'site-blocked', laneId: lane.id, host: hostKey, status });
+      }
+    }
   }
 
-  function makeLease(lane) {
+  function makeLease(lane, context = {}) {
     lane.active += 1;
     let released = false;
     return {
@@ -138,11 +189,12 @@ export function createEgressPool(options = {}) {
       proxyName: lane.proxyName,
       proxyUrl: lane.proxyUrl,
       dispatcher: lane.dispatcher,
+      host: context.host,
       release(result) {
         if (released) return;
         released = true;
         lane.active = Math.max(0, lane.active - 1);
-        recordResult(lane, result);
+        recordResult(lane, { ...result, host: result.host || context.host });
         drain();
       },
     };
@@ -158,7 +210,7 @@ export function createEgressPool(options = {}) {
       let selectedIndex = -1;
       let selectedLane;
       for (const index of indexes) {
-        const lane = chooseLane({ priority: waiters[index].priority, galleryShard: waiters[index].context.galleryShard });
+        const lane = chooseLane({ priority: waiters[index].priority, galleryShard: waiters[index].context.galleryShard, host: waiters[index].context.host, scope: waiters[index].context.scope });
         if (lane) {
           selectedIndex = index;
           selectedLane = lane;
@@ -174,7 +226,7 @@ export function createEgressPool(options = {}) {
 
   function acquire(context = {}) {
     const priority = context.priority === 'background' ? 'background' : 'foreground';
-    const lane = chooseLane({ priority, galleryShard: context.galleryShard });
+    const lane = chooseLane({ priority, galleryShard: context.galleryShard, host: context.host, scope: context.scope });
     if (lane) return Promise.resolve(makeLease(lane, context));
     if (!laneStates.size) return Promise.reject(poolError('no healthy egress lanes are available', 'EGRESS_POOL_EMPTY'));
     return new Promise((resolve, reject) => {
@@ -196,6 +248,8 @@ export function createEgressPool(options = {}) {
         id: lane.id,
         active: lane.active,
         targetConcurrency: lane.targetConcurrency,
+        siteBlocked: [...lane.siteHealth.keys()],
+        healthyScopes: lane.healthyScopes ? [...lane.healthyScopes] : null,
       })),
     }),
   };

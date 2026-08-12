@@ -118,3 +118,63 @@ test('reserves one slot per lane for foreground requests over background work', 
   const finalBackground = await background;
   finalBackground.release({ status: 200 });
 });
+
+test('blocks a lane for a host after repeated blocked statuses and degrades gracefully', async () => {
+  const events = [];
+  const pool = createEgressPool({
+    lanes: [
+      { id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a'), healthyScopes: ['public', 'sticky'] },
+      { id: 'lane-b', proxyName: 'node-b', proxyUrl: 'http://127.0.0.1:7902', dispatcher: dispatcher('b'), healthyScopes: ['public', 'sticky'] },
+    ],
+    minConcurrencyPerLane: 1,
+    maxConcurrencyPerLane: 1,
+    cooldownMs: 0,
+    siteFailureThreshold: 2,
+    siteFailureWindowMs: 60_000,
+    siteBlockCooldownMs: 60_000,
+    blockedStatuses: [401, 403, 407, 429],
+    onEvent: (event) => events.push(event),
+  });
+
+  for (let count = 0; count < 4; count += 1) {
+    const lease = await pool.acquire({ host: 'iwara.tv' });
+    lease.release({ status: 403 });
+  }
+  const blockedEvents = events.filter((event) => event.state === 'site-blocked');
+  assert.equal(blockedEvents.length, 2);
+  assert.equal(blockedEvents[0].host, 'iwara.tv');
+  for (const lane of pool.stats().lanes) {
+    assert.equal(lane.siteBlocked.includes('iwara.tv'), true);
+  }
+
+  const degraded = await pool.acquire({ host: 'iwara.tv' });
+  assert.ok(degraded.laneId);
+  assert.ok(events.some((event) => event.state === 'site-degraded' && event.host === 'iwara.tv'));
+  degraded.release({ status: 403 });
+
+  const other = await pool.acquire({ host: 'x.com' });
+  assert.ok(other.laneId);
+  other.release({ status: 200 });
+});
+
+test('filters lanes by healthyScopes and applies host scope overrides', async () => {
+  const pool = createEgressPool({
+    lanes: [
+      { id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a'), healthyScopes: ['public'] },
+      { id: 'lane-b', proxyName: 'node-b', proxyUrl: 'http://127.0.0.1:7902', dispatcher: dispatcher('b'), healthyScopes: ['public', 'sticky'] },
+    ],
+    minConcurrencyPerLane: 1,
+    maxConcurrencyPerLane: 1,
+    scopeOverrides: { 'i.iwara.tv': 'sticky' },
+  });
+
+  const stickyLease = await pool.acquire({ host: 'www.iwara.tv', scope: 'sticky' });
+  assert.equal(stickyLease.laneId, 'lane-b');
+  stickyLease.release({ status: 200 });
+  const overridden = await pool.acquire({ host: 'i.iwara.tv' });
+  assert.equal(overridden.laneId, 'lane-b');
+  overridden.release({ status: 200 });
+  const publicLease = await pool.acquire({ host: 'e-hentai.org', scope: 'public' });
+  assert.ok(['lane-a', 'lane-b'].includes(publicLease.laneId));
+  publicLease.release({ status: 200 });
+});
