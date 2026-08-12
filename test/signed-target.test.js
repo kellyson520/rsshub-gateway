@@ -40,6 +40,30 @@ test('accepts Telegram post and media hosts', () => {
   );
 });
 
+test('allows common RSSHub feed media CDNs', () => {
+  const allowed = [
+    'https://i.imgur.com/demo.jpg',
+    'https://cdn.discordapp.com/attachments/1/2/demo.png',
+    'https://i.redd.it/abc.jpg',
+    'https://preview.redd.it/abc.jpg',
+    'https://v.redd.it/abc.mp4',
+    'https://i.ytimg.com/vi/abc/hqdefault.jpg',
+    'https://static.flickr.com/1/2/3.jpg',
+    'https://cdn.myanimelist.net/images/anime/1/1.jpg',
+    'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/1.jpg',
+    'https://image.tmdb.org/t/p/w500/demo.jpg',
+    'https://media.steampowered.com/steam/apps/1/header.jpg',
+    'https://raw.githubusercontent.com/user/repo/main/demo.png',
+    'https://camo.githubusercontent.com/abc/demo.png',
+    'https://images.weserv.nl/?url=example.com%2Fdemo.jpg',
+    'https://wsrv.nl/?url=example.com%2Fdemo.jpg',
+  ];
+  for (const url of allowed) {
+    assert.equal(isAllowedTarget(url), true, `expected ${url} to be allowed`);
+    assert.equal(verifySignedTarget(createSignedTarget(url, 'secret'), 'secret').url, url);
+  }
+});
+
 test('allows E-Hentai gallery and image hosts but not unrelated hosts', () => {
   assert.equal(isAllowedTarget('https://e-hentai.org/g/123/abc/'), true);
   assert.equal(isAllowedTarget('https://ehgt.org/thumb.jpg'), true);

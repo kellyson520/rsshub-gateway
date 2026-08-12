@@ -43,8 +43,12 @@ import {
 } from './adapters/iwara.js';
 import { fetchdJson } from './fetchd.js';
 import { createBrowserFetchClient } from './browser-fetch.js';
-import { chunkSizeFor, createLeaseStore, createSignedChunk, verifySignedChunk } from './download-lease.js';
+import { createLeaseStore, createSignedChunk, verifySignedChunk } from './download-lease.js';
 import { createLeaseProxy } from './lease-proxy.js';
+import { createLogger } from './infrastructure/logger.js';
+import { createPoller } from './infrastructure/poller.js';
+import { createMediaTransport } from './media/media-transport.js';
+import { chunkSizeFor } from './media/chunks.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -152,15 +156,17 @@ function documentCacheKind(url, kind) {
   return kind;
 }
 
-function cacheStateLog(url, kind, state) {
+function cacheStateLog(url, kind, state, logger) {
   try {
-    console.log(JSON.stringify({ event: 'gateway_cache', host: new URL(url).hostname, kind, state }));
+    const line = { event: 'gateway_cache', host: new URL(url).hostname, kind, state };
+    if (logger) logger.info('gateway_cache', line);
+    else console.log(JSON.stringify(line));
   } catch {
     // Cache diagnostics must never affect the response.
   }
 }
 
-async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl = requestUrl, request, kind }) {
+async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl = requestUrl, request, kind, logger }) {
   if (!cache) return fetcher(requestUrl, request);
   const cacheKind = documentCacheKind(cacheUrl, kind);
   const result = await cache.getOrLoad(cacheUrl, cacheKind, async () => {
@@ -181,7 +187,7 @@ async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl = requ
     allowStale: cacheKind !== 'eh-image',
     bypassInflight: request?.priority === 'foreground',
   });
-  cacheStateLog(cacheUrl, cacheKind, result.state);
+  cacheStateLog(cacheUrl, cacheKind, result.state, logger);
   return responseFromCachedDocument(result);
 }
 
@@ -340,35 +346,6 @@ function parseByteRange(value, size) {
   return { start, end };
 }
 
-async function cachedMediaRange({ cache, target, namespace, range }) {
-  if (!cache) return null;
-  const ranged = await cache.readRange(target, 'media', { namespace });
-  if (!ranged) return null;
-  const parsed = parseByteRange(range, ranged.size);
-  if (!parsed) return null;
-  if (parsed.unsatisfiable) {
-    return new Response(null, {
-      status: 416,
-      headers: {
-        'content-range': `bytes */${ranged.size}`,
-        'content-type': ranged.entry.headers['content-type'] || 'application/octet-stream',
-      },
-    });
-  }
-  const stream = ranged.createStream(parsed.start, parsed.end);
-  if (!stream) return null;
-  const headers = {
-    'content-type': ranged.entry.headers['content-type'] || 'application/octet-stream',
-    'content-length': String(parsed.end - parsed.start + 1),
-    'content-range': `bytes ${parsed.start}-${parsed.end}/${ranged.size}`,
-    'accept-ranges': 'bytes',
-  };
-  for (const name of ['etag', 'last-modified']) {
-    const value = ranged.entry.headers[name];
-    if (value) headers[name] = value;
-  }
-  return new Response(Readable.toWeb(stream), { status: 206, headers });
-}
 
 async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
   const targets = [...new Set(pages.map((page) => page.mediaTarget).filter(Boolean))].slice(0, count);
@@ -556,6 +533,7 @@ async function prefetchEhGallery({
 }
 
 export function createGatewayServer(options = {}) {
+  const logger = options.logger || createLogger();
   const secret = options.secret || readSecret();
   const sourceConfig = options.sourceConfig || readSources();
   const ehPrefetchConcurrency = boundedInteger(
@@ -637,7 +615,7 @@ export function createGatewayServer(options = {}) {
     maxConcurrencyPerLane: egressMaxConcurrencyPerLane,
     onEvent: (event) => {
       if (['ramp', 'backoff', 'empty'].includes(event.state)) {
-        console.log(JSON.stringify({ event: 'egress_pool', state: event.state, lanes: egressPool.stats().lanes.length }));
+        logger.info('egress_pool', { state: event.state, lanes: egressPool.stats().lanes.length });
       }
     },
   });
@@ -654,7 +632,7 @@ export function createGatewayServer(options = {}) {
       probeCacheMs: egressProbeCacheMs,
       onEvent: (event) => {
         if (['refresh', 'degraded', 'empty'].includes(event.state)) {
-          console.log(JSON.stringify({ event: 'mihomo_egress', state: event.state, lanes: event.lanes }));
+          logger.info('mihomo_egress', { state: event.state, lanes: event.lanes });
         }
       },
     })
@@ -774,7 +752,7 @@ export function createGatewayServer(options = {}) {
   );
   const imageVariantLimiter = createConcurrencyLimiter(imageVariantConcurrency);
   const metricCounts = new Map();
-  const metricSink = options.onMetric || ((event) => console.log(JSON.stringify(event)));
+  const metricSink = options.onMetric || ((event) => logger.info(String(event.event || 'metric'), event));
   function recordMetric(metric, details = {}) {
     const count = (metricCounts.get(metric) || 0) + 1;
     metricCounts.set(metric, count);
@@ -801,6 +779,7 @@ export function createGatewayServer(options = {}) {
     requestUrl: url,
     request,
     kind,
+    logger,
   });
 
   const browserFetch = options.browserFetch || createBrowserFetchClient();
@@ -841,6 +820,27 @@ export function createGatewayServer(options = {}) {
     return resolved;
   }
 
+  const mediaTransport = createMediaTransport({
+    cache,
+    fetchExternal,
+    resolveMediaUrl: resolveIwaraVideo,
+    isVideoTarget: isIwaraVideoTarget,
+    makeImageVariant,
+    variantLimiter: imageVariantLimiter,
+    imageVariantMaxSourceBytes,
+    mediaCacheMaxFileBytes,
+    videoCacheMaxFileBytes,
+    mediaBrowserCacheSeconds,
+    createSignedChunk,
+    routeRequest: (target, requestOptions, routeMetadata) => fetchGatewayTarget(target, requestOptions, routeMetadata),
+    adapterFor: adapterForUrl,
+    resolveSession: (adapter) => resolveSessionTransport(adapter),
+    namespaceFor: cacheNamespaceFor,
+    logger,
+    onMetric: recordMetric,
+    onImageWarmup: (target, namespace) => warmupImageVariants(target, namespace),
+  });
+
   function iwaraUnavailableResponse() {
     return new Response('video unavailable\n', {
       status: 502,
@@ -848,48 +848,34 @@ export function createGatewayServer(options = {}) {
     });
   }
 
-  async function fetchIwaraVideoMedia(target, requestOptions, routeMetadata) {
-    const adapter = adapterForUrl(target);
-    if (requestOptions.range) {
-      const ranged = await cachedMediaRange({ cache, target, namespace: 'public', range: requestOptions.range });
-      if (ranged) return { adapter, egressScope: 'public', response: ranged };
-      const resolved = await resolveIwaraVideo(target);
-      if (!resolved) return { adapter, egressScope: 'public', response: iwaraUnavailableResponse() };
-      const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
-      return { adapter, egressScope: 'public', response: remote };
+  async function warmupImageVariants(target, namespace) {
+    try {
+      const cachedOriginal = await mediaTransport.readCached(target, 'media', namespace);
+      if (!cachedOriginal?.ok) return;
+      for (const width of IMAGE_VARIANT_WIDTHS) {
+        const startedAt = Date.now();
+        const original = cachedOriginal.clone();
+        await mediaTransport.mediaVariant(
+          { adapter: adapterForUrl(target), response: original },
+          target,
+          width,
+          namespace,
+        );
+        recordMetric('image_variant_warmup', {
+          source: adapterForUrl(target).name,
+          width,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+    } catch {
+      // Background warmup must never affect requests.
     }
-    const cached = await readCachedGatewayDocument(target, 'media', 'public', { bypassInflight: true });
-    if (cached) return { adapter, egressScope: 'public', response: cached };
-    const resolved = await resolveIwaraVideo(target);
-    if (!resolved) return { adapter, egressScope: 'public', response: iwaraUnavailableResponse() };
-    const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
-    if (!remote.ok) return { adapter, egressScope: 'public', response: remote };
-    const source = { adapter, egressScope: 'public', response: await cacheGatewayMedia(target, 'public', remote, { bypassInflight: true }) };
-    return source;
   }
 
   async function mediaSizeFor(target) {
-    if (cache) {
-      const ranged = await cache.readRange(target, 'media', { namespace: 'public' });
-      if (ranged) return ranged.size;
-    }
-    try {
-      const probeUrl = isIwaraVideoTarget(target)
-        ? (await resolveIwaraVideo(target))?.url
-        : target;
-      if (!probeUrl) return null;
-      const probe = await fetchExternal(probeUrl, {
-        range: 'bytes=0-0',
-        circuit: false,
-        priority: 'background',
-      });
-      const contentRange = probe.headers.get('content-range') || '';
-      const match = contentRange.match(/\/(\d+)\s*$/);
-      return match ? Number(match[1]) : null;
-    } catch {
-      return null;
-    }
+    return mediaTransport.probeSize(target);
   }
+
   function sessionCredentialsFor(adapter) {
     const credentials = sourceConfig[adapter.name];
     const headers = adapter.headers?.(credentials, { includeCredentials: true }) || {};
@@ -1059,175 +1045,15 @@ export function createGatewayServer(options = {}) {
   }
 
   async function cacheGatewayMedia(target, namespace, response, { bypassInflight = false } = {}) {
-    if (!cache) return response;
-    const contentType = response.headers.get('content-type') || '';
-    const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
-    const mediaType = contentType.toLowerCase();
-    const mediaBytes = mediaType.startsWith('video/') ? videoCacheMaxFileBytes : mediaCacheMaxFileBytes;
-    const cacheable = response.ok
-      && (mediaType.startsWith('image/') || mediaType.startsWith('video/'))
-      && Number.isSafeInteger(contentLength)
-      && contentLength >= 0
-      && contentLength <= mediaBytes;
-    if (!cacheable) return response;
-    if (bypassInflight) {
-      const cacheCopy = response.clone();
-      const result = await cache.getOrLoad(target, 'media', async () => ({
-        passthrough: response,
-        status: response.status,
-        headers: responseHeaders(response),
-        cacheable: true,
-        cacheBody: async () => ({
-          status: response.status,
-          headers: responseHeaders(response),
-          body: await readBinaryLimited(cacheCopy, mediaBytes),
-          cacheable: true,
-        }),
-      }), {
-        namespace,
-        bypassInflight: true,
-        ignoreFresh: true,
-        deferStore: true,
-      });
-      cacheStateLog(target, 'media', result.state);
-      return result.passthrough || responseFromCachedDocument(result);
-    }
-    const body = await readBinaryLimited(response, mediaBytes);
-    const result = await cache.getOrLoad(target, 'media', async () => ({
-      status: response.status,
-      headers: responseHeaders(response),
-      body,
-      cacheable: true,
-    }), { namespace, bypassInflight });
-    cacheStateLog(target, 'media', result.state);
-    return responseFromCachedDocument(result);
+    return mediaTransport.cacheMedia(target, namespace, response, { bypassInflight });
   }
 
   async function createGatewayMediaVariant(source, target, width, namespace) {
-    const original = source.response;
-    if (!original?.ok || !original.body) return source;
-    if (!(original.headers.get('content-type') || '').toLowerCase().startsWith('image/')) return source;
-
-    let variant;
-    let sourceBytes = 0;
-    const startedAt = Date.now();
-    try {
-      const body = await readBinaryLimited(original.clone(), imageVariantMaxSourceBytes);
-      sourceBytes = body.length;
-      variant = await imageVariantLimiter(() => makeImageVariant({
-        body,
-        contentType: original.headers.get('content-type') || '',
-        width,
-      }));
-    } catch {
-      recordMetric('image_variant_fallback', {
-        source: source.adapter?.name || 'unknown',
-        width,
-        reason: 'transform-failed',
-        durationMs: Date.now() - startedAt,
-      });
-      return source;
-    }
-    if (!variant?.usedVariant || !Buffer.isBuffer(variant.body)) {
-      recordMetric('image_variant_fallback', {
-        source: source.adapter?.name || 'unknown',
-        width,
-        reason: 'not-smaller',
-        durationMs: Date.now() - startedAt,
-      });
-      return source;
-    }
-    recordMetric('image_variant_generated', {
-      source: source.adapter?.name || 'unknown',
-      width,
-      sourceBytes,
-      variantBytes: variant.body.length,
-      durationMs: Date.now() - startedAt,
-    });
-
-    const headers = responseHeaders(original);
-    headers['content-type'] = variant.contentType;
-    headers['content-length'] = String(variant.body.length);
-    const cacheUrl = imageVariantCacheUrl(target, width);
-    if (!cache) {
-      return {
-        ...source,
-        response: new Response(variant.body, { status: original.status, statusText: original.statusText, headers }),
-      };
-    }
-
-    const result = await cache.getOrLoad(cacheUrl, 'media-variant', async () => ({
-      status: original.status,
-      headers,
-      body: variant.body,
-      cacheable: true,
-    }), { namespace });
-    cacheStateLog(target, 'media-variant', result.state);
-    return { ...source, response: responseFromCachedDocument(result) };
+    return mediaTransport.mediaVariant(source, target, width, namespace);
   }
 
   async function fetchGatewayMedia(target, requestOptions, routeMetadata, variantWidth) {
-    if (isIwaraVideoTarget(target)) return fetchIwaraVideoMedia(target, requestOptions, routeMetadata);
-    const adapter = adapterForUrl(target);
-    const bypassInflight = requestOptions?.priority === 'foreground';
-    const requestedScope = routeMetadata.egressScope === 'session'
-      ? 'session'
-      : (routeMetadata.egressScope === 'sticky' ? 'sticky' : 'public');
-    if (requestedScope === 'session') {
-      const session = await resolveSessionTransport(adapter);
-      if (!session) return { adapter, unavailable: true, egressScope: 'session' };
-      const namespace = cacheNamespaceFor('session', session);
-      if (requestOptions.range) {
-        const ranged = await cachedMediaRange({ cache, target, namespace, range: requestOptions.range });
-        if (ranged) return { adapter, egressScope: 'session', session, response: ranged };
-        return fetchGatewayTarget(target, requestOptions, routeMetadata);
-      }
-      if (variantWidth && cache) {
-        const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace, { bypassInflight });
-        if (cachedVariant) {
-          recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
-          return { adapter, egressScope: 'session', session, response: cachedVariant };
-        }
-      }
-      const cached = await readCachedGatewayDocument(target, 'media', namespace, { bypassInflight });
-      if (cached) {
-        const source = { adapter, egressScope: 'session', session, response: cached };
-        return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
-      }
-      const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
-      const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response, { bypassInflight }) };
-      return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
-    }
-
-    if (requestOptions.range) {
-      const ranged = await cachedMediaRange({ cache, target, namespace: 'public', range: requestOptions.range });
-      if (ranged) return { adapter, egressScope: requestedScope, response: ranged };
-      return fetchGatewayTarget(target, requestOptions, routeMetadata);
-    }
-    if (variantWidth && cache) {
-      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', 'public', { bypassInflight });
-      if (cachedVariant) {
-        recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
-        return { adapter, egressScope: 'public', response: cachedVariant };
-      }
-    }
-    const publicCached = await readCachedGatewayDocument(target, 'media', 'public', { bypassInflight });
-    if (publicCached) {
-      const source = { adapter, egressScope: 'public', response: publicCached };
-      return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, 'public') : source;
-    }
-    const routed = await fetchGatewayTarget(target, requestOptions, routeMetadata);
-    if (routed.unavailable) return routed;
-    const namespace = cacheNamespaceFor(routed.egressScope, routed.session);
-    if (variantWidth && namespace !== 'public' && cache) {
-      const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace, { bypassInflight });
-      if (cachedVariant) {
-        recordMetric('image_variant_hit', { source: adapter.name, width: variantWidth });
-        return { ...routed, response: cachedVariant };
-      }
-    }
-    const source = { ...routed, response: await cacheGatewayMedia(target, namespace, routed.response, { bypassInflight }) };
-    return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
+    return mediaTransport.serve(target, requestOptions, routeMetadata, variantWidth);
   }
 
   async function fetchResolvedEhMedia(target, requestOptions, routeMetadata, variantWidth, baseUrl) {
@@ -1279,7 +1105,7 @@ export function createGatewayServer(options = {}) {
       },
       onEvent: (event) => {
         if (['ramp', 'backoff', 'retry', 'failed'].includes(event.state)) {
-          console.log(JSON.stringify({ event: 'eh_media_prefetch', ...event }));
+          logger.info('eh_media_prefetch', event);
         }
       },
     })
@@ -1322,7 +1148,7 @@ export function createGatewayServer(options = {}) {
       port: leaseProxyPort,
       host: '0.0.0.0',
       onEvent: (event) => {
-        if (event.event !== 'lease_proxy_listening') console.log(JSON.stringify(event));
+        if (event.event !== 'lease_proxy_listening') logger.info(String(event.event || 'lease_proxy'), event);
       },
     })
     : null;
@@ -1330,7 +1156,7 @@ export function createGatewayServer(options = {}) {
     leaseProxy.listen().then((boundPort) => {
       leaseProxyBoundPort = boundPort;
     }).catch((error) => {
-      console.log(JSON.stringify({ event: 'lease_proxy_failed', error: error.message }));
+      logger.error('lease_proxy_failed', { error: error.message });
     });
   }
 
@@ -1381,13 +1207,12 @@ export function createGatewayServer(options = {}) {
         writeText(res, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
-          console.log(JSON.stringify({
-            event: 'ehviewer_failure',
+          logger.error('ehviewer_failure', {
             source: error.source,
             code: error.code,
             status: error.status,
             attempts: error.attempts,
-          }));
+          });
           writeGatewayError(res, error);
         } else {
           writeText(res, 502, 'source unavailable\n');
@@ -1437,16 +1262,15 @@ export function createGatewayServer(options = {}) {
         writeText(res, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
-          console.log(JSON.stringify({
-            event: 'iwara_failure',
+          logger.error('iwara_failure', {
             source: error.source,
             code: error.code,
             status: error.status,
             attempts: error.attempts,
-          }));
+          });
           writeGatewayError(res, error);
         } else {
-          console.log(JSON.stringify({ event: 'iwara_failure', code: 'IWARA_FEED_ERROR', status: 502, error: error.message }));
+          logger.error('iwara_failure', { code: 'IWARA_FEED_ERROR', status: 502, error: error.message });
           writeText(res, 502, 'source unavailable\n');
         }
       }
@@ -1530,16 +1354,14 @@ export function createGatewayServer(options = {}) {
           proxyPort: leaseProxyBoundPort,
           proxyUrl: leaseProxyPublicUrl || undefined,
         });
-        console.log(JSON.stringify({
-          event: 'lease_created',
-          username: lease.username,
+        logger.info('lease_created', {
           host: allowHosts[0],
           ttlMs: view.ttlMs,
           maxBytes: view.maxBytes,
-        }));
+        });
         writeJson(res, 200, view);
       } catch (error) {
-        console.log(JSON.stringify({ event: 'lease_failure', error: error.message }));
+        logger.error('lease_failure', { error: error.message });
         writeText(res, 502, 'lease unavailable\n');
       }
       return;
@@ -1839,13 +1661,12 @@ export function createGatewayServer(options = {}) {
         }
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
-          console.log(JSON.stringify({
-            event: 'upstream_failure',
+          logger.error('upstream_failure', {
             source: error.source,
             code: error.code,
             status: error.status,
             attempts: error.attempts,
-          }));
+          });
           writeGatewayError(res, error);
           return;
         }
@@ -1862,6 +1683,7 @@ export function createGatewayServer(options = {}) {
         requestUrl: rsshubPath,
         cacheUrl: rsshubTarget,
         kind: 'rss',
+        logger,
         request: {
           headers: {
             host: req.headers.host || 'localhost:1300',
@@ -1881,26 +1703,34 @@ export function createGatewayServer(options = {}) {
       writeText(res, remote.status, output, contentType || 'application/octet-stream');
     } catch (error) {
       if (error instanceof GatewayUpstreamError) {
-        console.log(JSON.stringify({
-          event: 'rsshub_failure',
+        logger.error('rsshub_failure', {
           source: error.source,
           code: error.code,
           status: error.status,
           attempts: error.attempts,
-        }));
+        });
         writeGatewayError(res, error);
         return;
       }
       writeText(res, 502, 'upstream unavailable\n');
     }
   });
+  const poller = options.poller || createPoller({ intervalMs: 60_000, logger });
+  poller.register('lease-sweep', () => {
+    const expired = leaseStore.revokeExpired();
+    if (expired.length) logger.info('lease_sweep', { count: expired.length });
+  }, { interval: 60_000 });
+  if (options.poller === undefined) poller.start();
+
   server.leaseProxy = leaseProxy;
   server.leaseStore = leaseStore;
   server.browserFetch = browserFetch;
+  server.poller = poller;
   return server;
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   const server = createGatewayServer();
-  server.listen(Number(process.env.PORT || 1300), '0.0.0.0', () => console.log('rsshub-gateway listening on 1300'));
+  const bootLogger = createLogger();
+  server.listen(Number(process.env.PORT || 1300), '0.0.0.0', () => bootLogger.info('gateway_listening', { port: Number(process.env.PORT || 1300) }));
 }
