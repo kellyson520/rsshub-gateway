@@ -7,6 +7,7 @@ import { createResponseCache } from '../src/cache.js';
 import {
   createMediaTransport,
   parseByteRange,
+  sliceRanges,
   imageVariantCacheUrl,
 } from '../src/media/media-transport.js';
 import { chunkSizeFor } from '../src/media/chunks.js';
@@ -38,6 +39,15 @@ test('parseByteRange handles suffix, open-ended and unsatisfiable ranges', () =>
   assert.deepEqual(parseByteRange('bytes=-50', 10), { start: 0, end: 9 });
   assert.deepEqual(parseByteRange('bytes=20-30', 10), { unsatisfiable: true });
   assert.equal(parseByteRange('items=0-1', 10), null);
+});
+
+test('sliceRanges plans aligned slices with a bounded lookahead', () => {
+  const plan = sliceRanges(0, 1024, 20 * 1024 * 1024, { sliceSize: 4 * 1024 * 1024, lookahead: 16 * 1024 * 1024 });
+  assert.equal(plan.slice, 4 * 1024 * 1024);
+  assert.deepEqual(plan.ranges.map((r) => r.start), [0, 4 * 1024 * 1024, 8 * 1024 * 1024, 12 * 1024 * 1024]);
+  const tail = sliceRanges(18 * 1024 * 1024, 19 * 1024 * 1024, 20 * 1024 * 1024, { sliceSize: 4 * 1024 * 1024, lookahead: 16 * 1024 * 1024 });
+  assert.deepEqual(tail.ranges.map((r) => [r.start, r.end]), [[16 * 1024 * 1024, 20 * 1024 * 1024 - 1]]);
+  assert.deepEqual(sliceRanges(500, 600, 100, { sliceSize: 4 * 1024 * 1024, lookahead: 16 * 1024 * 1024 }).ranges, []);
 });
 
 test('readCached and cacheMedia store and serve media through the transport', async () => {
@@ -136,13 +146,12 @@ test('probeSize returns the full size from a content-range probe', async () => {
   assert.equal(probed, true);
 });
 
-test('first video range request fills the cache in the background', async () => {
+test('first video range request fills slices in the background', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-transport-video-'));
   try {
     const cache = createResponseCache({ root });
     const body = Buffer.from('0123456789');
     let upstreamRanges = 0;
-    let upstreamFull = 0;
     const fetchExternal = async (url, options = {}) => {
       if (options.range) {
         upstreamRanges += 1;
@@ -159,7 +168,6 @@ test('first video range request fills the cache in the background', async () => 
           },
         });
       }
-      upstreamFull += 1;
       return new Response(body, {
         headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
       });
@@ -170,6 +178,8 @@ test('first video range request fills the cache in the background', async () => 
       resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
       isVideoTarget: () => true,
       videoCacheMaxFileBytes: 1024,
+      sliceSize: 4 * 1024 * 1024,
+      sliceLookaheadBytes: 16 * 1024 * 1024,
     });
     const first = await transport.serve(
       'https://www.iwara.tv/video/abc',
@@ -179,10 +189,10 @@ test('first video range request fills the cache in the background', async () => 
     assert.equal(first.response.status, 206);
     assert.equal(await first.response.text(), '2345');
     const deadline = Date.now() + 2_000;
-    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/abc', 'media')).hit) {
+    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/abc#slice=0', 'media')).hit) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal((await cache.peek('https://www.iwara.tv/video/abc', 'media')).hit, true);
+    assert.equal((await cache.peek('https://www.iwara.tv/video/abc#slice=0', 'media')).hit, true);
     const second = await transport.serve(
       'https://www.iwara.tv/video/abc',
       { range: 'bytes=4-7', priority: 'foreground' },
@@ -190,8 +200,65 @@ test('first video range request fills the cache in the background', async () => 
     );
     assert.equal(second.response.status, 206);
     assert.equal(await second.response.text(), '4567');
-    assert.equal(upstreamRanges, 1);
-    assert.equal(upstreamFull, 1);
+    assert.equal(upstreamRanges, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('serves later video seeks from cached slices without upstream', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-transport-slices-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 7);
+    let upstreamRanges = 0;
+    const fetchExternal = async (url, options = {}) => {
+      upstreamRanges += 1;
+      const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+      const start = Number(match[1]);
+      const end = Number(match[2]);
+      const slice = body.subarray(start, end + 1);
+      return new Response(slice, {
+        status: 206,
+        headers: {
+          'content-type': 'video/mp4',
+          'content-length': String(slice.length),
+          'content-range': `bytes ${start}-${end}/${body.length}`,
+        },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceLookaheadBytes: 16 * 1024 * 1024,
+      sliceFillConcurrency: 4,
+    });
+    const first = await transport.serve(
+      'https://www.iwara.tv/video/big',
+      { range: 'bytes=0-1023', priority: 'foreground' },
+      {},
+    );
+    assert.equal(first.response.status, 206);
+    await first.response.arrayBuffer();
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/big#slice=4194304', 'media')).hit) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal((await cache.peek('https://www.iwara.tv/video/big#slice=4194304', 'media')).hit, true);
+    const slicesBefore = upstreamRanges;
+    const seek = await transport.serve(
+      'https://www.iwara.tv/video/big',
+      { range: 'bytes=524288-1048575', priority: 'foreground' },
+      {},
+    );
+    assert.equal(seek.response.status, 206);
+    const bytes = Buffer.from(await seek.response.arrayBuffer());
+    assert.equal(bytes.length, 524288);
+    assert.equal(bytes.every((value) => value === 7), true);
+    assert.equal(upstreamRanges, slicesBefore);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

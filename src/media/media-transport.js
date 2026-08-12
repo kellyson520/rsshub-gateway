@@ -2,6 +2,25 @@ import { Readable } from 'node:stream';
 
 const CACHE_RESPONSE_HEADERS = ['content-type', 'content-length', 'etag', 'last-modified', 'cache-control'];
 const IMAGE_VARIANT_CACHE_VERSION = 'v1';
+const SLICE_ALIGN = 64 * 1024;
+
+export function sliceRanges(start, end, size, {
+  sliceSize = 4 * 1024 * 1024,
+  lookahead = 16 * 1024 * 1024,
+} = {}) {
+  const slice = Math.max(SLICE_ALIGN, Math.ceil(sliceSize / SLICE_ALIGN) * SLICE_ALIGN);
+  const from = Math.max(0, Number(start) || 0);
+  const to = Math.min(size - 1, Number(end) ?? size - 1);
+  if (from > to || !Number.isSafeInteger(size) || size <= 0) return { slice, ranges: [] };
+  const firstIndex = Math.floor(from / slice);
+  const prefetchEnd = Math.min(size - 1, Math.max(to, firstIndex * slice + lookahead - 1));
+  const lastIndex = Math.floor(prefetchEnd / slice);
+  const ranges = [];
+  for (let index = firstIndex; index <= lastIndex; index += 1) {
+    ranges.push({ start: index * slice, end: Math.min(size - 1, index * slice + slice - 1), index });
+  }
+  return { slice, ranges };
+}
 
 export function responseHeaders(response) {
   const headers = {};
@@ -59,6 +78,9 @@ export function createMediaTransport({
   imageVariantMaxSourceBytes = 32 * 1024 ** 2,
   mediaCacheMaxFileBytes = 32 * 1024 ** 2,
   videoCacheMaxFileBytes = 256 * 1024 ** 2,
+  sliceSize = 4 * 1024 * 1024,
+  sliceLookaheadBytes = 16 * 1024 * 1024,
+  sliceFillConcurrency = 4,
   mediaBrowserCacheSeconds = 300,
   createSignedChunk,
   routeRequest,
@@ -70,6 +92,19 @@ export function createMediaTransport({
   logger = { info() {}, warn() {}, error() {} },
   onMetric = () => {},
 } = {}) {
+  const knownVideoSizes = new Map();
+  const KNOWN_SIZE_CAP = 10_000;
+  function rememberVideoSize(target, size) {
+    if (knownVideoSizes.has(target)) {
+      knownVideoSizes.set(target, size);
+      return;
+    }
+    knownVideoSizes.set(target, size);
+    if (knownVideoSizes.size > KNOWN_SIZE_CAP) {
+      knownVideoSizes.delete(knownVideoSizes.keys().next().value);
+    }
+  }
+
   async function readBinaryLimited(response, limit) {
     const chunks = [];
     let size = 0;
@@ -304,10 +339,122 @@ export function createMediaTransport({
     });
   }
 
+  function sliceKey(target, start) {
+    return `${String(target)}#slice=${start}`;
+  }
+
+  async function storeVideoSlice(target, namespace, range, response) {
+    if (!cache || !response?.ok) return false;
+    const body = await readBinaryLimited(response, sliceSize + 64 * 1024);
+    await cache.getOrLoad(sliceKey(target, range.start), 'media', async () => ({
+      status: response.status,
+      headers: responseHeaders(response),
+      body,
+      cacheable: true,
+    }), { namespace });
+    return true;
+  }
+
+  async function readSliceRange(target, namespace, range, size) {
+    if (!cache) return null;
+    const parsed = parseByteRange(range, size);
+    if (!parsed) return null;
+    if (parsed.unsatisfiable) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'content-range': `bytes */${size}`,
+          'content-type': 'application/octet-stream',
+        },
+      });
+    }
+    const plan = sliceRanges(parsed.start, parsed.end, size, {
+      sliceSize,
+      lookahead: Math.max(1, parsed.end - parsed.start + 1),
+    });
+    const slices = [];
+    for (const part of plan.ranges) {
+      const ranged = await cache.readRange(sliceKey(target, part.start), 'media', { namespace });
+      if (!ranged || ranged.size !== part.end - part.start + 1) return null;
+      slices.push({ ranged, part });
+    }
+    if (!slices.length) return null;
+    const headers = {
+      'content-type': slices[0].ranged.entry.headers['content-type'] || 'application/octet-stream',
+      'content-length': String(parsed.end - parsed.start + 1),
+      'content-range': `bytes ${parsed.start}-${parsed.end}/${size}`,
+      'accept-ranges': 'bytes',
+    };
+    for (const name of ['etag', 'last-modified']) {
+      const value = slices[0].ranged.entry.headers[name];
+      if (value) headers[name] = value;
+    }
+    async function* bytes() {
+      for (let index = 0; index < slices.length; index += 1) {
+        const { ranged, part } = slices[index];
+        const from = index === 0 ? parsed.start - part.start : 0;
+        const to = index === slices.length - 1 ? parsed.end - part.start : part.end - part.start;
+        const stream = ranged.createStream(from, to);
+        if (!stream) throw new Error('slice stream unavailable');
+        for await (const chunk of stream) yield chunk;
+      }
+    }
+    return new Response(Readable.toWeb(Readable.from(bytes())), { status: 206, headers });
+  }
+
+  async function fillVideoSlices(target, resolvedUrl, size, namespace, parsed, maxSliceBytes = videoCacheMaxFileBytes) {
+    if (!cache) return;
+    const plan = sliceRanges(parsed.start, parsed.end, size, { sliceSize, lookahead: sliceLookaheadBytes });
+    if (!plan.ranges.length || plan.ranges[0].start >= maxSliceBytes) return;
+    const missing = [];
+    for (const part of plan.ranges) {
+      if (part.start >= maxSliceBytes) break;
+      const existing = await cache.readRange(sliceKey(target, part.start), 'media', { namespace });
+      if (!existing || existing.size !== part.end - part.start + 1) missing.push(part);
+    }
+    if (!missing.length) return;
+    let next = 0;
+    async function worker() {
+      while (next < missing.length) {
+        const part = missing[next];
+        next += 1;
+        try {
+          const response = await fetchExternal(resolvedUrl, {
+            range: `bytes=${part.start}-${part.end}`,
+            circuit: false,
+            priority: 'background',
+          });
+          await storeVideoSlice(target, namespace, part, response);
+        } catch {
+          // Slice fill failures are background noise; the upstream path still works.
+        }
+      }
+    }
+    const workers = [];
+    for (let index = 0; index < Math.min(sliceFillConcurrency, missing.length); index += 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+  }
+
   async function serveIwaraVideo(target, requestOptions, routeMetadata) {
     if (requestOptions.range) {
       const ranged = await readRange({ target, namespace: 'public', range: requestOptions.range });
       if (ranged) return { adapter: { name: 'iwara' }, egressScope: 'public', response: ranged };
+      const knownSize = knownVideoSizes.get(target);
+      if (Number.isSafeInteger(knownSize) && knownSize > 0) {
+        const sliced = await readSliceRange(target, 'public', requestOptions.range, knownSize);
+        if (sliced) return { adapter: { name: 'iwara' }, egressScope: 'public', response: sliced };
+        const parsed = parseByteRange(requestOptions.range, knownSize);
+        if (parsed && !parsed.unsatisfiable) {
+          const resolved = await resolveMediaUrl(target);
+          if (resolved?.url) {
+            fillVideoSlices(target, resolved.url, knownSize, 'public', parsed).catch(() => {
+              // Background slice fill must never affect the served response.
+            });
+          }
+        }
+      }
       const resolved = await resolveMediaUrl(target);
       if (!resolved?.url) return { adapter: { name: 'iwara' }, egressScope: 'public', response: unavailableResponse() };
       const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
@@ -315,18 +462,18 @@ export function createMediaTransport({
         const contentRange = remote.headers.get('content-range') || '';
         const match = contentRange.match(/\/(\d+)\s*$/);
         const size = match ? Number(match[1]) : null;
-        if (Number.isSafeInteger(size) && size > 0 && size <= videoCacheMaxFileBytes) {
-          // First play-through of a cacheable video: fill the whole file in the
-          // background with one upstream request so every later seek is served
-          // from the gateway cache instead of repeating upstream range fetches.
-          const full = await fetchExternal(resolved.url, {
-            ...requestOptions,
-            range: undefined,
-            circuit: false,
-            priority: 'background',
-          });
-          const stored = await cacheMedia(target, 'public', full, { bypassInflight: true });
-          await stored?.body?.cancel?.();
+        if (Number.isSafeInteger(size) && size > 0) {
+          rememberVideoSize(target, size);
+          const parsed = parseByteRange(requestOptions.range, size);
+          if (parsed && !parsed.unsatisfiable) {
+            // First play-through of a cacheable video: fill the covering slices
+            // (plus a lookahead window) in the background with parallel range
+            // requests so every later seek is served from the gateway cache
+            // instead of repeating upstream range fetches.
+            fillVideoSlices(target, resolved.url, size, 'public', parsed).catch(() => {
+              // Background slice fill must never affect the served response.
+            });
+          }
         }
       }
       return { adapter: { name: 'iwara' }, egressScope: 'public', response: remote };
