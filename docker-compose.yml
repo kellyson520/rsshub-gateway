@@ -8,6 +8,7 @@ services:
       GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
       GATEWAY_CACHE_MAX_BYTES: "5368709120"
       GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES: "33554432"
+      GATEWAY_VIDEO_CACHE_MAX_FILE_BYTES: "268435456"
       GATEWAY_IMAGE_VARIANT_CONCURRENCY: "2"
       GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES: "33554432"
       GATEWAY_HTML_BROTLI_MIN_BYTES: "4096"
@@ -38,6 +39,7 @@ services:
       EGRESS_PROBE_TIMEOUT_MS: "5000"
       EGRESS_PROBE_CACHE_MS: "300000"
       RSSHUB_URL: http://rsshub:1200
+      IWARA_FETCHD_URL: http://iwara-fetchd:7899
       SOURCE_CONFIG_FILE: /app/config/sources.json
     ports:
       - 127.0.0.1:1300:1300
@@ -50,6 +52,19 @@ services:
       1panel-network:
         aliases:
           - rsshub-gateway
+
+  iwara-fetchd:
+    build: ./docker/fetchd
+    container_name: iwara-fetchd
+    restart: unless-stopped
+    environment:
+      FETCHD_PROXY: http://rsshub-gateway:7890
+      FETCHD_PORT: "7899"
+      FETCHD_MAX_BODY: "4194304"
+    networks:
+      1panel-network:
+        aliases:
+          - iwara-fetchd
 
 networks:
   1panel-network:

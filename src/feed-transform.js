@@ -104,6 +104,27 @@ function rewriteEntry($, entry, options) {
       // Preserve non-URL GUID values.
     }
   }
+  $(entry).find('link').each((_, element) => {
+    if ($(element).attr('rel') !== 'enclosure') return;
+    const href = $(element).attr('href');
+    try {
+      if (href) $(element).attr('href', localUrl(options.baseUrl, 'media', new URL(href).toString(), options));
+    } catch {
+      // Preserve malformed Atom enclosure links.
+    }
+  });
+  $(entry).find('*').each((_, child) => {
+    if (!['enclosure', 'media:content', 'media:thumbnail'].includes(child.name)) return;
+    for (const attribute of ['url', 'cover']) {
+      const value = $(child).attr(attribute);
+      if (!value) continue;
+      try {
+        $(child).attr(attribute, localUrl(options.baseUrl, 'media', new URL(value).toString(), options));
+      } catch {
+        // Preserve malformed attachment URLs.
+      }
+    }
+  });
   $(entry).children().each((_, child) => {
     if (!['description', 'content', 'content:encoded'].includes(child.name)) return;
     const content = decodeTextEntities($(child).text());

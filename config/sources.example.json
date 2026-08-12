@@ -1,5 +1,7 @@
 {
-  "iwara": {},
+  "iwara": {
+    "token": "replace-with-your-iwara-refresh-token"
+  },
   "x": {},
   "instagram": {}
 }

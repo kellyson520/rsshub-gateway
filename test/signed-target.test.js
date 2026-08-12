@@ -74,3 +74,34 @@ test('protects scope metadata in signed targets and keeps legacy tokens compatib
   assert.equal(legacy.egressScope, undefined);
   assert.throws(() => createSignedTarget('https://x.com/example/status/1', 'secret', 3600, 1000, { egressScope: 'private' }));
 });
+
+test('allows major adult source hosts and their media CDNs', () => {
+  const allowed = [
+    'https://nhentai.net/g/123/',
+    'https://i.nhentai.net/galleries/123/1.jpg',
+    'https://t.nhentai.net/galleries/123/cover.jpg',
+    'https://hitomi.la/galleries/123.html',
+    'https://tn.hitomi.la/reader/1/1.jpg',
+    'https://pururin.io/gallery/1/1.jpg',
+    'https://hanime.tv/videos/hentai/1',
+    'https://hentai.tv/video/1',
+    'https://pictures.hentai-foundry.com/x/1.jpg',
+    'https://images.8muses.com/x/1.jpg',
+    'https://rule34.xxx/index.php?page=post&s=view&id=1',
+    'https://img3.gelbooru.com/images/1/2.jpg',
+    'https://cdn.donmai.us/original/1/2.jpg',
+    'https://s.sankakucomplex.com/data/1/2.jpg',
+    'https://pornhub.com/view_video.php?viewkey=1',
+    'https://ci.phncdn.com/videos/1.mp4',
+    'https://xvideos.com/video1',
+    'https://x1.xv-cdn.com/videos/1.mp4',
+    'https://missav.com/watch/1',
+    'https://javdb.com/v/1',
+    'https://javbus.com/1',
+    'https://www.jpgcdn.com/1.jpg',
+  ];
+  for (const target of allowed) {
+    assert.equal(isAllowedTarget(target), true, target);
+  }
+  assert.equal(isAllowedTarget('https://example.com/outside.mp4'), false);
+});

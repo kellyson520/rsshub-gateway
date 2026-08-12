@@ -40,7 +40,27 @@ sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml lo
 
 The gateway can make an existing RSSHub route readable, but it cannot enable a route that RSSHub has disabled. In the installed RSSHub version, `/twitter/...` requires RSSHub Twitter API configuration and `/instagram/user/...` requires `IG_USERNAME` and `IG_PASSWORD`. `/instagram/2/...` is the public web route, but it remains subject to Instagram access limits. Store any RSSHub credentials only in its runtime configuration, never in this repository.
 
+## Source catalog
+
+The gateway proxies media for the major adult sources and their CDNs, in addition to the existing Iwara, X, Instagram, Telegram, and E-Hentai support: nhentai, Hitomi, Pururin, Hanime, Hentai.tv, Hentai-Foundry, 8muses, Rule34, Gelbooru, Danbooru, Sankaku Complex, Hiyobi, Pornhub, XVideos, MissAV, JavDB, and JavBus. Any RSSHub route for these sources passes through unchanged; feed media (images, videos, enclosures) is rewritten to signed gateway routes, and item links open the safe reader page. Requests to these hosts use the shared adaptive egress pool with per-source retries and circuit isolation, so one blocked source cannot stall the rest.
+
+## Video playback and caching
+
+Feed attachments are rewritten in both RSS and Atom form: `enclosure@url`, `media:content@url`/`cover`, `media:thumbnail@url`, and Atom `link[rel=enclosure]@href` all point at signed gateway media routes, so readers such as Flare can play video directly from the feed.
+
+Gateway media caching now covers videos as well as images. A complete video response up to `GATEWAY_VIDEO_CACHE_MAX_FILE_BYTES` (default 256 MiB) is stored in the same persistent cache with the 7-day TTL and 5 GB budget. Byte-range requests are served locally from the cached file (`206` with `Content-Range`), so seeking a cached video never touches the upstream source; range requests for uncached or oversized videos continue to stream through the upstream unchanged. Image variants remain image-only; video responses are never sent through the Sharp pipeline.
+
+## Iwara feed and video
+
+The gateway serves `/iwara/users/:username/:type?` (type defaults to `video`) natively instead of forwarding it to RSSHub, because iwara's Cloudflare protection blocks the plain Node/curl TLS fingerprints RSSHub uses. A small sidecar container (`iwara-fetchd`, Chrome-impersonating `curl_cffi`) performs the iwara API calls; media hosts (`i.iwara.tv`, `filesq.iwara.tv`, `acheron.iwara.tv`) remain reachable with the normal gateway transport.
+
+Each feed item includes a signed thumbnail, an `enclosure`/`media:content` pointing at the gateway media route for the video, and an item link that opens a gateway HTML5 reader page. Playing a video resolves `api.iwara.tv/video/{id}` for the signed file URL, picks the highest numeric quality variant, and streams it through the gateway video cache (full `200` cached, `206` byte ranges served from disk). The resolution is cached in memory for 15 minutes so repeated requests reuse one upstream resolution.
+
+An optional iwara account token in `config/sources.json` (`{"iwara": {"token": "<refresh token>"}}`) is sent as `Authorization: Bearer` for metadata and R18 video detail requests; it is never logged or committed. Without a token the feed still lists public videos.
+
 ## Verification
+
+
 
 ```sh
 npm test

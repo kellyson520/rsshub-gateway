@@ -31,6 +31,17 @@ import {
   mergeResolvedPage,
   withForegroundDeadline,
 } from './reader-manifest.js';
+import {
+  fetchIwaraUser,
+  fetchIwaraVideos,
+  fetchIwaraVideoDetail,
+  isIwaraVideoTarget,
+  iwaraVideoId,
+  renderIwaraFeed,
+  renderIwaraReaderPage,
+  resolveIwaraVideoStream,
+} from './adapters/iwara.js';
+import { createFetchdClient, fetchdJson } from './fetchd.js';
 
 function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
@@ -177,6 +188,7 @@ const DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE = 6;
 const DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY = 48;
 const DEFAULT_EGRESS_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
+const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
 const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
 const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 
@@ -293,6 +305,54 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
 
 async function fetchCachedMedia(options) {
   return (await loadCachedMedia(options)).response;
+}
+
+function parseByteRange(value, size) {
+  const match = String(value || '').trim().match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+  const [, startText, endText] = match;
+  if (startText === '' && endText === '') return null;
+  if (startText === '') {
+    const suffix = Number.parseInt(endText, 10);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return { unsatisfiable: true };
+    const start = Math.max(0, size - suffix);
+    return start >= size ? { unsatisfiable: true } : { start, end: size - 1 };
+  }
+  const start = Number.parseInt(startText, 10);
+  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return { unsatisfiable: true };
+  const end = endText === '' ? size - 1 : Math.min(Number.parseInt(endText, 10), size - 1);
+  if (end < start) return { unsatisfiable: true };
+  return { start, end };
+}
+
+async function cachedMediaRange({ cache, target, namespace, range }) {
+  if (!cache) return null;
+  const ranged = await cache.readRange(target, 'media', { namespace });
+  if (!ranged) return null;
+  const parsed = parseByteRange(range, ranged.size);
+  if (!parsed) return null;
+  if (parsed.unsatisfiable) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        'content-range': `bytes */${ranged.size}`,
+        'content-type': ranged.entry.headers['content-type'] || 'application/octet-stream',
+      },
+    });
+  }
+  const stream = ranged.createStream(parsed.start, parsed.end);
+  if (!stream) return null;
+  const headers = {
+    'content-type': ranged.entry.headers['content-type'] || 'application/octet-stream',
+    'content-length': String(parsed.end - parsed.start + 1),
+    'content-range': `bytes ${parsed.start}-${parsed.end}/${ranged.size}`,
+    'accept-ranges': 'bytes',
+  };
+  for (const name of ['etag', 'last-modified']) {
+    const value = ranged.entry.headers[name];
+    if (value) headers[name] = value;
+  }
+  return new Response(Readable.toWeb(stream), { status: 206, headers });
 }
 
 async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
@@ -661,6 +721,12 @@ export function createGatewayServer(options = {}) {
     1 * 1024 ** 2,
     256 * 1024 ** 2,
   );
+  const videoCacheMaxFileBytes = boundedInteger(
+    options.videoCacheMaxFileBytes ?? process.env.GATEWAY_VIDEO_CACHE_MAX_FILE_BYTES,
+    DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
+    8 * 1024 ** 2,
+    1024 ** 3,
+  );
   const mediaBrowserCacheSeconds = boundedInteger(
     options.mediaBrowserCacheSeconds ?? process.env.GATEWAY_MEDIA_BROWSER_CACHE_SECONDS,
     DEFAULT_MEDIA_BROWSER_CACHE_SECONDS,
@@ -721,6 +787,70 @@ export function createGatewayServer(options = {}) {
     request,
     kind,
   });
+
+  const fetchdFetch = options.fetchdFetch || createFetchdClient();
+  const fetchJsonViaFetchd = (url, request) => fetchdJson(fetchdFetch, url, request);
+  const iwaraAccessToken = { value: null, expiresAt: 0 };
+  const iwaraResolutionCache = new Map();
+
+  async function iwaraToken() {
+    const credentials = sourceConfig.iwara;
+    if (!credentials?.token) return null;
+    const now = Date.now();
+    if (iwaraAccessToken.value && iwaraAccessToken.expiresAt > now + 60_000) return iwaraAccessToken.value;
+    let expiresAt = now + 2 * 60 * 60 * 1000;
+    try {
+      const payload = JSON.parse(Buffer.from(String(credentials.token).split('.')[1] || '', 'base64url').toString('utf8'));
+      if (Number.isFinite(payload?.exp)) expiresAt = payload.exp * 1000;
+    } catch {
+      // Fall back to the short-lived in-memory expiry when the token is not a JWT.
+    }
+    iwaraAccessToken.value = credentials.token;
+    iwaraAccessToken.expiresAt = expiresAt;
+    return iwaraAccessToken.value;
+  }
+
+  async function resolveIwaraVideo(target) {
+    const videoId = iwaraVideoId(target);
+    if (!videoId) return null;
+    const cached = iwaraResolutionCache.get(videoId);
+    if (cached && cached.expiresAt > Date.now()) return cached;
+    const token = await iwaraToken();
+    const detail = await fetchIwaraVideoDetail(fetchJsonViaFetchd, videoId, { token });
+    if (!detail?.fileUrl) return null;
+    const stream = await resolveIwaraVideoStream(fetchJsonViaFetchd, detail);
+    if (!stream) return null;
+    const resolved = { ...stream, expiresAt: Date.now() + 15 * 60 * 1000 };
+    iwaraResolutionCache.set(videoId, resolved);
+    return resolved;
+  }
+
+  function iwaraUnavailableResponse() {
+    return new Response('video unavailable\n', {
+      status: 502,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    });
+  }
+
+  async function fetchIwaraVideoMedia(target, requestOptions, routeMetadata) {
+    const adapter = adapterForUrl(target);
+    if (requestOptions.range) {
+      const ranged = await cachedMediaRange({ cache, target, namespace: 'public', range: requestOptions.range });
+      if (ranged) return { adapter, egressScope: 'public', response: ranged };
+      const resolved = await resolveIwaraVideo(target);
+      if (!resolved) return { adapter, egressScope: 'public', response: iwaraUnavailableResponse() };
+      const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
+      return { adapter, egressScope: 'public', response: remote };
+    }
+    const cached = await readCachedGatewayDocument(target, 'media', 'public', { bypassInflight: true });
+    if (cached) return { adapter, egressScope: 'public', response: cached };
+    const resolved = await resolveIwaraVideo(target);
+    if (!resolved) return { adapter, egressScope: 'public', response: iwaraUnavailableResponse() };
+    const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
+    if (!remote.ok) return { adapter, egressScope: 'public', response: remote };
+    const source = { adapter, egressScope: 'public', response: await cacheGatewayMedia(target, 'public', remote, { bypassInflight: true }) };
+    return source;
+  }
   function sessionCredentialsFor(adapter) {
     const credentials = sourceConfig[adapter.name];
     const headers = adapter.headers?.(credentials, { includeCredentials: true }) || {};
@@ -893,11 +1023,13 @@ export function createGatewayServer(options = {}) {
     if (!cache) return response;
     const contentType = response.headers.get('content-type') || '';
     const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+    const mediaType = contentType.toLowerCase();
+    const mediaBytes = mediaType.startsWith('video/') ? videoCacheMaxFileBytes : mediaCacheMaxFileBytes;
     const cacheable = response.ok
-      && contentType.toLowerCase().startsWith('image/')
+      && (mediaType.startsWith('image/') || mediaType.startsWith('video/'))
       && Number.isSafeInteger(contentLength)
       && contentLength >= 0
-      && contentLength <= mediaCacheMaxFileBytes;
+      && contentLength <= mediaBytes;
     if (!cacheable) return response;
     if (bypassInflight) {
       const cacheCopy = response.clone();
@@ -909,7 +1041,7 @@ export function createGatewayServer(options = {}) {
         cacheBody: async () => ({
           status: response.status,
           headers: responseHeaders(response),
-          body: await readBinaryLimited(cacheCopy, mediaCacheMaxFileBytes),
+          body: await readBinaryLimited(cacheCopy, mediaBytes),
           cacheable: true,
         }),
       }), {
@@ -921,7 +1053,7 @@ export function createGatewayServer(options = {}) {
       cacheStateLog(target, 'media', result.state);
       return result.passthrough || responseFromCachedDocument(result);
     }
-    const body = await readBinaryLimited(response, mediaCacheMaxFileBytes);
+    const body = await readBinaryLimited(response, mediaBytes);
     const result = await cache.getOrLoad(target, 'media', async () => ({
       status: response.status,
       headers: responseHeaders(response),
@@ -935,6 +1067,7 @@ export function createGatewayServer(options = {}) {
   async function createGatewayMediaVariant(source, target, width, namespace) {
     const original = source.response;
     if (!original?.ok || !original.body) return source;
+    if (!(original.headers.get('content-type') || '').toLowerCase().startsWith('image/')) return source;
 
     let variant;
     let sourceBytes = 0;
@@ -995,7 +1128,7 @@ export function createGatewayServer(options = {}) {
   }
 
   async function fetchGatewayMedia(target, requestOptions, routeMetadata, variantWidth) {
-    if (requestOptions.range) return fetchGatewayTarget(target, requestOptions, routeMetadata);
+    if (isIwaraVideoTarget(target)) return fetchIwaraVideoMedia(target, requestOptions, routeMetadata);
     const adapter = adapterForUrl(target);
     const bypassInflight = requestOptions?.priority === 'foreground';
     const requestedScope = routeMetadata.egressScope === 'session'
@@ -1005,6 +1138,11 @@ export function createGatewayServer(options = {}) {
       const session = await resolveSessionTransport(adapter);
       if (!session) return { adapter, unavailable: true, egressScope: 'session' };
       const namespace = cacheNamespaceFor('session', session);
+      if (requestOptions.range) {
+        const ranged = await cachedMediaRange({ cache, target, namespace, range: requestOptions.range });
+        if (ranged) return { adapter, egressScope: 'session', session, response: ranged };
+        return fetchGatewayTarget(target, requestOptions, routeMetadata);
+      }
       if (variantWidth && cache) {
         const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', namespace, { bypassInflight });
         if (cachedVariant) {
@@ -1022,6 +1160,11 @@ export function createGatewayServer(options = {}) {
       return variantWidth ? createGatewayMediaVariant(source, target, variantWidth, namespace) : source;
     }
 
+    if (requestOptions.range) {
+      const ranged = await cachedMediaRange({ cache, target, namespace: 'public', range: requestOptions.range });
+      if (ranged) return { adapter, egressScope: requestedScope, response: ranged };
+      return fetchGatewayTarget(target, requestOptions, routeMetadata);
+    }
     if (variantWidth && cache) {
       const cachedVariant = await readCachedGatewayDocument(imageVariantCacheUrl(target, variantWidth), 'media-variant', 'public', { bypassInflight });
       if (cachedVariant) {
@@ -1168,6 +1311,59 @@ export function createGatewayServer(options = {}) {
       writeText(res, 404, 'not found\n');
       return;
     }
+    const iwaraFeedMatch = requestUrl.pathname.match(/^\/iwara\/users\/([^/]+)(?:\/(video|image))?$/);
+    if (iwaraFeedMatch) {
+      const username = decodeURIComponent(iwaraFeedMatch[1]);
+      const kind = iwaraFeedMatch[2] || 'video';
+      try {
+        const output = await fetchCachedDocument({
+          cache,
+          fetcher: async () => {
+            const token = await iwaraToken();
+            const user = await fetchIwaraUser(fetchJsonViaFetchd, username, { token });
+            if (!user?.id) {
+              return new Response('user not found\n', {
+                status: 404,
+                headers: { 'content-type': 'text/plain; charset=utf-8' },
+              });
+            }
+            const videos = await fetchIwaraVideos(fetchJsonViaFetchd, user.id, { kind, token });
+            const feed = renderIwaraFeed({ username, kind, videos });
+            return new Response(feed, {
+              status: 200,
+              headers: { 'content-type': 'application/rss+xml; charset=utf-8' },
+            });
+          },
+          requestUrl: requestUrl.pathname,
+          cacheUrl: new URL(requestUrl.pathname, 'http://gateway.internal').toString(),
+          kind: 'rss',
+          request: { priority: 'foreground' },
+        });
+        const body = await readLimited(output);
+        const transformed = transformFeed(body, {
+          baseUrl: publicBaseUrl(req),
+          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
+          secret,
+          signedTargetMetadata: { egressScope: 'public' },
+        });
+        writeText(res, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+      } catch (error) {
+        if (error instanceof GatewayUpstreamError) {
+          console.log(JSON.stringify({
+            event: 'iwara_failure',
+            source: error.source,
+            code: error.code,
+            status: error.status,
+            attempts: error.attempts,
+          }));
+          writeGatewayError(res, error);
+        } else {
+          console.log(JSON.stringify({ event: 'iwara_failure', code: 'IWARA_FEED_ERROR', status: 502, error: error.message }));
+          writeText(res, 502, 'source unavailable\n');
+        }
+      }
+      return;
+    }
     const gatewayMatch = requestUrl.pathname.match(/^\/_gateway\/(item|media)\/(.+)$/);
     if (gatewayMatch) {
       const mediaVariant = gatewayMatch[1] === 'media'
@@ -1189,6 +1385,19 @@ export function createGatewayServer(options = {}) {
       }
       try {
         const adapter = adapterForUrl(target);
+        if (gatewayMatch[1] === 'item' && isIwaraVideoTarget(target)) {
+          try {
+            const token = await iwaraToken();
+            const detail = await fetchIwaraVideoDetail(fetchJsonViaFetchd, iwaraVideoId(target), { token });
+            if (detail?.id) {
+              const page = renderIwaraReaderPage({ video: detail, baseUrl: publicBaseUrl(req), secret });
+              writeText(res, 200, page, 'text/html; charset=utf-8');
+              return;
+            }
+          } catch {
+            // Fall through to the standard item handling when metadata is unavailable.
+          }
+        }
         const ehImageMediaTarget = gatewayMatch[1] === 'media' && isEhImagePageTarget(target);
         const responseDriven = adapter.publiclyReadable
           || ['session', 'sticky'].includes(routeMetadata.egressScope)

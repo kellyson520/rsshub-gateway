@@ -1480,3 +1480,120 @@ test('stores protected media only in its session cache namespace', async () => {
     }
   }
 });
+
+test('caches video media and serves byte ranges from the cached file', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-video-cache-'));
+  const videoUrl = 'https://cdn.iwara.tv/video/demo.mp4';
+  const videoBytes = Buffer.alloc(64 * 1024, 7);
+  const upstreamRequests = [];
+  const cache = createResponseCache({ root });
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache,
+    fetchExternal: async (url, request) => {
+      upstreamRequests.push({ url: String(url), range: request?.range });
+      if (request?.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        return new Response(videoBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(end - start + 1),
+            'content-range': `bytes ${start}-${end}/${videoBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(videoBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(videoBytes.length) },
+      });
+    },
+  });
+  const token = createSignedTarget(videoUrl, 'secret');
+  const mediaPath = `/_gateway/media/${token}`;
+
+  const first = await request(server, mediaPath);
+  assert.equal(first.response.status, 200);
+  assert.equal(first.response.headers.get('content-type'), 'video/mp4');
+  assert.equal(first.body.length, videoBytes.length);
+  assert.equal(upstreamRequests.length, 1);
+  await waitFor(async () => (await cache.peek(videoUrl, 'media')).hit);
+
+  const second = await request(server, mediaPath);
+  assert.equal(second.response.status, 200);
+  assert.equal(second.body.length, videoBytes.length);
+  assert.equal(upstreamRequests.length, 1, 'second full request served from cache');
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const ranged = await fetch(`http://127.0.0.1:${port}${mediaPath}`, { headers: { range: 'bytes=0-9' } });
+  const rangedBody = Buffer.from(await ranged.arrayBuffer());
+  assert.equal(ranged.status, 206);
+  assert.equal(ranged.headers.get('content-range'), `bytes 0-9/${videoBytes.length}`);
+  assert.equal(ranged.headers.get('accept-ranges'), 'bytes');
+  assert.equal(rangedBody.length, 10);
+  assert.deepEqual(rangedBody, videoBytes.subarray(0, 10));
+  assert.equal(upstreamRequests.length, 1, 'range served from cache without upstream');
+
+  const pastEnd = await fetch(`http://127.0.0.1:${port}${mediaPath}`, { headers: { range: `bytes=${videoBytes.length}-` } });
+  assert.equal(pastEnd.status, 416);
+  assert.equal(pastEnd.headers.get('content-range'), `bytes */${videoBytes.length}`);
+  assert.equal(upstreamRequests.length, 1, 'unsatisfiable range stays local');
+  await new Promise((resolve) => server.close(resolve));
+  await rm(root, { recursive: true, force: true });
+});
+
+test('passes video range requests through upstream when the media is not cached', async () => {
+  const videoUrl = 'https://cdn.iwara.tv/video/stream.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchExternal: async (url, request) => {
+      assert.equal(request.range, 'bytes=0-9');
+      return new Response(Buffer.alloc(10, 1), {
+        status: 206,
+        headers: {
+          'content-type': 'video/mp4',
+          'content-length': '10',
+          'content-range': 'bytes 0-9/100',
+          'accept-ranges': 'bytes',
+        },
+      });
+    },
+  });
+  const token = createSignedTarget(videoUrl, 'secret');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const response = await fetch(`http://127.0.0.1:${port}/_gateway/media/${token}`, { headers: { range: 'bytes=0-9' } });
+  const body = Buffer.from(await response.arrayBuffer());
+  assert.equal(response.status, 206);
+  assert.equal(response.headers.get('content-range'), 'bytes 0-9/100');
+  assert.equal(body.length, 10);
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test('does not cache videos larger than the video cache cap', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-video-cap-'));
+  const videoUrl = 'https://cdn.iwara.tv/video/big.mp4';
+  const size = 16 * 1024 * 1024;
+  let calls = 0;
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    videoCacheMaxFileBytes: 8 * 1024 ** 2,
+    fetchExternal: async () => {
+      calls += 1;
+      return new Response(Buffer.alloc(size, 3), {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(size) },
+      });
+    },
+  });
+  const token = createSignedTarget(videoUrl, 'secret');
+  await request(server, `/_gateway/media/${token}`);
+  await request(server, `/_gateway/media/${token}`);
+  assert.equal(calls, 2, 'oversized video bypasses the cache');
+  await rm(root, { recursive: true, force: true });
+});

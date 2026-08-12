@@ -84,3 +84,34 @@ test('carries public route metadata into transformed feed links', () => {
   assert.equal(data.egressScope, 'public');
   assert.equal(data.source, 'iwara');
 });
+
+test('rewrites RSS enclosure and media attachment URLs to signed media routes', () => {
+  const feed = `<?xml version="1.0"?><rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><item>
+    <title>Video</title>
+    <link>https://www.iwara.tv/video/abc</link>
+    <enclosure url="https://cdn.iwara.tv/video/demo.mp4" type="video/mp4" length="12345"/>
+    <media:content url="https://cdn.iwara.tv/video/demo.mp4" type="video/mp4" cover="https://i.iwara.tv/image/poster.jpg"/>
+    <media:thumbnail url="https://i.iwara.tv/image/thumb.jpg"/>
+  </item></channel></rss>`;
+  const output = transformFeed(feed, options);
+  const mediaUrls = [...output.matchAll(/_gateway\/media\/([^"<]+)/g)].map((match) => verifySignedTarget(match[1], 'secret', 1001).url);
+  assert.ok(mediaUrls.includes('https://cdn.iwara.tv/video/demo.mp4'));
+  assert.ok(mediaUrls.includes('https://i.iwara.tv/image/poster.jpg'));
+  assert.ok(mediaUrls.includes('https://i.iwara.tv/image/thumb.jpg'));
+  assert.doesNotMatch(output, /https:\/\/cdn\.iwara\.tv\/video\/demo\.mp4/);
+});
+
+test('rewrites Atom enclosure links and preserves disallowed attachment hosts', () => {
+  const atom = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry>
+    <title>Post</title>
+    <link href="https://x.com/user/status/1"/>
+    <link rel="enclosure" href="https://video.twimg.com/ext_tw_video/1.mp4" type="video/mp4"/>
+  </entry></feed>`;
+  const output = transformFeed(atom, options);
+  assert.match(output, /rel="enclosure" href="https:\/\/gateway\.example\.test\/_gateway\/media\//);
+  assert.doesNotMatch(output, /https:\/\/video\.twimg\.com\/ext_tw_video\/1\.mp4/);
+
+  const external = `<?xml version="1.0"?><rss><channel><item><link>https://x.com/user/status/1</link><enclosure url="https://example.com/outside.mp4" type="video/mp4"/></item></channel></rss>`;
+  const unchanged = transformFeed(external, options);
+  assert.match(unchanged, /enclosure url="https:\/\/example\.com\/outside\.mp4"/);
+});

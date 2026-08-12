@@ -68,3 +68,26 @@ test('keeps session and unknown requests on a stable route', () => {
   assert.equal(egressPolicyForRequest('https://exhentai.org/g/1/a/', { scope: 'public' }), EGRESS_POLICIES.STICKY);
   assert.equal(egressPolicyForRequest('https://example.com/page', { scope: 'public' }), EGRESS_POLICIES.STICKY);
 });
+
+test('routes adult galleries, boorus, and video CDNs through the public egress', () => {
+  const targets = [
+    'https://nhentai.net/g/123/',
+    'https://i.nhentai.net/galleries/123/1.jpg',
+    'https://hitomi.la/galleries/123.html',
+    'https://pornhub.com/view_video.php?viewkey=1',
+    'https://ci.phncdn.com/videos/1.mp4',
+    'https://xvideos.com/video1',
+    'https://x1.xv-cdn.com/videos/1.mp4',
+    'https://missav.com/watch/1',
+    'https://javdb.com/v/1',
+    'https://www.jpgcdn.com/1.jpg',
+    'https://cdn.donmai.us/original/1/2.jpg',
+    'https://rule34.xxx/index.php',
+  ];
+  for (const target of targets) {
+    assert.equal(egressPolicyForUrl(target), EGRESS_POLICIES.PUBLIC, target);
+    assert.equal(isPublicEgressTarget(target), true, target);
+  }
+  assert.equal(egressPolicyForRequest('https://nhentai.net/g/123/', { scope: 'public' }), EGRESS_POLICIES.PUBLIC);
+  assert.equal(egressPolicyForRequest('https://danbooru.donmai.us/posts/1', { scope: 'public' }), EGRESS_POLICIES.PUBLIC);
+});

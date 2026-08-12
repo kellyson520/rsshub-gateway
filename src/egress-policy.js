@@ -2,6 +2,29 @@ const PUBLIC_HOSTS = Object.freeze([
   'e-hentai.org',
   'ehgt.org',
   'hath.network',
+  'nhentai.net',
+  'hitomi.la',
+  'pururin.io',
+  'pururin.com',
+  'hanime.tv',
+  'hentai.tv',
+  'hentai-foundry.com',
+  '8muses.com',
+  'rule34.xxx',
+  'gelbooru.com',
+  'donmai.us',
+  'sankakucomplex.com',
+  'hiyobi.me',
+  'pornhub.com',
+  'phncdn.com',
+  'xvideos.com',
+  'xv-cdn.com',
+  'missav.com',
+  'missav.ai',
+  'javdb.com',
+  'javbus.com',
+  'javbus.one',
+  'jpgcdn.com',
 ]);
 
 const PUBLIC_REQUEST_HOSTS = Object.freeze([
@@ -15,6 +38,7 @@ const PUBLIC_REQUEST_HOSTS = Object.freeze([
   'instagram.com',
   'cdninstagram.com',
   'fbcdn.net',
+  'danbooru.donmai.us',
 ]);
 
 export const EGRESS_POLICIES = Object.freeze({

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 
@@ -301,7 +302,31 @@ export function createResponseCache({
     return { hit: Boolean(entry) };
   }
 
-  return { getOrLoad, peek, keyFor, root: cacheRoot };
+  async function readRange(url, kind, { namespace = 'public' } = {}) {
+    await ready;
+    const cacheNamespace = normalizedNamespace(namespace);
+    const key = keyFor(url, kind, cacheNamespace);
+    const entry = entries.get(key);
+    if (!entry || now() >= entry.expiresAt) return null;
+    entry.lastAccessAt = now();
+    scheduleTouchPersist();
+    return {
+      entry,
+      size: entry.size,
+      createStream(start = 0, end = entry.size - 1) {
+        const rangeStart = Math.max(0, Number(start) || 0);
+        const rangeEnd = Number.isInteger(end) ? Math.min(end, entry.size - 1) : entry.size - 1;
+        if (rangeStart > rangeEnd) return null;
+        try {
+          return fs.createReadStream(path.join(cacheRoot, entry.file), { start: rangeStart, end: rangeEnd });
+        } catch {
+          return null;
+        }
+      },
+    };
+  }
+
+  return { getOrLoad, peek, readRange, keyFor, root: cacheRoot };
 }
 
 export { DEFAULT_MAX_BYTES, DEFAULT_TTL_SECONDS };
