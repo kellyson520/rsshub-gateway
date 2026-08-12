@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { transformFeed } from './feed-transform.js';
 import { verifySignedTarget } from './signed-target.js';
-import { createUpstreamClient } from './upstream.js';
 import { GatewayUpstreamError } from './upstream-errors.js';
 import { adapterForUrl } from './adapters/index.js';
 import { parseRankingHtml, rankingTarget, renderRankingFeed } from './adapters/ehviewer.js';
@@ -41,8 +40,7 @@ import {
   renderIwaraReaderPage,
   resolveIwaraVideoStream,
 } from './adapters/iwara.js';
-import { fetchdJson } from './fetchd.js';
-import { createBrowserFetchClient } from './browser-fetch.js';
+import { createRequestService } from './infrastructure/request-service.js';
 import { createLeaseStore, createSignedChunk, verifySignedChunk } from './download-lease.js';
 import { createLeaseProxy } from './lease-proxy.js';
 import { createLogger } from './infrastructure/logger.js';
@@ -765,10 +763,21 @@ export function createGatewayServer(options = {}) {
   const cache = options.cache === false
     ? null
     : options.cache || ((!options.fetchExternal && !options.fetchRssHub) ? createResponseCache() : null);
-  const client = options.client || createUpstreamClient({ sourceConfig, fetchImpl: options.fetchImpl, egressPool });
+  const requestService = options.requestService || createRequestService({
+    sourceConfig,
+    client: options.client,
+    fetchImpl: options.fetchImpl,
+    egressPool,
+    browserFetch: options.browserFetch,
+    fetchdFetch: options.fetchdFetch,
+    fetchExternal: options.fetchExternal,
+    fetchRssHub: options.fetchRssHub,
+    logger,
+  });
+  const client = requestService.client;
   const makeImageVariant = options.createImageVariant || createImageVariant;
-  const fetchRssHub = options.fetchRssHub || ((path, request) => client.fetchRssHub(path, undefined, request?.headers, request));
-  const fetchExternal = options.fetchExternal || ((url, request) => client.fetchExternal(url, request));
+  const fetchRssHub = requestService.fetchRssHub;
+  const fetchExternal = requestService.fetchExternal;
   const currentEhPrefetchConcurrency = () => {
     const poolCapacity = Number(egressPool.capacity?.()) || 0;
     return Math.min(ehPrefetchMaxConcurrency, egressMaxTotalConcurrency, Math.max(ehPrefetchConcurrency, poolCapacity));
@@ -782,9 +791,9 @@ export function createGatewayServer(options = {}) {
     logger,
   });
 
-  const browserFetch = options.browserFetch || createBrowserFetchClient();
-  const fetchdFetch = options.fetchdFetch || browserFetch.fetchdFetch;
-  const fetchJsonViaFetchd = (url, request) => fetchdJson(fetchdFetch, url, request);
+  const browserFetch = requestService.browserFetch;
+  const fetchdFetch = requestService.fetchdFetch;
+  const fetchJsonViaFetchd = requestService.fetchJsonViaFetchd;
   const iwaraAccessToken = { value: null, expiresAt: 0 };
   const iwaraResolutionCache = new Map();
 

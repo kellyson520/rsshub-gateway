@@ -31,11 +31,21 @@ test('keeps canonical reader URLs and source-specific fallback messages', () => 
   const x = adapterForUrl('https://x.com/example/status/1');
   const instagram = adapterForUrl('https://www.instagram.com/example/');
   const iwara = adapterForUrl('https://www.iwara.tv/video/example');
+  const pixiv = adapterForUrl('https://www.pixiv.net/artworks/123');
 
   assert.equal(x.readerTarget('https://x.com/example/status/1'), 'https://x.com/example/status/1');
   assert.match(x.unavailableMessage(), /X/);
   assert.match(instagram.unavailableMessage(), /Instagram/);
   assert.match(iwara.unavailableMessage(), /Iwara/);
+  assert.match(pixiv.unavailableMessage(), /Pixiv/);
+});
+
+test('attaches the pixiv referer for image CDN media', () => {
+  const adapter = adapterForUrl('https://i.pximg.net/img-master/img/2026/08/12/00/00/00/1_p0_master1200.jpg');
+  assert.equal(adapter.name, 'pixiv');
+  assert.equal(adapter.headers({}).referer, 'https://www.pixiv.net/');
+  assert.equal(adapterForUrl('https://www.pixiv.net/artworks/123').headers({ referer: 'https://example.com/' }).referer, 'https://example.com/');
+  assert.equal(adapter.headers({ cookie: 'session=value' }, { includeCredentials: true }).cookie, 'session=value');
 });
 
 test('selects the E-Hentai adapter for gallery and image hosts', () => {

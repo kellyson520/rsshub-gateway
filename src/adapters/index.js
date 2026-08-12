@@ -3,8 +3,9 @@ import * as x from './x.js';
 import * as instagram from './instagram.js';
 import * as telegram from './telegram.js';
 import * as ehviewer from './ehviewer.js';
+import * as pixiv from './pixiv.js';
 
-const adapters = [iwara, x, instagram, telegram, ehviewer];
+const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv];
 
 const defaultAdapter = {
   name: 'unknown',

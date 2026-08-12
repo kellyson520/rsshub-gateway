@@ -57,6 +57,8 @@ test('allows common RSSHub feed media CDNs', () => {
     'https://camo.githubusercontent.com/abc/demo.png',
     'https://images.weserv.nl/?url=example.com%2Fdemo.jpg',
     'https://wsrv.nl/?url=example.com%2Fdemo.jpg',
+    'https://i.pximg.net/img-master/img/1_p0_master1200.jpg',
+    'https://www.pixiv.net/artworks/123',
   ];
   for (const url of allowed) {
     assert.equal(isAllowedTarget(url), true, `expected ${url} to be allowed`);

@@ -67,6 +67,8 @@ const ALLOWED_HOSTS = [
   'camo.githubusercontent.com',
   'images.weserv.nl',
   'wsrv.nl',
+  'pixiv.net',
+  'pximg.net',
 ];
 
 function encode(value) {
