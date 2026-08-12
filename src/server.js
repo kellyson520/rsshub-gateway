@@ -45,6 +45,7 @@ import { createLeaseStore, createSignedChunk, verifySignedChunk } from './downlo
 import { createLeaseProxy } from './lease-proxy.js';
 import { createLogger } from './infrastructure/logger.js';
 import { createPoller } from './infrastructure/poller.js';
+import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
 import { createMediaTransport } from './media/media-transport.js';
 import { chunkSizeFor } from './media/chunks.js';
 
@@ -218,6 +219,32 @@ function positiveInteger(value, fallback) {
 
 function boundedInteger(value, fallback, minimum, maximum) {
   return Math.min(Math.max(positiveInteger(value, fallback), minimum), maximum);
+}
+
+function parseProbeTargets(value, legacyProbeUrl) {
+  if (value && typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      // Fall through to default targets.
+    }
+  }
+  if (value && typeof value === 'object') {
+    const list = (input) => {
+      if (!input) return [];
+      return (Array.isArray(input) ? input : [input]).map(String).filter(Boolean);
+    };
+    return {
+      public: list(value.public),
+      sticky: list(value.sticky),
+      hosts: value.hosts && typeof value.hosts === 'object' ? value.hosts : {},
+    };
+  }
+  return {
+    public: [String(legacyProbeUrl || 'https://e-hentai.org/').trim()],
+    sticky: ['https://www.iwara.tv/', 'https://x.com/'],
+    hosts: {},
+  };
 }
 
 function requestedImageVariantWidth(searchParams) {
@@ -607,13 +634,47 @@ export function createGatewayServer(options = {}) {
     10_000,
     60 * 60_000,
   );
+  const egressProbeTargets = parseProbeTargets(
+    options.egressProbeTargets ?? process.env.EGRESS_PROBE_TARGETS,
+    egressProbeUrl,
+  );
+  const egressSiteFailureThreshold = boundedInteger(
+    options.egressSiteFailureThreshold ?? process.env.EGRESS_SITE_FAILURE_THRESHOLD,
+    3,
+    1,
+    100,
+  );
+  const egressSiteFailureWindowMs = boundedInteger(
+    options.egressSiteFailureWindowMs ?? process.env.EGRESS_SITE_FAILURE_WINDOW_MS,
+    60_000,
+    1_000,
+    24 * 60 * 60_000,
+  );
+  const egressSiteBlockCooldownMs = boundedInteger(
+    options.egressSiteBlockCooldownMs ?? process.env.EGRESS_SITE_BLOCK_COOLDOWN_MS,
+    60_000,
+    0,
+    24 * 60 * 60_000,
+  );
+  const egressBlockedStatuses = new Set(String(
+    options.egressBlockedStatuses ?? process.env.EGRESS_BLOCKED_STATUSES ?? '401,403,407,429',
+  ).split(',').map((value) => Number.parseInt(value, 10)).filter(Number.isInteger));
   const egressPool = options.egressPool || createEgressPool({
     lanes: options.egressLanes,
     minConcurrencyPerLane: egressMinConcurrencyPerLane,
     maxConcurrencyPerLane: egressMaxConcurrencyPerLane,
+    blockedStatuses: egressBlockedStatuses,
+    siteFailureThreshold: egressSiteFailureThreshold,
+    siteFailureWindowMs: egressSiteFailureWindowMs,
+    siteBlockCooldownMs: egressSiteBlockCooldownMs,
+    scopeOverrides: egressProbeTargets.hosts,
     onEvent: (event) => {
       if (['ramp', 'backoff', 'empty'].includes(event.state)) {
         logger.info('egress_pool', { state: event.state, lanes: egressPool.stats().lanes.length });
+      } else if (event.state === 'site-blocked') {
+        logger.warn('egress_site_blocked', { laneId: event.laneId, host: event.host, status: event.status });
+      } else if (event.state === 'site-degraded') {
+        logger.info('egress_site_degraded', { host: event.host, scope: event.scope });
       }
     },
   });
@@ -626,6 +687,7 @@ export function createGatewayServer(options = {}) {
       sessionLaneCount: egressSessionLaneCount,
       sessionListenerBasePort: egressSessionListenerBasePort,
       probeUrl: egressProbeUrl,
+      probeTargets: egressProbeTargets,
       probeTimeoutMs: egressProbeTimeoutMs,
       probeCacheMs: egressProbeCacheMs,
       onEvent: (event) => {
@@ -643,6 +705,27 @@ export function createGatewayServer(options = {}) {
       laneIds: () => egressAdapter.sessionLanes?.().map((lane) => lane.id) || [],
     })
     : null);
+  const sessionSiteTracker = createSiteFailureTracker({
+    threshold: egressSiteFailureThreshold,
+    windowMs: egressSiteFailureWindowMs,
+  });
+
+  async function recordSessionFailure(session, response, target) {
+    if (!session?.laneId || !egressAdapter?.markSessionLaneUnhealthy || !sessionAffinity) return;
+    if (!egressBlockedStatuses.has(response.status)) return;
+    let host = 'unknown';
+    try {
+      host = new URL(String(target)).hostname.toLowerCase();
+    } catch {
+      // Diagnostics must never fail the request.
+    }
+    if (sessionSiteTracker.record(session.laneId, host, response.status)) {
+      await egressAdapter.markSessionLaneUnhealthy(session.laneId);
+      await sessionAffinity.markLaneUnhealthy(session.laneId);
+      logger.warn('session_lane_site_blocked', { laneId: session.laneId, host, status: response.status });
+    }
+  }
+
   if (egressAdapter) {
     const refreshEgress = async () => {
       const lanes = egressAdapter.refreshPublicLanes
@@ -927,17 +1010,14 @@ export function createGatewayServer(options = {}) {
     if (requestedScope === 'session') {
       const session = await resolveSessionTransport(adapter);
       if (!session) return { adapter, unavailable: true, egressScope: 'session' };
-      return {
-        adapter,
+      const response = await fetchExternal(adapter.readerTarget(target), {
+        ...requestOptions,
         egressScope: 'session',
-        session,
-        response: await fetchExternal(adapter.readerTarget(target), {
-          ...requestOptions,
-          egressScope: 'session',
-          sessionDispatcher: session.dispatcher,
-          sessionCredentials: session.credentials,
-        }),
-      };
+        sessionDispatcher: session.dispatcher,
+        sessionCredentials: session.credentials,
+      });
+      await recordSessionFailure(session, response, adapter.readerTarget(target));
+      return { adapter, egressScope: 'session', session, response };
     }
 
     const response = await fetchExternal(adapter.readerTarget(target), {
@@ -950,16 +1030,18 @@ export function createGatewayServer(options = {}) {
     const session = await resolveSessionTransport(adapter);
     if (!session) return { adapter, egressScope: 'public', response };
     await response.body?.cancel();
+    const sessionResponse = await fetchExternal(adapter.readerTarget(target), {
+      ...requestOptions,
+      egressScope: 'session',
+      sessionDispatcher: session.dispatcher,
+      sessionCredentials: session.credentials,
+    });
+    await recordSessionFailure(session, sessionResponse, adapter.readerTarget(target));
     return {
       adapter,
       egressScope: 'session',
       session,
-      response: await fetchExternal(adapter.readerTarget(target), {
-        ...requestOptions,
-        egressScope: 'session',
-        sessionDispatcher: session.dispatcher,
-        sessionCredentials: session.credentials,
-      }),
+      response: sessionResponse,
     };
   }
 
@@ -1207,7 +1289,11 @@ export function createGatewayServer(options = {}) {
         },
         poller: poller.stats(),
         cache: cache ? cache.stats() : null,
-        egress: egressPool.stats(),
+        egress: {
+          ...egressPool.stats(),
+          probeTargets: egressProbeTargets,
+          adapter: egressAdapter?.stats?.() || null,
+        },
         leases: leaseStore.stats(),
         circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
         metrics: Object.fromEntries(metricCounts),

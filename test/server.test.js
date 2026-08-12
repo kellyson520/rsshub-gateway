@@ -1726,3 +1726,56 @@ test('issues one-time download leases for signed media targets', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('infra exposes egress probe targets and lane site health', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+    fetchExternal: async () => new Response('nope', { status: 404 }),
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      sessionLanes: () => [],
+      markSessionLaneUnhealthy: async () => true,
+      stats: () => ({ degraded: false, lanes: 0, sessionLanes: 0 }),
+    },
+  });
+  const { response, body } = await request(server, '/_gateway/infra');
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(body);
+  assert.ok(payload.egress.probeTargets);
+  assert.ok(Array.isArray(payload.egress.probeTargets.public));
+  assert.ok(Array.isArray(payload.egress.probeTargets.sticky));
+  assert.equal(payload.egress.adapter.degraded, false);
+});
+
+test('migrates a session lane after repeated blocked statuses', async () => {
+  const events = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    sourceConfig: { x: { authToken: 'test-token' } },
+    egressBlockedStatuses: [403],
+    egressSiteFailureThreshold: 2,
+    resolveSessionTransport: async () => ({ laneId: 'session-lane-01', dispatcher: { proxyUrl: 'http://127.0.0.1:7921' }, credentials: { authToken: 'test-token' } }),
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      sessionLanes: () => [{ id: 'session-lane-01', proxyName: 'node-a' }],
+      markSessionLaneUnhealthy: async (laneId) => { events.push(['mark', laneId]); return true; },
+      stats: () => ({}),
+    },
+    sessionAffinity: {
+      resolve: async () => ({ laneId: 'session-lane-01' }),
+      markLaneUnhealthy: async (laneId) => { events.push(['affinity', laneId]); return 0; },
+    },
+    fetchExternal: async () => new Response('blocked', { status: 403 }),
+  });
+  const token = createSignedTarget('https://x.com/example/status/1', 'secret', 300, undefined, { egressScope: 'session' });
+  for (let index = 0; index < 2; index += 1) {
+    const { response } = await request(server, `/_gateway/item/${token}`);
+    assert.equal(response.status, 403);
+  }
+  assert.deepEqual(events, [['mark', 'session-lane-01'], ['affinity', 'session-lane-01']]);
+});

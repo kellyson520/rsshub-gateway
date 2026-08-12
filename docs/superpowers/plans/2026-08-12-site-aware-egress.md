@@ -748,7 +748,7 @@ git commit -m "feat: site-aware lane selection and release feedback in egress po
 - Modify: `src/server.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/server.test.js`：
 
@@ -815,12 +815,12 @@ test('migrates a session lane after repeated blocked statuses', async () => {
 
 注意：x.com 在 PUBLIC_REQUEST_HOSTS 中，但请求带 `egressScope: 'session'`，`fetchGatewayTarget` 直接走 session 分支（`requestedScope === 'session'`）。`sourceConfig` 需要 `sessionCredentialsFor(adapter)` 能取到凭证——若实现不需要凭证即可 resolve，可去掉 sourceConfig；以实际实现为准，测试里保留最简形式。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/server.test.js`
 Expected: FAIL（infra 无 `probeTargets`/`adapter`；会话 403 不触发迁移）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 修改 `src/server.js`：
 
@@ -959,17 +959,17 @@ egress: {
 
 注意 `createGatewayServer` 现有签名：`options.egressPool` 目前未被读取（代码直接 `options.egressPool || createEgressPool(...)` 已支持），但 `egressAdapter` 的 onEvent 分支需保留原有日志。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/server.test.js`
 Expected: PASS（新旧测试全过）。
 
-- [ ] **Step 5: 全量测试**
+- [x] **Step 5: 全量测试**
 
 Run: `npm test`
 Expected: `# tests` 增长、`# pass` 等于 tests、`# fail 0`。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add src/server.js test/server.test.js
