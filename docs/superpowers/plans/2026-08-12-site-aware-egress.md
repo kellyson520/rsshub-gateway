@@ -181,7 +181,7 @@ git commit -m "feat: shared sliding-window site failure tracker; amend hosts sem
 - Modify: `src/egress-policy.js`
 - Test: `test/egress-policy.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `test/egress-policy.test.js`：
 
@@ -208,12 +208,12 @@ test('merges env host overrides into public lists and includes pixiv defaults', 
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test test/egress-policy.test.js`
 Expected: FAIL（`parseHostList` 未导出；pixiv 未在请求列表）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 修改 `src/egress-policy.js`：把现有 `PUBLIC_HOSTS` 改名为 `DEFAULT_PUBLIC_HOSTS`，现有 `PUBLIC_REQUEST_HOSTS` 改名为 `DEFAULT_PUBLIC_REQUEST_HOSTS` 并在其列表末尾追加 `'pixiv.net', 'pximg.net'`；文件尾部改为：
 
@@ -244,12 +244,12 @@ export const PUBLIC_REQUEST_HOSTS = Object.freeze([
 
 测试文件顶部 import 增加 `parseHostList`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test test/egress-policy.test.js`
 Expected: PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/egress-policy.js test/egress-policy.test.js

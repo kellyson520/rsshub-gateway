@@ -5,6 +5,7 @@ import {
   egressPolicyForRequest,
   egressPolicyForUrl,
   isPublicEgressTarget,
+  parseHostList,
 } from '../src/egress-policy.js';
 
 test('routes public E-Hentai and H@H targets through the public egress', () => {
@@ -90,4 +91,25 @@ test('routes adult galleries, boorus, and video CDNs through the public egress',
   }
   assert.equal(egressPolicyForRequest('https://nhentai.net/g/123/', { scope: 'public' }), EGRESS_POLICIES.PUBLIC);
   assert.equal(egressPolicyForRequest('https://danbooru.donmai.us/posts/1', { scope: 'public' }), EGRESS_POLICIES.PUBLIC);
+});
+
+test('parses env host lists as JSON or comma separated', () => {
+  assert.deepEqual(parseHostList('a.com, b.com'), ['a.com', 'b.com']);
+  assert.deepEqual(parseHostList(JSON.stringify(['c.com', 'd.com'])), ['c.com', 'd.com']);
+  assert.deepEqual(parseHostList(''), []);
+});
+
+test('merges env host overrides into public lists and includes pixiv defaults', async () => {
+  process.env.EGRESS_PUBLIC_HOSTS = 'example.com';
+  process.env.EGRESS_PUBLIC_REQUEST_HOSTS = JSON.stringify(['cdn.example.com']);
+  const fresh = await import(`../src/egress-policy.js?env=${Date.now()}`);
+  try {
+    assert.equal(fresh.isPublicEgressTarget('https://example.com/a'), true);
+    assert.equal(fresh.isPublicRequestTarget('https://cdn.example.com/a'), true);
+    assert.equal(fresh.isPublicRequestTarget('https://www.pixiv.net/artworks/1'), true);
+    assert.equal(fresh.isPublicEgressTarget('https://www.pixiv.net/artworks/1'), false);
+  } finally {
+    delete process.env.EGRESS_PUBLIC_HOSTS;
+    delete process.env.EGRESS_PUBLIC_REQUEST_HOSTS;
+  }
 });

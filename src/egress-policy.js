@@ -1,4 +1,4 @@
-const PUBLIC_HOSTS = Object.freeze([
+const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'e-hentai.org',
   'ehgt.org',
   'hath.network',
@@ -27,8 +27,8 @@ const PUBLIC_HOSTS = Object.freeze([
   'jpgcdn.com',
 ]);
 
-const PUBLIC_REQUEST_HOSTS = Object.freeze([
-  ...PUBLIC_HOSTS,
+const DEFAULT_PUBLIC_REQUEST_HOSTS = Object.freeze([
+  ...DEFAULT_PUBLIC_HOSTS,
   'iwara.tv',
   't.me',
   'telesco.pe',
@@ -39,6 +39,8 @@ const PUBLIC_REQUEST_HOSTS = Object.freeze([
   'cdninstagram.com',
   'fbcdn.net',
   'danbooru.donmai.us',
+  'pixiv.net',
+  'pximg.net',
 ]);
 
 export const EGRESS_POLICIES = Object.freeze({
@@ -77,5 +79,28 @@ export function egressPolicyForRequest(value, { scope = 'auto' } = {}) {
   if (scope === 'public' && isPublicRequestTarget(value)) return EGRESS_POLICIES.PUBLIC;
   return egressPolicyForUrl(value);
 }
+
+export function parseHostList(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    // Fall through to comma-separated parsing.
+  }
+  return String(value).split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+}
+
+const PUBLIC_HOSTS = Object.freeze([
+  ...new Set([...DEFAULT_PUBLIC_HOSTS, ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS)]),
+]);
+
+const PUBLIC_REQUEST_HOSTS = Object.freeze([
+  ...new Set([
+    ...DEFAULT_PUBLIC_REQUEST_HOSTS,
+    ...parseHostList(process.env.EGRESS_PUBLIC_REQUEST_HOSTS),
+    ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS),
+  ]),
+]);
 
 export { PUBLIC_HOSTS, PUBLIC_REQUEST_HOSTS };
