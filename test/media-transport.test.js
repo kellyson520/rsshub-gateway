@@ -136,6 +136,67 @@ test('probeSize returns the full size from a content-range probe', async () => {
   assert.equal(probed, true);
 });
 
+test('first video range request fills the cache in the background', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-transport-video-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.from('0123456789');
+    let upstreamRanges = 0;
+    let upstreamFull = 0;
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        upstreamRanges += 1;
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        const slice = body.subarray(start, end + 1);
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(slice.length),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      upstreamFull += 1;
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      videoCacheMaxFileBytes: 1024,
+    });
+    const first = await transport.serve(
+      'https://www.iwara.tv/video/abc',
+      { range: 'bytes=2-5', priority: 'foreground' },
+      {},
+    );
+    assert.equal(first.response.status, 206);
+    assert.equal(await first.response.text(), '2345');
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/abc', 'media')).hit) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal((await cache.peek('https://www.iwara.tv/video/abc', 'media')).hit, true);
+    const second = await transport.serve(
+      'https://www.iwara.tv/video/abc',
+      { range: 'bytes=4-7', priority: 'foreground' },
+      {},
+    );
+    assert.equal(second.response.status, 206);
+    assert.equal(await second.response.text(), '4567');
+    assert.equal(upstreamRanges, 1);
+    assert.equal(upstreamFull, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('chunkManifest signs independent chunk urls covering the full file', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-transport-chunk-'));
   try {

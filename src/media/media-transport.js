@@ -311,6 +311,24 @@ export function createMediaTransport({
       const resolved = await resolveMediaUrl(target);
       if (!resolved?.url) return { adapter: { name: 'iwara' }, egressScope: 'public', response: unavailableResponse() };
       const remote = await fetchExternal(resolved.url, { ...requestOptions, circuit: false, priority: 'foreground' });
+      if (cache && remote.ok) {
+        const contentRange = remote.headers.get('content-range') || '';
+        const match = contentRange.match(/\/(\d+)\s*$/);
+        const size = match ? Number(match[1]) : null;
+        if (Number.isSafeInteger(size) && size > 0 && size <= videoCacheMaxFileBytes) {
+          // First play-through of a cacheable video: fill the whole file in the
+          // background with one upstream request so every later seek is served
+          // from the gateway cache instead of repeating upstream range fetches.
+          const full = await fetchExternal(resolved.url, {
+            ...requestOptions,
+            range: undefined,
+            circuit: false,
+            priority: 'background',
+          });
+          const stored = await cacheMedia(target, 'public', full, { bypassInflight: true });
+          await stored?.body?.cancel?.();
+        }
+      }
       return { adapter: { name: 'iwara' }, egressScope: 'public', response: remote };
     }
     const cached = await readCached(target, 'media', 'public', { bypassInflight: true });

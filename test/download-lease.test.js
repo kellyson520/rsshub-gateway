@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  chunkSizeFor,
   createLeaseStore,
   createSignedChunk,
   verifySignedChunk,
@@ -50,17 +49,6 @@ test('lease public view includes proxy url and one-time semantics', () => {
   assert.deepEqual(view.allowHosts, ['filesq.iwara.tv']);
   assert.equal(view.maxConcurrency >= 1, true);
   assert.equal(view.ttlMs > 0, true);
-});
-
-test('chunk size calculation respects bounds and counts', () => {
-  assert.deepEqual(chunkSizeFor(10 * 1024 * 1024, 8), { count: 8, size: 1310720 });
-  const tiny = chunkSizeFor(100 * 1024, 8);
-  assert.equal(tiny.size, 256 * 1024);
-  assert.equal(tiny.count, 1);
-  const huge = chunkSizeFor(200 * 1024 * 1024, 4);
-  assert.equal(huge.size, 16 * 1024 * 1024);
-  assert.equal(huge.count, 4);
-  assert.deepEqual(chunkSizeFor(0, 4), { count: 1, size: 1024 * 1024 });
 });
 
 test('signed chunks verify and reject tampering', () => {

@@ -3,9 +3,6 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
 const DEFAULT_MAX_CONCURRENCY = 8;
-const DEFAULT_CHUNK_SIZE = 1024 * 1024;
-const MIN_CHUNK_SIZE = 256 * 1024;
-const MAX_CHUNK_SIZE = 16 * 1024 * 1024;
 
 function encode(value) {
   return Buffer.from(value).toString('base64url');
@@ -113,14 +110,6 @@ export function createLeaseStore({ now = Date.now } = {}) {
   }
 
   return { createLease, verify, revoke, revokeExpired, publicView, stats };
-}
-
-export function chunkSizeFor(totalBytes, chunks, { min = MIN_CHUNK_SIZE, max = MAX_CHUNK_SIZE } = {}) {
-  const count = Number.isInteger(chunks) && chunks >= 1 ? Math.min(chunks, 256) : 1;
-  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) return { count: 1, size: DEFAULT_CHUNK_SIZE };
-  const natural = Math.ceil(totalBytes / count);
-  const size = Math.max(min, Math.min(max, Math.ceil(natural / (64 * 1024)) * (64 * 1024)));
-  return { count: Math.min(count, Math.ceil(totalBytes / size)), size };
 }
 
 export function createSignedChunk({ url, start, end, secret, now: nowValue = Math.floor(Date.now() / 1000), ttlSeconds = 24 * 60 * 60, metadata = {} }) {
