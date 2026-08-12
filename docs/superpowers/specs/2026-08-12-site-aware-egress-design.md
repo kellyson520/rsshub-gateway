@@ -45,16 +45,16 @@ siteHealth: Map<host, { failures: number, until: number, blocked: boolean }>
   3. 无候选时**降级**：忽略站点 blocked 但保留并发/scope 条件再选一次，并 emit `{ state: 'site-degraded', host }`；
   4. 仍无则按现有 `EGRESS_POOL_EMPTY` 语义等待。
 - `makeLease` 携带 `host`（acquire 时传入）；`release(result)` 的 `result` 支持 `{ status, host, error }`。
-- `recordResult` 扩展：`status` 命中封禁集合（403、401、407、429）且带 `host` 时 → 该 lane 该 host 失败计数 +1，连续失败达到阈值（默认 3 次、窗口 60s）→ `siteHealth[host] = { blocked: true, until: now + cooldownMs }` 并 emit `{ state: 'site-blocked', laneId, host, status }`；成功响应清除该 host 计数。
+- `recordResult` 扩展：`status` 命中封禁集合（401、403、407、429）且带 `host` 时 → 经共享失败跟踪器（见下）计数，达到阈值 → `siteHealth[host] = { blocked: true, until: now + cooldownMs }` 并 emit `{ state: 'site-blocked', laneId, host, status }`；成功响应清除该 host 计数。
 - 新增 `stats()` 字段：per-lane `siteBlocked: [host...]`。
 
 ### 3. 请求失败反馈回路
 
-- `upstream.js`：`lease.release({ status, host, error })` 补传 `host`（请求目标 hostname）；其余重试/熔断逻辑不变。
-- `server.js` 的 egress `onEvent`：
-  - `site-blocked` 且 lane 是会话 lane（id 以 `session-lane-` 开头）→ `mihomoEgress.markSessionLaneUnhealthy(laneId)` + `sessionAffinity.markLaneUnhealthy(laneId)`（现有迁移逻辑），记日志 `session_lane_site_blocked`；
-  - `site-degraded` → 记 `egress_site_degraded` 日志（含 host）。
-- session 请求的 lane 绑定仍在 `upstream.js` 的 session 分支（`sessionDispatcher`），反馈经 pool 事件链路完成；session 迁移后旧 dispatcher 由 `markSessionLaneUnhealthy` 关闭。
+失败计数算法抽为共享底层模块 `src/infrastructure/site-failure-tracker.js`（`createSiteFailureTracker({ threshold, windowMs, now })` → `record(laneId, host, status)` 返回是否达到阈值、`reset(laneId, host)`、`stats()`），pool 与会话路径共用，避免重复实现。
+
+- **公共 lane（走 egressPool）**：`upstream.js` 的 `lease.release({ status, host, error })` 补传 `host`（请求目标 hostname）；池内按 tracker 统计，达到阈值 → `siteHealth[host] = { blocked, until }` 并 emit `{ state: 'site-blocked', laneId, host, status }`；`server.js` 的 egress `onEvent` 收到后记日志 `egress_site_blocked`（公共 lane 仅摘除池内选择，不解绑节点）。
+- **会话 lane（不走 egressPool，`upstream.js` 的 session 分支直接用 `sessionDispatcher`）**：反馈在 server 层完成——`fetchGatewayTarget` 拿到 session 响应后，若状态命中封禁集合，用同一 tracker 按 `(session.laneId, host)` 计数；达到阈值 → `egressAdapter.markSessionLaneUnhealthy(laneId)`（关闭旧 dispatcher）+ `sessionAffinity.markLaneUnhealthy(laneId)`（迁移亲和记录），记日志 `session_lane_site_blocked`。
+- 会话请求的 `laneId` 来自 `resolveSessionTransport` 返回的 affinity 记录（已包含 `laneId`），无需改动 upstream 的 session 分支。
 
 ### 4. 策略配置化
 
@@ -72,6 +72,7 @@ siteHealth: Map<host, { failures: number, until: number, blocked: boolean }>
 | env | 默认 | 说明 |
 | --- | --- | --- |
 | `EGRESS_PROBE_TARGETS` | `{"public":["https://e-hentai.org/"],"sticky":["https://www.iwara.tv/","https://x.com/"],"hosts":{}}` | 站点级探测目标 JSON |
+| `EGRESS_BLOCKED_STATUSES` | `401,403,407,429` | 视为站点封禁的状态码集合 |
 | `EGRESS_SITE_FAILURE_THRESHOLD` | `3` | 站点连续失败摘除阈值 |
 | `EGRESS_SITE_FAILURE_WINDOW_MS` | `60000` | 站点失败统计窗口 |
 | `EGRESS_PUBLIC_HOSTS` | 默认列表 | 公共作用域 host 覆盖（合并） |
