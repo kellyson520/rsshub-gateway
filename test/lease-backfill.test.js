@@ -161,7 +161,7 @@ test('skips non-video targets and unknown sizes', async () => {
   }
 });
 
-test('skips when the cache has no headroom for the expected size', async () => {
+test('backfills from a full cache within the eviction budget and skips larger videos', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-backfill-cap-'));
   try {
     const cache = createResponseCache({ root, maxBytes: 2 * 1024 * 1024 });
@@ -176,10 +176,24 @@ test('skips when the cache has no headroom for the expected size', async () => {
       isVideoTarget: () => true,
       probeSize: async () => 20 * 1024 * 1024,
       maxConcurrency: 2,
+      evictionBudget: 4 * 1024 * 1024,
     });
     await queue.enqueue(lease(store));
     assert.equal(transport.filled.length, 0);
     assert.equal(queue.stats().skipped, 1);
+    const queue2 = createLeaseBackfillQueue({
+      mediaTransport: transport.fake,
+      fetchExternal: async () => new Response('x'),
+      resolveMediaUrl: async () => ({ url: 'https://cdn.iwara.tv/video/abc.mp4' }),
+      leaseStore: store,
+      cache,
+      isVideoTarget: () => true,
+      probeSize: async () => 1 * 1024 * 1024,
+      maxConcurrency: 2,
+      evictionBudget: 4 * 1024 * 1024,
+    });
+    await queue2.enqueue(lease(store));
+    assert.equal(transport.filled.length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

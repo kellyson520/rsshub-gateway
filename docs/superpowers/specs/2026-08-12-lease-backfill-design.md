@@ -47,7 +47,7 @@ createLeaseBackfillQueue({
 
 - `enqueue(lease)`：仅当 `isVideoTarget(lease.targetUrl)` 且 `lease.resolvedUrl` 存在。
   - 同 target 去重：in-flight 中则合并等待（返回已有任务），完成后记录参与租约数。
-  - 容量保护：可用空间小于预计回填大小时跳过（`skipped`），防止把整库 LRU 挤爆。
+  - 容量保护：可用空间（含默认 128MiB eviction budget）小于预计回填大小时跳过（`skipped`），允许挤掉少量旧条目但不允许挤爆整库。
   - 大小：优先 `mediaTransport.probeSize` / 已知大小；未知则跳过。
   - 超限：超过 `videoCacheMaxFileBytes` 只回填前部切片（与播放时 `fillVideoSlices` 的 `maxSliceBytes` 语义一致）。
   - 回填期间每片前检查 `stopToken`；租约撤销后停止。
