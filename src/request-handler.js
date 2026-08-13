@@ -57,6 +57,10 @@ function withPrefetchStatus(view, target, prefetchStatus) {
   return { ...view, prefetch: prefetchStatus?.(target) ?? null };
 }
 
+function promLabel(value) {
+  return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n');
+}
+
 const DEFAULT_PREFETCH_WAIT_MS = 30_000;
 const MAX_PREFETCH_WAIT_MS = 60_000;
 
@@ -234,6 +238,46 @@ export function createRequestHandler(deps) {
         lines.push('# TYPE rsshub_gateway_lease_backfill_bytes gauge');
         lines.push(`rsshub_gateway_lease_backfill_bytes ${backfillStats.bytesFilled}`);
       }
+      const prefetchStats = feedPrefetchQueue ? feedPrefetchQueue.stats() : null;
+      if (prefetchStats) {
+        lines.push('# TYPE rsshub_gateway_prefetch_enabled gauge');
+        lines.push(`rsshub_gateway_prefetch_enabled ${prefetchStats.enabled ? 1 : 0}`);
+        lines.push('# TYPE rsshub_gateway_prefetch_configured gauge');
+        lines.push(`rsshub_gateway_prefetch_configured ${prefetchStats.configured}`);
+        lines.push('# TYPE rsshub_gateway_prefetch_queue_length gauge');
+        lines.push(`rsshub_gateway_prefetch_queue_length ${prefetchStats.queueLength}`);
+        lines.push('# TYPE rsshub_gateway_prefetch_in_flight gauge');
+        lines.push(`rsshub_gateway_prefetch_in_flight ${prefetchStats.inFlight}`);
+        lines.push('# TYPE rsshub_gateway_prefetch_completed_total counter');
+        lines.push(`rsshub_gateway_prefetch_completed_total ${prefetchStats.completed}`);
+        lines.push('# TYPE rsshub_gateway_prefetch_failed_total counter');
+        lines.push(`rsshub_gateway_prefetch_failed_total ${prefetchStats.failed}`);
+        if (prefetchStats.lastRunAt) {
+          lines.push('# TYPE rsshub_gateway_prefetch_last_run_ms gauge');
+          lines.push(`rsshub_gateway_prefetch_last_run_ms ${prefetchStats.lastRunAt}`);
+        }
+        for (const [path, entry] of Object.entries(prefetchStats.paths || {})) {
+          const label = `path="${promLabel(path)}"`;
+          lines.push(`rsshub_gateway_prefetch_path_completed_total{${label}} ${entry.completed}`);
+          lines.push(`rsshub_gateway_prefetch_path_failed_total{${label}} ${entry.failed}`);
+          if (entry.lastStatus !== null && entry.lastStatus !== undefined) {
+            lines.push(`rsshub_gateway_prefetch_path_last_status{${label}} ${entry.lastStatus}`);
+          }
+          if (entry.lastDurationMs !== null && entry.lastDurationMs !== undefined) {
+            lines.push(`rsshub_gateway_prefetch_path_last_duration_ms{${label}} ${entry.lastDurationMs}`);
+          }
+        }
+      }
+      for (const lane of egressStats.lanes || []) {
+        const label = `lane="${promLabel(lane.id)}"`;
+        lines.push(`rsshub_gateway_egress_lane_active{${label}} ${lane.active ?? 0}`);
+        lines.push(`rsshub_gateway_egress_lane_target_concurrency{${label}} ${lane.targetConcurrency ?? 0}`);
+        lines.push(`rsshub_gateway_egress_lane_samples{${label}} ${lane.samples ?? 0}`);
+        if (lane.ewmaMs !== undefined && lane.ewmaMs !== null) {
+          lines.push(`rsshub_gateway_egress_lane_ewma_ms{${label}} ${lane.ewmaMs}`);
+        }
+        lines.push(`rsshub_gateway_egress_lane_site_blocked_count{${label}} ${(lane.siteBlocked || []).length}`);
+      }
       writeText(res, 200, `${lines.join('\n')}\n`, 'text/plain; version=0.0.4; charset=utf-8');
       return;
     }
@@ -255,6 +299,7 @@ export function createRequestHandler(deps) {
         },
         leases: leaseStore.stats(),
         leaseBackfill: leaseBackfillQueue ? leaseBackfillQueue.stats() : null,
+        feedPrefetch: feedPrefetchQueue ? feedPrefetchQueue.stats() : null,
         circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
         metrics: Object.fromEntries(metricCounts),
         histograms: Object.fromEntries([...histograms].map(([metric, entry]) => [

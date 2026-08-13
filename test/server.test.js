@@ -2641,3 +2641,68 @@ test('download session wait returns immediately for non-video targets and 404s f
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('metrics exports prefetch queue and per-lane egress series', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    feedPrefetchPaths: ['/custom/feed'],
+    feedPrefetchIntervalMs: 60_000,
+    feedPrefetchConcurrency: 1,
+    egressPool: {
+      setLanes: () => {},
+      capacity: () => 4,
+      minimumCapacity: () => 4,
+      stats: () => ({
+        active: 1,
+        lanes: [
+          { id: 'lane-01', active: 1, targetConcurrency: 4, samples: 2, ewmaMs: 150, siteBlocked: ['source.example'], healthyScopes: ['telegram'] },
+          { id: 'lane"02', active: 0, targetConcurrency: 4, samples: 0, siteBlocked: [], healthyScopes: null },
+        ],
+      }),
+    },
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  try {
+    const deadline = Date.now() + 3000;
+    while (server.feedPrefetchQueue?.stats().completed !== 1) {
+      if (Date.now() > deadline) assert.fail('prefetch did not complete in time');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    const metricsResponse = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`);
+    assert.equal(metricsResponse.status, 200);
+    const body = await metricsResponse.text();
+
+    assert.match(body, /rsshub_gateway_prefetch_enabled 1/);
+    assert.match(body, /rsshub_gateway_prefetch_configured 1/);
+    assert.match(body, /rsshub_gateway_prefetch_queue_length 0/);
+    assert.match(body, /rsshub_gateway_prefetch_in_flight 0/);
+    assert.match(body, /rsshub_gateway_prefetch_completed_total 1/);
+    assert.match(body, /rsshub_gateway_prefetch_failed_total 0/);
+    assert.match(body, /rsshub_gateway_prefetch_last_run_ms \d+/);
+    assert.match(body, /rsshub_gateway_prefetch_path_completed_total\{path="\/custom\/feed"\} 1/);
+    assert.match(body, /rsshub_gateway_prefetch_path_failed_total\{path="\/custom\/feed"\} 0/);
+    assert.match(body, /rsshub_gateway_prefetch_path_last_status\{path="\/custom\/feed"\} 200/);
+    assert.match(body, /rsshub_gateway_prefetch_path_last_duration_ms\{path="\/custom\/feed"\} \d+/);
+
+    assert.match(body, /rsshub_gateway_egress_lane_active\{lane="lane-01"\} 1/);
+    assert.match(body, /rsshub_gateway_egress_lane_target_concurrency\{lane="lane-01"\} 4/);
+    assert.match(body, /rsshub_gateway_egress_lane_samples\{lane="lane-01"\} 2/);
+    assert.match(body, /rsshub_gateway_egress_lane_ewma_ms\{lane="lane-01"\} 150/);
+    assert.match(body, /rsshub_gateway_egress_lane_site_blocked_count\{lane="lane-01"\} 1/);
+    assert.match(body, /rsshub_gateway_egress_lane_site_blocked_count\{lane="lane\\"02"\} 0/);
+    assert.doesNotMatch(body, /rsshub_gateway_egress_lane_ewma_ms\{lane="lane\\"02"/);
+
+    const infraResponse = await fetch(`http://127.0.0.1:${port}/_gateway/infra`);
+    assert.equal(infraResponse.status, 200);
+    const infra = await infraResponse.json();
+    assert.ok(infra.feedPrefetch);
+    assert.equal(infra.feedPrefetch.configured, 1);
+    assert.equal(infra.feedPrefetch.completed, 1);
+  } finally {
+    server.feedPrefetchQueue?.stop();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
