@@ -12,52 +12,20 @@ import { createMihomoEgressAdapter } from './mihomo-egress.js';
 import { createSessionAffinity } from './session-affinity.js';
 import { IMAGE_VARIANT_WIDTHS, createImageVariant } from './image-variants.js';
 import {
-  DEFAULT_HTML_BROTLI_MIN_BYTES,
-  DEFAULT_HTML_BROTLI_QUALITY,
-} from './http-encoding.js';
-import {
-  boundedInteger,
   cacheStateLog,
-  createConcurrencyLimiter,
   documentCacheKind,
   fetchCachedDocument,
   imageVariantCacheUrl,
   mapWithConcurrency,
-  parseProbeTargets,
-  positiveInteger,
   readBinaryLimited,
   readLimited,
-  readSecret,
-  readSources,
   responseFromCachedDocument,
   responseHeaders,
 } from './http-utils.js';
-const DEFAULT_EH_PREFETCH_CONCURRENCY = 8;
-const DEFAULT_EH_PREFETCH_MAX_CONCURRENCY = 36;
-const DEFAULT_EH_MAX_PREFETCH_PAGES = 300;
-const DEFAULT_EH_MEDIA_PREFETCH_CONCURRENCY = 6;
-const DEFAULT_EH_MEDIA_PREFETCH_MIN_CONCURRENCY = 3;
-const DEFAULT_EH_MEDIA_PREFETCH_MAX_CONCURRENCY = 12;
-const DEFAULT_EH_MEDIA_PREFETCH_PER_ORIGIN = 2;
-const DEFAULT_EH_MEDIA_FOREGROUND_WARM_COUNT = 8;
-const DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY = 8;
-const DEFAULT_EH_FIRST_PAINT_COUNT = 1;
-const DEFAULT_EGRESS_LANE_COUNT = 12;
-const DEFAULT_EGRESS_SESSION_LANE_COUNT = 12;
-const DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT = 7921;
-const DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE = 3;
-const DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE = 6;
-const DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY = 48;
-const DEFAULT_EGRESS_REFRESH_INTERVAL_MS = 60_000;
-const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
-const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
-const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
+import { resolveGatewayOptions } from './options.js';
 
 
-import {
-  DEFAULT_FIRST_DETAIL_BUDGET_MS,
-  withForegroundDeadline,
-} from './reader-manifest.js';
+import { withForegroundDeadline } from './reader-manifest.js';
 import {
   fetchIwaraVideoDetail,
   isIwaraVideoTarget,
@@ -345,107 +313,57 @@ function routeBucket(pathname) {
 }
 
 export function createGatewayServer(options = {}) {
-  const logger = options.logger || createLogger();
-  const secret = options.secret || readSecret();
-  const sourceConfig = options.sourceConfig || readSources();
-  const ehPrefetchConcurrency = boundedInteger(
-    options.ehPrefetchConcurrency ?? process.env.EH_PREFETCH_CONCURRENCY,
-    DEFAULT_EH_PREFETCH_CONCURRENCY,
-    1,
-    DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY,
-  );
-  const ehMaxPrefetchPages = boundedInteger(
-    options.ehMaxPrefetchPages ?? process.env.EH_MAX_PREFETCH_PAGES,
-    DEFAULT_EH_MAX_PREFETCH_PAGES,
-    1,
-    DEFAULT_EH_MAX_PREFETCH_PAGES,
-  );
-  const egressLaneCount = boundedInteger(
-    options.egressLaneCount ?? process.env.EGRESS_LANE_COUNT,
-    DEFAULT_EGRESS_LANE_COUNT,
-    1,
-    DEFAULT_EGRESS_LANE_COUNT,
-  );
-  const egressSessionLaneCount = boundedInteger(
-    options.egressSessionLaneCount ?? process.env.EGRESS_SESSION_LANE_COUNT,
-    DEFAULT_EGRESS_SESSION_LANE_COUNT,
-    1,
-    DEFAULT_EGRESS_SESSION_LANE_COUNT,
-  );
-  const egressSessionListenerBasePort = boundedInteger(
-    options.egressSessionListenerBasePort ?? process.env.EGRESS_SESSION_LISTENER_BASE_PORT,
-    DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT,
-    1024,
-    65_524,
-  );
-  const egressMinConcurrencyPerLane = boundedInteger(
-    options.egressMinConcurrencyPerLane ?? process.env.EGRESS_MIN_CONCURRENCY_PER_LANE,
-    DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE,
-    1,
-    12,
-  );
-  const egressMaxConcurrencyPerLane = boundedInteger(
-    options.egressMaxConcurrencyPerLane ?? process.env.EGRESS_MAX_CONCURRENCY_PER_LANE,
-    DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE,
-    egressMinConcurrencyPerLane,
-    24,
-  );
-  const egressMaxTotalConcurrency = boundedInteger(
-    options.egressMaxTotalConcurrency ?? process.env.EGRESS_MAX_TOTAL_CONCURRENCY,
-    DEFAULT_EGRESS_MAX_TOTAL_CONCURRENCY,
-    egressMinConcurrencyPerLane,
-    96,
-  );
-  const ehPrefetchMaxConcurrency = boundedInteger(
-    options.ehPrefetchMaxConcurrency ?? process.env.EH_PREFETCH_MAX_CONCURRENCY,
-    DEFAULT_EH_PREFETCH_MAX_CONCURRENCY,
+  const {
+    logger,
+    secret,
+    sourceConfig,
     ehPrefetchConcurrency,
+    ehMaxPrefetchPages,
+    egressLaneCount,
+    egressSessionLaneCount,
+    egressSessionListenerBasePort,
+    egressMinConcurrencyPerLane,
+    egressMaxConcurrencyPerLane,
     egressMaxTotalConcurrency,
-  );
-  const egressRefreshIntervalMs = boundedInteger(
-    options.egressRefreshIntervalMs ?? process.env.EGRESS_REFRESH_INTERVAL_MS,
-    DEFAULT_EGRESS_REFRESH_INTERVAL_MS,
-    5_000,
-    10 * 60_000,
-  );
-  const egressProbeUrl = options.egressProbeUrl ?? process.env.EGRESS_PROBE_URL ?? 'https://e-hentai.org/';
-  const egressProbeTimeoutMs = boundedInteger(
-    options.egressProbeTimeoutMs ?? process.env.EGRESS_PROBE_TIMEOUT_MS,
-    5_000,
-    1_000,
-    30_000,
-  );
-  const egressProbeCacheMs = boundedInteger(
-    options.egressProbeCacheMs ?? process.env.EGRESS_PROBE_CACHE_MS,
-    5 * 60_000,
-    10_000,
-    60 * 60_000,
-  );
-  const egressProbeTargets = parseProbeTargets(
-    options.egressProbeTargets ?? process.env.EGRESS_PROBE_TARGETS,
+    ehPrefetchMaxConcurrency,
+    egressRefreshIntervalMs,
     egressProbeUrl,
-  );
-  const egressSiteFailureThreshold = boundedInteger(
-    options.egressSiteFailureThreshold ?? process.env.EGRESS_SITE_FAILURE_THRESHOLD,
-    3,
-    1,
-    100,
-  );
-  const egressSiteFailureWindowMs = boundedInteger(
-    options.egressSiteFailureWindowMs ?? process.env.EGRESS_SITE_FAILURE_WINDOW_MS,
-    60_000,
-    1_000,
-    24 * 60 * 60_000,
-  );
-  const egressSiteBlockCooldownMs = boundedInteger(
-    options.egressSiteBlockCooldownMs ?? process.env.EGRESS_SITE_BLOCK_COOLDOWN_MS,
-    60_000,
-    0,
-    24 * 60 * 60_000,
-  );
-  const egressBlockedStatuses = new Set(String(
-    options.egressBlockedStatuses ?? process.env.EGRESS_BLOCKED_STATUSES ?? '401,403,407,429',
-  ).split(',').map((value) => Number.parseInt(value, 10)).filter(Number.isInteger));
+    egressProbeTimeoutMs,
+    egressProbeCacheMs,
+    egressProbeTargets,
+    egressSiteFailureThreshold,
+    egressSiteFailureWindowMs,
+    egressSiteBlockCooldownMs,
+    egressBlockedStatuses,
+    egressProxyBaseUrl,
+    controllerUrl,
+    sessionAffinityRoot,
+    sessionAffinityFile,
+    ehMediaPrefetchConcurrency,
+    ehMediaPrefetchMinConcurrency,
+    ehMediaPrefetchMaxConcurrency,
+    ehMediaPrefetchPerOriginConcurrency,
+    ehMediaForegroundWarmCount,
+    ehMediaForegroundWarmConcurrency,
+    ehFirstPaintCount,
+    ehColdStartEnabled,
+    ehFirstDetailBudgetMs,
+    mediaCacheMaxFileBytes,
+    videoCacheMaxFileBytes,
+    mediaBrowserCacheSeconds,
+    imageVariantConcurrency,
+    imageVariantMaxSourceBytes,
+    htmlBrotliMinBytes,
+    htmlBrotliQuality,
+    imageVariantLimiter,
+    leaseBackfillEnabled,
+    leaseBackfillConcurrency,
+    leaseProxyPort,
+    leaseProxyPublicUrl,
+    leaseTtlMs,
+    leaseMaxBytes,
+    leaseMaxConcurrency,
+  } = resolveGatewayOptions(options);
   const egressPool = options.egressPool || createEgressPool({
     lanes: options.egressLanes,
     minConcurrencyPerLane: egressMinConcurrencyPerLane,
@@ -465,11 +383,10 @@ export function createGatewayServer(options = {}) {
       }
     },
   });
-  const controllerUrl = options.egressControllerUrl || process.env.EGRESS_CONTROLLER_URL;
   const egressAdapter = options.egressAdapter || (controllerUrl
     ? createMihomoEgressAdapter({
       controllerUrl,
-      listenerBaseUrl: options.egressProxyBaseUrl || process.env.EGRESS_PROXY_BASE_URL,
+      listenerBaseUrl: egressProxyBaseUrl,
       laneCount: egressLaneCount,
       sessionLaneCount: egressSessionLaneCount,
       sessionListenerBasePort: egressSessionListenerBasePort,
@@ -486,8 +403,8 @@ export function createGatewayServer(options = {}) {
     : null);
   const sessionAffinity = options.sessionAffinity || (egressAdapter
     ? createSessionAffinity({
-      root: options.sessionAffinityRoot || process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
-      file: options.sessionAffinityFile || process.env.SESSION_AFFINITY_FILE,
+      root: sessionAffinityRoot,
+      file: sessionAffinityFile,
       secret,
       laneIds: () => egressAdapter.sessionLanes?.().map((lane) => lane.id) || [],
     })
@@ -525,100 +442,6 @@ export function createGatewayServer(options = {}) {
     const refreshTimer = setInterval(() => void refreshEgress(), egressRefreshIntervalMs);
     refreshTimer.unref?.();
   }
-  const ehMediaPrefetchConcurrency = boundedInteger(
-    options.ehMediaPrefetchConcurrency ?? process.env.EH_MEDIA_PREFETCH_CONCURRENCY,
-    DEFAULT_EH_MEDIA_PREFETCH_CONCURRENCY,
-    1,
-    egressMaxTotalConcurrency,
-  );
-  const ehMediaPrefetchMinConcurrency = boundedInteger(
-    options.ehMediaPrefetchMinConcurrency ?? process.env.EH_MEDIA_PREFETCH_MIN_CONCURRENCY,
-    DEFAULT_EH_MEDIA_PREFETCH_MIN_CONCURRENCY,
-    1,
-    egressMaxTotalConcurrency,
-  );
-  const ehMediaPrefetchMaxConcurrency = boundedInteger(
-    options.ehMediaPrefetchMaxConcurrency ?? process.env.EH_MEDIA_PREFETCH_MAX_CONCURRENCY,
-    DEFAULT_EH_MEDIA_PREFETCH_MAX_CONCURRENCY,
-    ehMediaPrefetchMinConcurrency,
-    egressMaxTotalConcurrency,
-  );
-  const ehMediaPrefetchPerOriginConcurrency = boundedInteger(
-    options.ehMediaPrefetchPerOriginConcurrency ?? process.env.EH_MEDIA_PREFETCH_PER_ORIGIN,
-    DEFAULT_EH_MEDIA_PREFETCH_PER_ORIGIN,
-    1,
-    48,
-  );
-  const ehMediaForegroundWarmCount = boundedInteger(
-    options.ehMediaForegroundWarmCount ?? process.env.EH_MEDIA_FOREGROUND_WARM_COUNT,
-    DEFAULT_EH_MEDIA_FOREGROUND_WARM_COUNT,
-    1,
-    24,
-  );
-  const ehMediaForegroundWarmConcurrency = boundedInteger(
-    options.ehMediaForegroundWarmConcurrency ?? process.env.EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
-    DEFAULT_EH_MEDIA_FOREGROUND_WARM_CONCURRENCY,
-    1,
-    ehMediaForegroundWarmCount,
-  );
-  const ehFirstPaintCount = boundedInteger(
-    options.ehFirstPaintCount ?? process.env.EH_FIRST_PAINT_COUNT,
-    DEFAULT_EH_FIRST_PAINT_COUNT,
-    1,
-    24,
-  );
-  const ehColdStartEnabled = String(
-    options.ehColdStartEnabled ?? process.env.EH_COLD_START_ENABLED ?? 'true',
-  ).toLowerCase() !== 'false';
-  const ehFirstDetailBudgetMs = boundedInteger(
-    options.ehFirstDetailBudgetMs ?? process.env.EH_FIRST_DETAIL_BUDGET_MS,
-    DEFAULT_FIRST_DETAIL_BUDGET_MS,
-    100,
-    1_800,
-  );
-  const mediaCacheMaxFileBytes = boundedInteger(
-    options.mediaCacheMaxFileBytes ?? process.env.GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES,
-    DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES,
-    1 * 1024 ** 2,
-    256 * 1024 ** 2,
-  );
-  const videoCacheMaxFileBytes = boundedInteger(
-    options.videoCacheMaxFileBytes ?? process.env.GATEWAY_VIDEO_CACHE_MAX_FILE_BYTES,
-    DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
-    8 * 1024 ** 2,
-    1024 ** 3,
-  );
-  const mediaBrowserCacheSeconds = boundedInteger(
-    options.mediaBrowserCacheSeconds ?? process.env.GATEWAY_MEDIA_BROWSER_CACHE_SECONDS,
-    DEFAULT_MEDIA_BROWSER_CACHE_SECONDS,
-    60,
-    86_400,
-  );
-  const imageVariantConcurrency = boundedInteger(
-    options.imageVariantConcurrency ?? process.env.GATEWAY_IMAGE_VARIANT_CONCURRENCY,
-    2,
-    1,
-    12,
-  );
-  const imageVariantMaxSourceBytes = boundedInteger(
-    options.imageVariantMaxSourceBytes ?? process.env.GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES,
-    mediaCacheMaxFileBytes,
-    1 * 1024 ** 2,
-    mediaCacheMaxFileBytes,
-  );
-  const htmlBrotliMinBytes = boundedInteger(
-    options.htmlBrotliMinBytes ?? process.env.GATEWAY_HTML_BROTLI_MIN_BYTES,
-    DEFAULT_HTML_BROTLI_MIN_BYTES,
-    256,
-    16 * 1024 ** 2,
-  );
-  const htmlBrotliQuality = boundedInteger(
-    options.htmlBrotliQuality ?? process.env.GATEWAY_HTML_BROTLI_QUALITY,
-    DEFAULT_HTML_BROTLI_QUALITY,
-    1,
-    11,
-  );
-  const imageVariantLimiter = createConcurrencyLimiter(imageVariantConcurrency);
   const metricCounts = new Map();
   const metricSink = options.onMetric || ((event) => logger.info(String(event.event || 'metric'), event));
   function recordMetric(metric, details = {}) {
@@ -1054,15 +877,6 @@ export function createGatewayServer(options = {}) {
     })
     : { enqueue: () => {} };
 
-  const leaseBackfillEnabled = String(
-    options.leaseBackfillEnabled ?? process.env.GATEWAY_LEASE_BACKFILL ?? 'true',
-  ).toLowerCase() !== 'false';
-  const leaseBackfillConcurrency = boundedInteger(
-    options.leaseBackfillConcurrency ?? process.env.GATEWAY_LEASE_BACKFILL_CONCURRENCY,
-    2,
-    0,
-    8,
-  );
   const leaseStore = options.leaseStore || createLeaseStore();
   const leaseBackfillQueue = leaseBackfillEnabled ? createLeaseBackfillQueue({
     mediaTransport,
@@ -1077,33 +891,6 @@ export function createGatewayServer(options = {}) {
     logger,
     ...(options.leaseBackfillOptions || {}),
   }) : null;
-  const leaseProxyPort = boundedInteger(
-    options.leaseProxyPort ?? process.env.GATEWAY_LEASE_PROXY_PORT,
-    0,
-    0,
-    65_535,
-  );
-  const leaseProxyPublicUrl = String(
-    options.leaseProxyPublicUrl ?? process.env.GATEWAY_LEASE_PROXY_PUBLIC_URL ?? '',
-  );
-  const leaseTtlMs = boundedInteger(
-    options.leaseTtlMs ?? process.env.GATEWAY_LEASE_TTL_MS,
-    30 * 60_000,
-    60_000,
-    24 * 60 * 60_000,
-  );
-  const leaseMaxBytes = boundedInteger(
-    options.leaseMaxBytes ?? process.env.GATEWAY_LEASE_MAX_BYTES,
-    2 * 1024 ** 3,
-    1024 * 1024,
-    64 * 1024 ** 3,
-  );
-  const leaseMaxConcurrency = boundedInteger(
-    options.leaseMaxConcurrency ?? process.env.GATEWAY_LEASE_MAX_CONCURRENCY,
-    8,
-    1,
-    32,
-  );
   let leaseProxyBoundPort = leaseProxyPort;
   const leaseProxy = (options.leaseProxy !== undefined || leaseProxyPort > 0)
     ? createLeaseProxy({
