@@ -637,11 +637,11 @@ git commit -m "feat: wire lease backfill into server lifecycle and infra stats"
 - Modify: `README.md`
 - Modify: `/opt/1panel/apps/rsshub-gateway/docker-compose.yml`（生产）
 
-- [ ] **Step 1: README 租约段落更新**
+- [x] **Step 1: README 租约段落更新**
 
 在 README 租约下载段落（第 83-85 行附近）追加回填说明与 env 表。
 
-- [ ] **Step 2: 生产同步与重建**
+- [x] **Step 2: 生产同步与重建**
 
 ```bash
 for f in src/lease-backfill.js src/media/media-transport.js src/server.js; do
@@ -653,7 +653,7 @@ curl -sk http://127.0.0.1:1300/healthz
 ```
 Expected: `ok`。
 
-- [ ] **Step 3: 生产验证**
+- [x] **Step 3: 生产验证**
 
 ```bash
 curl -sk http://127.0.0.1:1300/_gateway/infra | python3 -m json.tool | grep -A 8 '"leaseBackfill"'
@@ -665,7 +665,7 @@ curl -sk -m 90 -o /dev/null -w '%{http_code}\n' https://kellson.dpdns.org:81/iwa
 ```
 Expected: `200`。
 
-- [ ] **Step 4: 提交并推送**
+- [x] **Step 4: 提交并推送**
 
 ```bash
 cd /home/ubuntu/.config/rsshub-gateway
