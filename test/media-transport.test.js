@@ -840,3 +840,63 @@ test('prefetchStatus is null without activity and resets on a new prefetch', asy
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('prefetch and foreground assembly share slice fetches without duplicate upstream requests', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-slice-dedup-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 3);
+    const requested = [];
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        requested.push(String(options.range));
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return new Response(body.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(end - start + 1),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceFillConcurrency: 4,
+    });
+    const target = 'https://www.iwara.tv/video/slice-dedup';
+    const prefetch = transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const served = await transport.serve(
+      target,
+      { range: 'bytes=0-8388607', priority: 'foreground' },
+      {},
+    );
+    assert.equal(served.response.status, 206);
+    assert.equal(Buffer.from(await served.response.arrayBuffer()).length, 8 * 1024 * 1024);
+    await prefetch;
+    const counts = requested.reduce((acc, range) => {
+      acc[range] = (acc[range] || 0) + 1;
+      return acc;
+    }, {});
+    assert.equal(requested.length, 5);
+    for (let slice = 0; slice < 5; slice += 1) {
+      const start = slice * 4 * 1024 * 1024;
+      const end = start + 4 * 1024 * 1024 - 1;
+      assert.equal(counts[`bytes=${start}-${end}`], 1);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});

@@ -362,16 +362,34 @@ export function createMediaTransport({
     return `${String(target)}#slice=${start}`;
   }
 
-  async function storeVideoSlice(target, namespace, range, response) {
-    if (!cache || !response?.ok) return false;
-    const body = await readBinaryLimited(response, sliceSize + 64 * 1024);
-    await cache.getOrLoad(sliceKey(target, range.start), 'media', async () => ({
-      status: response.status,
-      headers: responseHeaders(response),
-      body,
-      cacheable: true,
-    }), { namespace });
-    return true;
+  async function fetchSliceIntoCache(target, resolvedUrl, namespace, part, { priority }) {
+    if (!cache) return { status: 'failed' };
+    const key = sliceKey(target, part.start);
+    const existing = await cache.readRange(key, 'media', { namespace });
+    if (existing && existing.size === part.end - part.start + 1) return { status: 'cached' };
+    try {
+      await cache.getOrLoad(key, 'media', async () => {
+        const response = await fetchExternal(resolvedUrl, {
+          range: `bytes=${part.start}-${part.end}`,
+          circuit: false,
+          priority,
+        });
+        if (!response?.ok) throw new Error(`slice ${part.start} fetch failed`);
+        const body = await readBinaryLimited(response, sliceSize + 64 * 1024);
+        if (body.length !== part.end - part.start + 1) {
+          throw new Error(`slice ${part.start} short body`);
+        }
+        return {
+          status: response.status,
+          headers: responseHeaders(response),
+          body,
+          cacheable: true,
+        };
+      }, { namespace });
+      return { status: 'stored' };
+    } catch {
+      return { status: 'failed' };
+    }
   }
 
   async function readSliceRange(target, namespace, range, size) {
@@ -441,12 +459,7 @@ export function createMediaTransport({
         const part = missing[next];
         next += 1;
         try {
-          const response = await fetchExternal(resolvedUrl, {
-            range: `bytes=${part.start}-${part.end}`,
-            circuit: false,
-            priority: 'background',
-          });
-          await storeVideoSlice(target, namespace, part, response);
+          await fetchSliceIntoCache(target, resolvedUrl, namespace, part, { priority: 'background' });
         } catch {
           // Slice fill failures are background noise; the upstream path still works.
         }
@@ -484,8 +497,8 @@ export function createMediaTransport({
           await probe.body?.cancel();
           if (!(Number.isSafeInteger(probedSize) && probedSize > 0)) return 0;
           fileSize = probedSize;
-          rememberVideoSize(target, probedSize);
         }
+        rememberVideoSize(target, fileSize);
         const plan = sliceRanges(0, fileSize - 1, fileSize, { sliceSize, lookahead: fileSize });
         if (!plan.ranges.length) return 0;
         state.total = plan.ranges.length;
@@ -499,18 +512,10 @@ export function createMediaTransport({
             const existing = await cache.readRange(sliceKey(target, part.start), 'media', { namespace: 'public' });
             if (existing && existing.size === part.end - part.start + 1) continue;
             try {
-              const response = await fetchExternal(resolved.url, {
-                range: `bytes=${part.start}-${part.end}`,
-                circuit: false,
-                priority: 'background',
-              });
-              if (response?.ok) {
-                const stored = await storeVideoSlice(target, 'public', part, response);
-                if (stored) state.fetched += 1;
-                else state.failed += 1;
-              } else {
-                state.failed += 1;
-              }
+              const result = await fetchSliceIntoCache(target, resolved.url, 'public', part, { priority: 'background' });
+              if (result.status === 'cached') continue;
+              if (result.status === 'stored') state.fetched += 1;
+              else state.failed += 1;
             } catch {
               // Background prefetch failures must never surface.
               state.failed += 1;
@@ -572,13 +577,8 @@ export function createMediaTransport({
         nextMissing += 1;
         if (item.ranged) continue;
         try {
-          const response = await fetchExternal(resolvedUrl, {
-            range: `bytes=${item.part.start}-${item.part.end}`,
-            circuit: false,
-            priority: 'foreground',
-          });
-          if (!response?.ok) throw new Error(`slice ${item.part.start} fetch failed`);
-          await storeVideoSlice(target, namespace, item.part, response);
+          const result = await fetchSliceIntoCache(target, resolvedUrl, namespace, item.part, { priority: 'foreground' });
+          if (result.status === 'failed') throw new Error(`slice ${item.part.start} fetch failed`);
           const stored = await cache.readRange(sliceKey(target, item.part.start), 'media', { namespace });
           if (!stored || stored.size !== item.part.end - item.part.start + 1) {
             throw new Error(`slice ${item.part.start} not stored`);
@@ -788,7 +788,10 @@ export function createMediaTransport({
       });
       const contentRange = probe.headers.get('content-range') || '';
       const match = contentRange.match(/\/(\d+)\s*$/);
-      return match ? Number(match[1]) : null;
+      if (!match) return null;
+      const size = Number(match[1]);
+      if (Number.isSafeInteger(size) && size > 0) rememberVideoSize(target, size);
+      return size;
     } catch {
       return null;
     }
