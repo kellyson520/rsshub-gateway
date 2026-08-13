@@ -166,7 +166,7 @@ test('opens an E-Hentai gallery item as one ordered continuous image page', asyn
 
 test('returns the E-Hentai reader shell before slow image detail pages finish', async () => {
   const gallery = '<html><body><div id="gn">Fast shell</div><div id="gdt"><a href="https://e-hentai.org/s/first/123-1">Page 1</a><a href="https://e-hentai.org/s/second/123-2">Page 2</a></div></body></html>';
-  let completed = false;
+  let slowFinished = false;
   const server = createGatewayServer({
     secret: 'secret',
     fetchExternal: async (url) => {
@@ -176,19 +176,15 @@ test('returns the E-Hentai reader shell before slow image detail pages finish', 
       if (String(url).endsWith('/s/first/123-1')) {
         return new Response(imagePageOne, { headers: { 'content-type': 'text/html' } });
       }
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      slowFinished = true;
       return new Response(imagePageTwo, { headers: { 'content-type': 'text/html' } });
     },
   });
   const token = createSignedTarget('https://e-hentai.org/g/123/fast-shell/', 'secret');
-  const pending = request(server, `/_gateway/item/${token}`).then((result) => {
-    completed = true;
-    return result;
-  });
+  const { response, body } = await request(server, `/_gateway/item/${token}`);
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  assert.equal(completed, true);
-  const { response, body } = await pending;
+  assert.equal(slowFinished, false);
   assert.equal(response.status, 200);
   assert.match(body, /class="reader eh-image-page"/);
   assert.match(body, /_gateway\/media\//);
@@ -1761,7 +1757,7 @@ function truncatingWebStream(buffer, failAfter) {
   return new ReadableStream({
     start(controller) {
       controller.enqueue(buffer.subarray(0, failAfter));
-      setTimeout(() => controller.error(new Error('simulated upstream drop')), 10);
+      setTimeout(() => controller.error(new Error('simulated upstream drop')), 50);
     },
   });
 }

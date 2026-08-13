@@ -86,7 +86,12 @@ export async function pumpResumableRange({
     if (attempt > 0) {
       if (fetches >= maxAttempts) break;
       await sleep(backoffMs * attempt);
-      const next = await fetchRange(`bytes=${start + written}-${end}`);
+      let next;
+      try {
+        next = await fetchRange(`bytes=${start + written}-${end}`);
+      } catch {
+        next = null;
+      }
       fetches += 1;
       if (!next?.ok || !next?.body) {
         attempt += 1;
