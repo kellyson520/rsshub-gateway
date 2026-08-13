@@ -481,6 +481,7 @@ export function createMediaTransport({
         const plan = sliceRanges(0, fileSize - 1, fileSize, { sliceSize, lookahead: fileSize });
         if (!plan.ranges.length) return 0;
         let fetched = 0;
+        let failed = 0;
         let next = 0;
         async function worker() {
           while (next < plan.ranges.length) {
@@ -499,9 +500,13 @@ export function createMediaTransport({
               if (response?.ok) {
                 const stored = await storeVideoSlice(target, 'public', part, response);
                 if (stored) fetched += 1;
+                else failed += 1;
+              } else {
+                failed += 1;
               }
             } catch {
               // Background prefetch failures must never surface.
+              failed += 1;
             }
           }
         }
@@ -510,6 +515,9 @@ export function createMediaTransport({
           workers.push(worker());
         }
         await Promise.all(workers);
+        if (failed > 0) {
+          logger.warn('media_prefetch_partial', { target, fetched, failed, total: plan.ranges.length });
+        }
         if (fetched > 0) onMetric('media_prefetch_slices', { count: fetched, total: plan.ranges.length });
         return fetched;
       } finally {
