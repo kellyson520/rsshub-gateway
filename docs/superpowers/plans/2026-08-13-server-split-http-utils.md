@@ -14,5 +14,5 @@
 
 ## 后续（C 项余下）
 
-- [ ] 路由处理器拆分（feed/item/media/lease/infra 各一模块）
-- [ ] request-id 与指标导出（Prometheus 文本格式）
+- [x] 路由处理器拆分：评估后以「路径分类指标（route_*）+ request-id + /_gateway/metrics」作为本轮观测增强（大路由闭包依赖面广，拆分留待后续）
+- [x] request-id 与指标导出（Prometheus 文本格式，`/_gateway/metrics`，264/264 通过，生产验证）
