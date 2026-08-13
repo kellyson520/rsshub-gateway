@@ -11,6 +11,12 @@ const DEFAULT_TTL_SECONDS = Object.freeze({
   'media-variant': 7 * 24 * 60 * 60,
 });
 const DEFAULT_MAX_BYTES = 5 * 1024 ** 3;
+const DEFAULT_EVICTION_PRIORITY = Object.freeze({
+  rss: 0,
+  html: 1,
+  media: 2,
+  'media-variant': 3,
+});
 const SAFE_HEADERS = new Set(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);
 
 function canonicalUrl(value) {
@@ -57,6 +63,7 @@ export function createResponseCache({
   root = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
   maxBytes = Number.parseInt(process.env.GATEWAY_CACHE_MAX_BYTES || '', 10) || DEFAULT_MAX_BYTES,
   ttlSeconds = {},
+  evictionPriority = {},
   now = () => Date.now(),
 } = {}) {
   const cacheRoot = path.resolve(root);
@@ -66,7 +73,12 @@ export function createResponseCache({
   const storeInflight = new Map();
   const loadStates = new Map();
   const ttl = { ...DEFAULT_TTL_SECONDS, ...ttlSeconds };
+  const priority = { ...DEFAULT_EVICTION_PRIORITY, ...evictionPriority };
   const byteLimit = positiveNumber(maxBytes, DEFAULT_MAX_BYTES);
+  function kindPriority(kind) {
+    const value = priority[String(kind || 'html')];
+    return Number.isInteger(value) ? value : DEFAULT_EVICTION_PRIORITY.html;
+  }
   let totalBytes = 0;
   const counters = {
     hits: 0,
@@ -164,7 +176,10 @@ export function createResponseCache({
 
   async function evict() {
     if (totalBytes <= byteLimit) return;
-    const ordered = [...entries.values()].sort((left, right) => left.lastAccessAt - right.lastAccessAt);
+    const ordered = [...entries.values()].sort((left, right) => (
+      kindPriority(left.kind) - kindPriority(right.kind)
+      || left.lastAccessAt - right.lastAccessAt
+    ));
     for (const entry of ordered) {
       if (totalBytes <= byteLimit) break;
       entries.delete(entry.key);

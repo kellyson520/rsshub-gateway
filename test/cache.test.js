@@ -301,3 +301,27 @@ test('isolates public and session cache namespaces for one upstream URL', async 
     assert.equal((await cache.peek(url, 'html', { namespace: sessionNamespace })).hit, true);
   });
 });
+
+test('evicts by kind weight so cheap rss leaves before media-variant', async () => {
+  let now = 1_000;
+  await withCache({ now: () => now, maxBytes: 7 }, async (cache) => {
+    await cache.getOrLoad('https://example.com/f.xml', 'rss', async () => ({ status: 200, headers: {}, body: 'aaaa' }));
+    now += 1;
+    await cache.getOrLoad('https://example.com/i.png', 'media-variant', async () => ({ status: 200, headers: {}, body: 'bbbb' }));
+    assert.equal((await cache.peek('https://example.com/f.xml', 'rss')).hit, false);
+    assert.equal((await cache.peek('https://example.com/i.png', 'media-variant')).hit, true);
+  });
+});
+
+test('touching a variant makes it the last eviction candidate', async () => {
+  let now = 1_000;
+  await withCache({ now: () => now, maxBytes: 10 }, async (cache) => {
+    await cache.getOrLoad('https://example.com/i.png', 'media-variant', async () => ({ status: 200, headers: {}, body: 'bbbb' }));
+    await cache.getOrLoad('https://example.com/f.xml', 'rss', async () => ({ status: 200, headers: {}, body: 'aaaa' }));
+    now += 1;
+    assert.equal((await cache.peek('https://example.com/i.png', 'media-variant')).hit, true);
+    await cache.getOrLoad('https://example.com/g.html', 'html', async () => ({ status: 200, headers: {}, body: 'cccc' }));
+    assert.equal((await cache.peek('https://example.com/f.xml', 'rss')).hit, false);
+    assert.equal((await cache.peek('https://example.com/i.png', 'media-variant')).hit, true);
+  });
+});
