@@ -106,6 +106,19 @@ Routes can also be registered at runtime without restarting the gateway: when `D
 
 Deployment comes in two flavors (see `docker-compose.standard.example.yml` and `docker-compose.enhanced.example.yml`): the standard companion mode runs only RSSHub + the gateway (pure transparent enhancement), and the enhanced mode additionally starts the `fetcher-iwara` / `fetcher-eh` services (same image, `command: ["fetcher-iwara"]` / `["fetcher-eh"]`, mihomo started by the entrypoint) and mounts `gateway-routes.yaml` so registered routes are served by the sidecars with automatic fallback to upstream RSSHub.
 
+## Async feed prefetch / precache queue
+
+The gateway can keep configured feed paths warm in the shared RSS cache by re-requesting them through its own pipeline on a schedule (`src/feed-prefetch.js`, architecture v0.2 phase 3.2). Each prefetch goes through the exact same dispatcher → sidecar/upstream → cache → post-processing path as a real reader request, so a warm entry means a reader's request is served instantly from cache without touching the source. In-flight and queued paths are deduplicated, concurrency is bounded, and transient failures are retried with backoff. Prefetch is off by default and enabled by listing paths:
+
+| Env / option | Default | Meaning |
+| --- | --- | --- |
+| `GATEWAY_FEED_PREFETCH_PATHS` (`feedPrefetchPaths`) | empty (off) | Comma-separated feed paths to keep warm, e.g. `/iwara/users/tsyj/video,/ehviewer/ranking` |
+| `GATEWAY_FEED_PREFETCH_INTERVAL_MS` | `900000` (15 min) | Minimum time between prefetch runs of the same path |
+| `GATEWAY_FEED_PREFETCH_CONCURRENCY` | `2` | Max parallel prefetch fetches |
+| `GATEWAY_FEED_PREFETCH_MAX_RETRIES` | `2` | Retries per path before marking failed |
+
+The control endpoint `/_gateway/prefetch` (guarded by the same `DISPATCHER_REGISTRATION_TOKEN` as route registration; 404 when unset) reports queue stats with `GET` and enqueues an on-demand prefetch with `POST {"path": "/..."}`.
+
 ## Verification
 
 

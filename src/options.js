@@ -30,6 +30,9 @@ const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
 const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
 const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
 const DEFAULT_VIDEO_PREFETCH_CONCURRENCY = 4;
+const DEFAULT_FEED_PREFETCH_INTERVAL_MS = 900_000;
+const DEFAULT_FEED_PREFETCH_CONCURRENCY = 2;
+const DEFAULT_FEED_PREFETCH_MAX_RETRIES = 2;
 
 export function resolveGatewayOptions(options = {}, env = process.env) {
   const logger = options.logger || createLogger();
@@ -281,6 +284,28 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     1,
     8,
   );
+  const feedPrefetchPaths = Array.isArray(options.feedPrefetchPaths)
+    ? options.feedPrefetchPaths.map(String).filter(Boolean)
+    : String(options.feedPrefetchPaths ?? env.GATEWAY_FEED_PREFETCH_PATHS ?? '')
+      .split(',').map((value) => value.trim()).filter(Boolean);
+  const feedPrefetchIntervalMs = boundedInteger(
+    options.feedPrefetchIntervalMs ?? env.GATEWAY_FEED_PREFETCH_INTERVAL_MS,
+    DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+    10_000,
+    86_400_000,
+  );
+  const feedPrefetchConcurrency = boundedInteger(
+    options.feedPrefetchConcurrency ?? env.GATEWAY_FEED_PREFETCH_CONCURRENCY,
+    DEFAULT_FEED_PREFETCH_CONCURRENCY,
+    1,
+    8,
+  );
+  const feedPrefetchMaxRetries = boundedInteger(
+    options.feedPrefetchMaxRetries ?? env.GATEWAY_FEED_PREFETCH_MAX_RETRIES,
+    DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+    0,
+    5,
+  );
   return {
     logger,
     secret,
@@ -310,6 +335,10 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     downloadSessionFile,
     videoPrefetchEnabled,
     videoPrefetchConcurrency,
+    feedPrefetchPaths,
+    feedPrefetchIntervalMs,
+    feedPrefetchConcurrency,
+    feedPrefetchMaxRetries,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,

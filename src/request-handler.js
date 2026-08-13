@@ -98,6 +98,7 @@ export function createRequestHandler(deps) {
     fetchJsonViaFetchd,
     fetchResolvedEhMedia,
     fetchRssHub,
+    feedPrefetchQueue,
     htmlBrotliMinBytes,
     htmlBrotliQuality,
     histogramBucketsMs,
@@ -137,9 +138,10 @@ export function createRequestHandler(deps) {
   async function handleRequest(req, res, attribution) {
     const downloadCreate = req.method === 'POST'
       && /^\/_gateway\/download\/[^/]+$/.test(String(req.url || '').split('?')[0]);
-    const dispatcherRoutes = String(req.url || '').split('?')[0] === '/_gateway/dispatcher/routes'
+    const controlPath = String(req.url || '').split('?')[0];
+    const controlWrite = (controlPath === '/_gateway/dispatcher/routes' || controlPath === '/_gateway/prefetch')
       && (req.method === 'POST' || req.method === 'DELETE');
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate && !dispatcherRoutes) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate && !controlWrite) {
       writeText(res, 405, 'method not allowed\n');
       return;
     }
@@ -323,6 +325,42 @@ export function createRequestHandler(deps) {
         }
         const result = dispatcher.unregisterRoutes(body.routeIds);
         writeJson(res, 200, { ...result, total: dispatcher.routes.length + dispatcher.runtimeRoutes.length });
+        return;
+      }
+      writeText(res, 405, 'method not allowed\n');
+      return;
+    }
+    if (requestUrl.pathname === '/_gateway/prefetch') {
+      if (!dispatcherRegistrationToken || !feedPrefetchQueue) {
+        writeText(res, 404, 'not found\n');
+        return;
+      }
+      const auth = String(req.headers.authorization || '');
+      const expected = `Bearer ${dispatcherRegistrationToken}`;
+      const provided = auth.trim();
+      if (!provided || provided.length !== expected.length
+        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+        writeText(res, 401, 'unauthorized\n');
+        return;
+      }
+      if (req.method === 'GET') {
+        writeJson(res, 200, feedPrefetchQueue.stats());
+        return;
+      }
+      if (req.method === 'POST') {
+        let body;
+        try {
+          body = JSON.parse(await readRequestBody(req));
+        } catch {
+          writeJson(res, 400, { error: 'invalid json body' });
+          return;
+        }
+        if (typeof body?.path !== 'string' || !body.path.trim()) {
+          writeJson(res, 400, { error: 'path is required' });
+          return;
+        }
+        const result = feedPrefetchQueue.enqueue(body.path.trim(), { force: true });
+        writeJson(res, 200, { ...result, queueLength: feedPrefetchQueue.stats().queueLength });
         return;
       }
       writeText(res, 405, 'method not allowed\n');

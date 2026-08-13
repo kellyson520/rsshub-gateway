@@ -70,3 +70,35 @@ test('resolveGatewayOptions parses blocked statuses from arrays and strings', ()
   const fromString = resolveGatewayOptions({ secret: 'secret', egressBlockedStatuses: '401, 403' }, ENV);
   assert.deepEqual([...fromString.egressBlockedStatuses], [401, 403]);
 });
+
+test('resolveGatewayOptions parses feed prefetch settings', () => {
+  const fromEnv = resolveGatewayOptions({ secret: 'secret' }, {
+    GATEWAY_FEED_PREFETCH_PATHS: '/iwara/users/tsyj/video, /ehviewer/ranking',
+    GATEWAY_FEED_PREFETCH_INTERVAL_MS: '600000',
+    GATEWAY_FEED_PREFETCH_CONCURRENCY: '4',
+    GATEWAY_FEED_PREFETCH_MAX_RETRIES: '3',
+  });
+  assert.deepEqual(fromEnv.feedPrefetchPaths, ['/iwara/users/tsyj/video', '/ehviewer/ranking']);
+  assert.equal(fromEnv.feedPrefetchIntervalMs, 600000);
+  assert.equal(fromEnv.feedPrefetchConcurrency, 4);
+  assert.equal(fromEnv.feedPrefetchMaxRetries, 3);
+
+  const fromOptions = resolveGatewayOptions({
+    secret: 'secret',
+    feedPrefetchPaths: ['/a'],
+    feedPrefetchIntervalMs: 120000,
+    feedPrefetchConcurrency: 1,
+  }, {});
+  assert.deepEqual(fromOptions.feedPrefetchPaths, ['/a']);
+  assert.equal(fromOptions.feedPrefetchIntervalMs, 120000);
+  assert.equal(fromOptions.feedPrefetchConcurrency, 1);
+
+  const defaults = resolveGatewayOptions({ secret: 'secret' }, {});
+  assert.deepEqual(defaults.feedPrefetchPaths, []);
+  assert.equal(defaults.feedPrefetchIntervalMs, 900000);
+  assert.equal(defaults.feedPrefetchConcurrency, 2);
+
+  const clamped = resolveGatewayOptions({ secret: 'secret', feedPrefetchConcurrency: 99, feedPrefetchMaxRetries: 99 }, {});
+  assert.equal(clamped.feedPrefetchConcurrency, 8);
+  assert.equal(clamped.feedPrefetchMaxRetries, 5);
+});

@@ -7,6 +7,7 @@ import {
 } from './reader.js';
 import { createResponseCache } from './cache.js';
 import { createMediaPrefetchQueue } from './media-prefetch.js';
+import { createFeedPrefetchQueue } from './feed-prefetch.js';
 import { createEgressPool } from './egress-pool.js';
 import { createMihomoEgressAdapter } from './mihomo-egress.js';
 import { createSessionAffinity } from './session-affinity.js';
@@ -307,6 +308,7 @@ function routeBucket(pathname) {
   if (pathname.startsWith('/_gateway/lease/')) return 'lease';
   if (pathname.startsWith('/_gateway/chunk/')) return 'chunk';
   if (pathname.startsWith('/_gateway/infra')) return 'infra';
+  if (pathname.startsWith('/_gateway/prefetch')) return 'prefetch';
   if (pathname.startsWith('/_gateway/metrics')) return 'metrics';
   if (pathname.startsWith('/_gateway/item/')) return 'item';
   if (pathname.startsWith('/_gateway/media/')) return 'media';
@@ -348,6 +350,10 @@ export function createGatewayServer(options = {}) {
     downloadSessionFile,
     videoPrefetchEnabled,
     videoPrefetchConcurrency,
+    feedPrefetchPaths,
+    feedPrefetchIntervalMs,
+    feedPrefetchConcurrency,
+    feedPrefetchMaxRetries,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,
@@ -927,6 +933,23 @@ export function createGatewayServer(options = {}) {
     });
   }
 
+  let prefetchServer = null;
+  const feedPrefetchQueue = feedPrefetchPaths.length > 0
+    ? createFeedPrefetchQueue({
+      paths: feedPrefetchPaths,
+      intervalMs: feedPrefetchIntervalMs,
+      concurrency: feedPrefetchConcurrency,
+      maxRetries: feedPrefetchMaxRetries,
+      fetchFeed: async (requestPath) => {
+        const address = prefetchServer?.address?.();
+        if (!address) return { ok: false, status: 503, notReady: true };
+        const response = await fetch(`http://127.0.0.1:${address.port}${requestPath}`);
+        return { ok: response.ok, status: response.status, text: () => response.text() };
+      },
+      logger,
+    })
+    : null;
+  feedPrefetchQueue?.start();
   const poller = options.poller || createPoller({ intervalMs: 60_000, logger });
   const dispatcher = options.dispatcher || createDispatcher({ routesFile, logger });
   const requestHandler = createRequestHandler({
@@ -948,6 +971,7 @@ export function createGatewayServer(options = {}) {
     ehMaxPrefetchPages,
     ehMediaForegroundWarmConcurrency,
     ehMediaForegroundWarmCount,
+    feedPrefetchQueue,
     fetchCachedMedia,
     fetchExternal,
     fetchExternalDocument,
@@ -993,6 +1017,13 @@ export function createGatewayServer(options = {}) {
     warmEhMedia,
   });
   const server = http.createServer(requestHandler);
+  prefetchServer = server;
+  if (feedPrefetchQueue) {
+    poller.register('feed-prefetch', () => feedPrefetchQueue.runCycle(), {
+      interval: feedPrefetchIntervalMs,
+      runImmediately: true,
+    });
+  }
   poller.register('lease-sweep', () => {
     const expired = leaseStore.revokeExpired();
     for (const username of expired) leaseBackfillQueue?.cancel(username);
@@ -1001,6 +1032,7 @@ export function createGatewayServer(options = {}) {
   if (options.poller === undefined) poller.start();
 
   server.leaseProxy = leaseProxy;
+  server.feedPrefetchQueue = feedPrefetchQueue;
   server.leaseStore = leaseStore;
   server.leaseBackfillQueue = leaseBackfillQueue;
   server.browserFetch = browserFetch;
