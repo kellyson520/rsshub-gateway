@@ -68,6 +68,6 @@ test('signed chunks verify and reject tampering', () => {
   assert.throws(() => verifySignedChunk(token, 'other-secret'));
   assert.throws(() => verifySignedChunk('not-a-token', secret));
   const [payload, signature] = token.split('.');
-  const tampered = `${payload}.${signature.slice(0, 10)}x${signature.slice(11)}`;
+  const tampered = `${payload}.${signature.slice(0, 10)}${signature[10] === 'x' ? 'y' : 'x'}${signature.slice(11)}`;
   assert.throws(() => verifySignedChunk(tampered, secret));
 });
