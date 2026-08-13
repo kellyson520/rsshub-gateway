@@ -68,6 +68,7 @@ import {
 import { createRequestService } from './infrastructure/request-service.js';
 import { createLeaseStore, createSignedChunk } from './download-lease.js';
 import { createRequestHandler } from './request-handler.js';
+import { installGracefulShutdown } from './graceful-shutdown.js';
 import { createLeaseProxy } from './lease-proxy.js';
 import { createLeaseBackfillQueue } from './lease-backfill.js';
 import { createLogger } from './infrastructure/logger.js';
@@ -1180,5 +1181,9 @@ export function createGatewayServer(options = {}) {
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   const server = createGatewayServer();
   const bootLogger = createLogger();
+  installGracefulShutdown({
+    servers: [server, server.leaseProxy?.server].filter(Boolean),
+    logger: bootLogger,
+  });
   server.listen(Number(process.env.PORT || 1300), '0.0.0.0', () => bootLogger.info('gateway_listening', { port: Number(process.env.PORT || 1300) }));
 }

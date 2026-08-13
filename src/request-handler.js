@@ -759,7 +759,14 @@ export function createRequestHandler(deps) {
     try {
       await handleRequest(req, res);
     } finally {
-      recordDuration('request_duration_seconds', Date.now() - startedAt);
+      const durationMs = Date.now() - startedAt;
+      recordDuration('request_duration_seconds', durationMs);
+      try {
+        const pathname = new URL(req.url || '/', 'http://gateway.internal').pathname;
+        recordDuration(`route_${routeBucket(pathname)}_duration_seconds`, durationMs);
+      } catch {
+        // Routing metrics must never affect the response.
+      }
     }
   };
 }

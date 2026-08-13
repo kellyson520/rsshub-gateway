@@ -1887,5 +1887,7 @@ test('metrics endpoint exports prometheus text counters and request ids flow thr
   assert.match(body, /rsshub_gateway_request_duration_seconds_bucket\{le="\+Inf"\} \d+/);
   assert.match(body, /rsshub_gateway_request_duration_seconds_sum \d+\.\d+/);
   assert.match(body, /rsshub_gateway_request_duration_seconds_count \d+/);
+  assert.match(body, /# TYPE rsshub_gateway_route_healthz_duration_seconds histogram/);
+  assert.match(body, /rsshub_gateway_route_healthz_duration_seconds_count \d+/);
   await new Promise((resolve) => server.close(resolve));
 });
