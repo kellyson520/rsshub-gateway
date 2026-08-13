@@ -2191,3 +2191,85 @@ test('metrics attribute request durations per source', async () => {
   assert.match(body, /rsshub_gateway_source_x_duration_seconds_count 1/);
   assert.doesNotMatch(body, /rsshub_gateway_source_healthz_duration_seconds/);
 });
+
+function fakeIwaraAccessToken() {
+  const payload = Buffer.from(JSON.stringify({
+    type: 'access_token',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  })).toString('base64url');
+  return `eyJhbGciOiJIUzI1NiJ9.${payload}.fake`;
+}
+
+test('download session creation prefetches the whole video into the slice cache', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-prefetch-'));
+  const cache = createResponseCache({ root });
+  const mediaBytes = Buffer.alloc(20 * 1024 * 1024, 4);
+  const videoId = 'prefetch-video';
+  const target = `https://www.iwara.tv/video/${videoId}`;
+  const cdnUrl = 'https://cdn.iwara.tv/video/prefetch.mp4';
+  const sliceRangesSeen = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache,
+    downloadSessionFile: path.join(root, 'download-sessions.json'),
+    sourceConfig: { iwara: { token: fakeIwaraAccessToken() } },
+    fetchdFetch: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl === `https://api.iwara.tv/video/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ({ fileUrl: `https://api.iwara.tv/file/${videoId}` }) };
+      }
+      if (requestUrl === `https://api.iwara.tv/file/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ([{ name: '1080', src: { view: cdnUrl } }]) };
+      }
+      throw new Error(`unexpected fetchd url ${requestUrl}`);
+    },
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), cdnUrl);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        if (request.range !== 'bytes=0-0') sliceRangesSeen.push(request.range);
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const created = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(created.status, 200);
+    const session = await created.json();
+    assert.equal(session.size, 20 * 1024 * 1024);
+    await waitFor(async () => {
+      for (const start of [0, 4194304, 8388608, 12582912, 16777216]) {
+        const ranged = await cache.readRange(`${target}#slice=${start}`, 'media');
+        if (!ranged || ranged.size !== 4 * 1024 * 1024) return false;
+      }
+      return true;
+    }, 3000);
+    assert.equal(sliceRangesSeen.length, 5);
+
+    const again = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(again.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sliceRangesSeen.length, 5);
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});

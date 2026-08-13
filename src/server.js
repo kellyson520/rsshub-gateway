@@ -965,6 +965,7 @@ export function createGatewayServer(options = {}) {
     mediaPreloadQueue,
     slowSourceThresholdMs,
     mediaSizeFor,
+    prefetchVideoFile: mediaTransport.prefetchVideoFile,
     metricCounts,
     poller,
     prefetchEhGallery,

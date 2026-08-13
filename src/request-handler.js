@@ -111,6 +111,7 @@ export function createRequestHandler(deps) {
     metricCounts,
     poller,
     prefetchEhGallery,
+    prefetchVideoFile,
     recordDuration,
     recordMetric,
     resolveForegroundEhPage,
@@ -398,6 +399,11 @@ export function createRequestHandler(deps) {
           chunkSize,
           chunks: entries,
         });
+        if (prefetchVideoFile) {
+          void prefetchVideoFile(verified.url, { size }).catch(() => {
+            // Background slice prefetch must never affect session creation.
+          });
+        }
         recordMetric('download_session_created');
         writeJson(res, 200, downloadSessionView(session));
         return;
