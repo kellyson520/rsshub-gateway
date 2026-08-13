@@ -46,5 +46,5 @@
 
 - [x] **Step 1:** `npm test`（root 全量）+ 非 root 容器全量 + 压测防 flaky。
 - [x] **Step 2:** 生产同步（新增 src/sidecar 文件 + entrypoint + compose 模板），重建，`/_gateway/infra` 200；内置 iwara/ehviewer 路由无回归。
-- [ ] **Step 3:** 提交（`feat: fetcher-eh sidecar and shared fetcher server` + docs），推送，CI 绿。
-- [ ] **Step 4:** 本计划全部勾选。
+- [x] **Step 3:** 提交（`feat: fetcher-eh sidecar and shared fetcher server` + docs），推送，CI 绿。
+- [x] **Step 4:** 本计划全部勾选。
