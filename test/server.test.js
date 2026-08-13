@@ -1757,10 +1757,20 @@ test('serves chunk manifests and signed chunk ranges for media', async () => {
   }
 });
 
+function truncatingWebStream(buffer, failAfter) {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(buffer.subarray(0, failAfter));
+      setTimeout(() => controller.error(new Error('simulated upstream drop')), 10);
+    },
+  });
+}
+
 test('download sessions track chunk progress for resume', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-'));
   const mediaBytes = Buffer.alloc(1024 * 1024, 7);
   const target = 'https://page.example.hath.network/h/video.mp4';
+  let chunkTruncated = false;
   const server = createGatewayServer({
     secret: 'secret',
     cache: createResponseCache({ root }),
@@ -1772,7 +1782,19 @@ test('download sessions track chunk progress for resume', async () => {
         assert.ok(match, `unexpected range ${request.range}`);
         const start = Number(match[1]);
         const end = Number(match[2]);
-        return new Response(mediaBytes.subarray(start, end + 1), {
+        const body = mediaBytes.subarray(start, end + 1);
+        if (request.range === 'bytes=0-262143' && !chunkTruncated) {
+          chunkTruncated = true;
+          return new Response(truncatingWebStream(body, 100000), {
+            status: 206,
+            headers: {
+              'content-type': 'video/mp4',
+              'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+              'accept-ranges': 'bytes',
+            },
+          });
+        }
+        return new Response(body, {
           status: 206,
           headers: {
             'content-type': 'video/mp4',
@@ -1805,7 +1827,12 @@ test('download sessions track chunk progress for resume', async () => {
     const chunkResponse = await fetch(`http://127.0.0.1:${port}${chunkUrl.pathname}${chunkUrl.search}`);
     assert.equal(chunkResponse.status, 206);
     assert.equal(chunkResponse.headers.get('content-range'), `bytes 0-262143/${1024 * 1024}`);
-    await chunkResponse.text();
+    const chunkBody = await chunkResponse.text();
+    assert.equal(chunkBody.length, 262144);
+
+    const metricsResponse = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`);
+    const metrics = await metricsResponse.text();
+    assert.match(metrics, /rsshub_gateway_download_chunk_resumed_total 1/);
 
     const progressResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${session.id}`);
     assert.equal(progressResponse.status, 200);

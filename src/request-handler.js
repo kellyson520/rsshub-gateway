@@ -9,6 +9,7 @@ import { renderReaderPage, renderUnavailablePage } from './reader.js';
 import { createInitialReaderManifest, mergeResolvedPage } from './reader-manifest.js';
 import { createSignedChunk, verifySignedChunk } from './download-lease.js';
 import { chunkSizeFor } from './media/chunks.js';
+import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse } from './http-encoding.js';
 import {
   fetchCachedDocument,
@@ -444,15 +445,28 @@ export function createRequestHandler(deps) {
         res.writeHead(remote.status, headers);
         if (req.method === 'HEAD') return res.end();
         if (remote.body) {
-          const stream = Readable.fromWeb(remote.body);
-          if (chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
-            stream.on('end', () => {
-              void downloadSessions.markChunkDone(chunk.sessionId, chunk.index).then((done) => {
-                if (done) recordMetric('download_chunk_completed');
-              });
-            });
+          const expectedBytes = chunk.end - chunk.start + 1;
+          const result = await pumpResumableRange({
+            response: remote,
+            fetchRange: async (range) => {
+              const routed = await fetchGatewayMedia(
+                chunk.url,
+                { range, circuit: false, priority: 'foreground' },
+                { egressScope: chunk.egressScope || 'public', source: chunk.source },
+                undefined,
+              );
+              return routed.unavailable ? null : routed.response;
+            },
+            res,
+            start: chunk.start,
+            end: chunk.end,
+          });
+          if (result.resumed > 0) recordMetric('download_chunk_resumed', { count: result.resumed });
+          if (result.written < expectedBytes) recordMetric('download_chunk_truncated');
+          if (result.written >= expectedBytes && chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
+            const done = await downloadSessions.markChunkDone(chunk.sessionId, chunk.index);
+            if (done) recordMetric('download_chunk_completed');
           }
-          stream.pipe(res);
         } else {
           res.end();
         }
