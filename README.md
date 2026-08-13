@@ -148,6 +148,7 @@ Probe targets and failure tuning are configurable:
 | `EGRESS_SITE_FAILURE_WINDOW_MS` | `60000` | Sliding failure window |
 | `EGRESS_SITE_BLOCK_COOLDOWN_MS` | `60000` | How long a tripped lane stays excluded for that host |
 | `EGRESS_BLOCKED_STATUSES` | `401,403,407,429` | Statuses counted as site blocks |
+| `GATEWAY_SLOW_SOURCE_MS` | `5000` | Per-source request duration threshold in ms; requests at or above it log a `slow_source` warning and increment `rsshub_gateway_slow_source_total` (`0` disables) |
 | `EGRESS_PUBLIC_HOSTS` | — | Extra hosts for the public egress policy (comma-separated or JSON array) |
 | `EGRESS_PUBLIC_REQUEST_HOSTS` | — | Extra hosts for the public request policy |
 

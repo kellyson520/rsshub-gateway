@@ -1862,6 +1862,56 @@ test('migrates a session lane after repeated blocked statuses', async () => {
   assert.deepEqual(events, [['mark', 'session-lane-01'], ['affinity', 'session-lane-01']]);
 });
 
+test('logs and counts slow source requests above the threshold', async () => {
+  const events = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    slowSourceThresholdMs: 30,
+    onMetric: (event) => { events.push(event); },
+    fetchRssHub: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return new Response(feed, { headers: { 'content-type': 'application/xml' } });
+    },
+  });
+  const { response } = await request(server, '/telegram/channel/foo');
+  assert.equal(response.status, 200);
+  const slow = events.filter((event) => event.event === 'gateway_metric' && event.metric === 'slow_source');
+  assert.equal(slow.length, 1);
+  assert.equal(slow[0].source, 'telegram');
+  assert.ok(slow[0].durationMs >= 30);
+  const { body } = await request(server, '/_gateway/metrics');
+  assert.match(body, /rsshub_gateway_slow_source_total 1/);
+});
+
+test('does not report fast source requests as slow', async () => {
+  const events = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    slowSourceThresholdMs: 5000,
+    onMetric: (event) => { events.push(event); },
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+  });
+  const { response } = await request(server, '/telegram/channel/foo');
+  assert.equal(response.status, 200);
+  assert.equal(events.filter((event) => event.metric === 'slow_source').length, 0);
+});
+
+test('slow source reporting is disabled at threshold zero', async () => {
+  const events = [];
+  const server = createGatewayServer({
+    secret: 'secret',
+    slowSourceThresholdMs: 0,
+    onMetric: (event) => { events.push(event); },
+    fetchRssHub: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return new Response(feed, { headers: { 'content-type': 'application/xml' } });
+    },
+  });
+  const { response } = await request(server, '/telegram/channel/foo');
+  assert.equal(response.status, 200);
+  assert.equal(events.filter((event) => event.metric === 'slow_source').length, 0);
+});
+
 test('session lane drill: a blocked lane is replaced and the next request succeeds', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-drill-'));
   try {

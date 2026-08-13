@@ -96,6 +96,7 @@ export function createRequestHandler(deps) {
     routeBucket,
     secret,
     signedTargetMetadata,
+    slowSourceThresholdMs,
     videoCacheMaxFileBytes,
     warmEhMedia
   } = deps;
@@ -787,6 +788,10 @@ export function createRequestHandler(deps) {
         recordDuration(`route_${routeBucket(pathname)}_duration_seconds`, durationMs);
         const sourceMetric = sourceMetricName(attribution.source);
         if (sourceMetric) recordDuration(sourceMetric, durationMs);
+        if (slowSourceThresholdMs > 0 && durationMs >= slowSourceThresholdMs) {
+          logger.warn('slow_source', { source: attribution.source, durationMs });
+          recordMetric('slow_source', { source: attribution.source, durationMs });
+        }
       } catch {
         // Routing metrics must never affect the response.
       }

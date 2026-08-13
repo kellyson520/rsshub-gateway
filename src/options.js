@@ -257,6 +257,11 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     1024 * 1024,
     64 * 1024 ** 3,
   );
+  const slowSourceThresholdMs = (() => {
+    const raw = options.slowSourceThresholdMs ?? env.GATEWAY_SLOW_SOURCE_MS ?? 5000;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 5000;
+  })();
   const leaseMaxConcurrency = boundedInteger(
     options.leaseMaxConcurrency ?? env.GATEWAY_LEASE_MAX_CONCURRENCY,
     8,
@@ -309,6 +314,7 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     htmlBrotliMinBytes,
     htmlBrotliQuality,
     imageVariantLimiter,
+    slowSourceThresholdMs,
     leaseBackfillEnabled,
     leaseBackfillConcurrency,
     leaseProxyPort,

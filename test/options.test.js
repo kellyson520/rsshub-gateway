@@ -56,6 +56,13 @@ test('resolveGatewayOptions clamps values to bounds', () => {
   assert.equal(options.leaseMaxConcurrency, 32);
 });
 
+test('resolveGatewayOptions resolves the slow source threshold', () => {
+  assert.equal(resolveGatewayOptions({ secret: 'secret' }, ENV).slowSourceThresholdMs, 5000);
+  assert.equal(resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_SLOW_SOURCE_MS: '3000' }).slowSourceThresholdMs, 3000);
+  assert.equal(resolveGatewayOptions({ secret: 'secret', slowSourceThresholdMs: 0 }, ENV).slowSourceThresholdMs, 0);
+  assert.equal(resolveGatewayOptions({ secret: 'secret', slowSourceThresholdMs: 'abc' }, ENV).slowSourceThresholdMs, 5000);
+});
+
 test('resolveGatewayOptions parses blocked statuses from arrays and strings', () => {
   const fromArray = resolveGatewayOptions({ secret: 'secret', egressBlockedStatuses: [403, 429] }, ENV);
   assert.deepEqual([...fromArray.egressBlockedStatuses], [403, 429]);
