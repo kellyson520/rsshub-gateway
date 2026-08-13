@@ -96,6 +96,7 @@ export function createMediaTransport({
   now = () => Date.now(),
 } = {}) {
   const knownVideoSizes = new Map();
+  const videoPrefetchInflight = new Map();
   const KNOWN_SIZE_CAP = knownSizeCap;
   function rememberVideoSize(target, size) {
     const timestamp = now();
@@ -455,6 +456,70 @@ export function createMediaTransport({
     await Promise.all(workers);
   }
 
+  async function prefetchVideoFile(target, { size, shouldStop } = {}) {
+    if (!cache || !isVideoTarget(target)) return 0;
+    const inflight = videoPrefetchInflight.get(target);
+    if (inflight) return inflight;
+    const promise = (async () => {
+      try {
+        const resolved = await resolveMediaUrl(target);
+        if (!resolved?.url) return 0;
+        let fileSize = Number.isSafeInteger(size) && size > 0 ? size : knownVideoSize(target);
+        if (!(Number.isSafeInteger(fileSize) && fileSize > 0)) {
+          const probe = await fetchExternal(resolved.url, {
+            range: 'bytes=0-0',
+            circuit: false,
+            priority: 'background',
+          });
+          const probeRange = (probe.headers.get('content-range') || '').match(/\/(\d+)\s*$/);
+          const probedSize = probeRange ? Number(probeRange[1]) : null;
+          await probe.body?.cancel();
+          if (!(Number.isSafeInteger(probedSize) && probedSize > 0)) return 0;
+          fileSize = probedSize;
+          rememberVideoSize(target, probedSize);
+        }
+        const plan = sliceRanges(0, fileSize - 1, fileSize, { sliceSize, lookahead: fileSize });
+        if (!plan.ranges.length) return 0;
+        let fetched = 0;
+        let next = 0;
+        async function worker() {
+          while (next < plan.ranges.length) {
+            if (shouldStop?.()) return;
+            const part = plan.ranges[next];
+            next += 1;
+            if (part.start >= videoCacheMaxFileBytes) continue;
+            const existing = await cache.readRange(sliceKey(target, part.start), 'media', { namespace: 'public' });
+            if (existing && existing.size === part.end - part.start + 1) continue;
+            try {
+              const response = await fetchExternal(resolved.url, {
+                range: `bytes=${part.start}-${part.end}`,
+                circuit: false,
+                priority: 'background',
+              });
+              if (response?.ok) {
+                const stored = await storeVideoSlice(target, 'public', part, response);
+                if (stored) fetched += 1;
+              }
+            } catch {
+              // Background prefetch failures must never surface.
+            }
+          }
+        }
+        const workers = [];
+        for (let index = 0; index < Math.min(sliceFillConcurrency, plan.ranges.length); index += 1) {
+          workers.push(worker());
+        }
+        await Promise.all(workers);
+        if (fetched > 0) onMetric('media_prefetch_slices', { count: fetched, total: plan.ranges.length });
+        return fetched;
+      } finally {
+        videoPrefetchInflight.delete(target);
+      }
+    })();
+    videoPrefetchInflight.set(target, promise);
+    return promise;
+  }
+
   async function assembleSliceRange(target, resolvedUrl, namespace, parsed, size) {
     if (!cache) return null;
     const plan = sliceRanges(parsed.start, parsed.end, size, {
@@ -727,6 +792,7 @@ export function createMediaTransport({
     chunkManifest,
     imageVariantCacheUrl,
     fillVideoSlices,
+    prefetchVideoFile,
     sliceKey,
     rememberVideoSize,
     knownVideoSize,

@@ -545,3 +545,199 @@ test('assembly falls back to single fetch when the first slice fails', async () 
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('prefetchVideoFile caches every slice with bounded concurrency', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-prefetch-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 3);
+    const requested = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        requested.push(String(options.range));
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        const slice = body.subarray(start, end + 1);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inFlight -= 1;
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(slice.length),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceFillConcurrency: 2,
+    });
+    const target = 'https://www.iwara.tv/video/prefetch';
+    const fetched = await transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 });
+    assert.equal(fetched, 5);
+    assert.equal(maxInFlight, 2);
+    assert.equal(requested.length, 5);
+    for (const start of [0, 4194304, 8388608, 12582912, 16777216]) {
+      const range = `bytes=${start}-${start + 4194303}`;
+      assert.ok(requested.includes(range), `missing ${range}`);
+      const ranged = await cache.readRange(`${target}#slice=${start}`, 'media');
+      assert.ok(ranged, `slice ${start} not cached`);
+      assert.equal(ranged.size, 4 * 1024 * 1024);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('prefetchVideoFile deduplicates concurrent prefetches for the same target', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-prefetch-dedup-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 6);
+    let rangeRequests = 0;
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal: async (url, options = {}) => {
+        if (options.range) {
+          rangeRequests += 1;
+          const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+          const start = Number(match[1]);
+          const end = Number(match[2]);
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          return new Response(body.subarray(start, end + 1), {
+            status: 206,
+            headers: {
+              'content-type': 'video/mp4',
+              'content-range': `bytes ${start}-${end}/${body.length}`,
+            },
+          });
+        }
+        return new Response(body, {
+          headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+        });
+      },
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+    });
+    const target = 'https://www.iwara.tv/video/prefetch-dedup';
+    const [first, second] = await Promise.all([
+      transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 }),
+      transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 }),
+    ]);
+    assert.equal(first, 5);
+    assert.equal(second, 5);
+    assert.equal(rangeRequests, 5);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('prefetchVideoFile respects the video cache cap and skips cached slices', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-prefetch-cap-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 8);
+    const requested = [];
+    const transport = createMediaTransport({
+      cache,
+      videoCacheMaxFileBytes: 12 * 1024 * 1024,
+      fetchExternal: async (url, options = {}) => {
+        if (options.range) {
+          requested.push(String(options.range));
+          const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+          const start = Number(match[1]);
+          const end = Number(match[2]);
+          return new Response(body.subarray(start, end + 1), {
+            status: 206,
+            headers: {
+              'content-type': 'video/mp4',
+              'content-range': `bytes ${start}-${end}/${body.length}`,
+            },
+          });
+        }
+        return new Response(body, {
+          headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+        });
+      },
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+    });
+    const target = 'https://www.iwara.tv/video/prefetch-cap';
+    const fetched = await transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 });
+    assert.equal(fetched, 3);
+    assert.equal(requested.length, 3);
+    assert.ok(requested.includes('bytes=8388608-12582911'));
+    assert.ok(!requested.includes('bytes=12582912-16777215'));
+    const warmed = await transport.prefetchVideoFile(target, { size: 20 * 1024 * 1024 });
+    assert.equal(warmed, 0);
+    assert.equal(requested.length, 3);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('prefetchVideoFile probes the size when not provided and no-ops for non-video targets', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-prefetch-probe-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 9);
+    const requested = [];
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal: async (url, options = {}) => {
+        if (options.range) {
+          requested.push(String(options.range));
+          const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+          const start = Number(match[1]);
+          const end = Number(match[2]);
+          return new Response(body.subarray(start, end + 1), {
+            status: 206,
+            headers: {
+              'content-type': 'video/mp4',
+              'content-range': `bytes ${start}-${end}/${body.length}`,
+            },
+          });
+        }
+        return new Response(body, {
+          headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+        });
+      },
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+    });
+    const target = 'https://www.iwara.tv/video/prefetch-probe';
+    const fetched = await transport.prefetchVideoFile(target);
+    assert.equal(fetched, 5);
+    assert.ok(requested.includes('bytes=0-0'));
+    assert.equal(transport.knownVideoSize(target), 20 * 1024 * 1024);
+
+    let calls = 0;
+    const nonVideo = createMediaTransport({
+      cache,
+      fetchExternal: async () => { calls += 1; return new Response(body, { status: 200 }); },
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => false,
+    });
+    assert.equal(await nonVideo.prefetchVideoFile(target, { size: 20 * 1024 * 1024 }), 0);
+    assert.equal(calls, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
