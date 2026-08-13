@@ -1,0 +1,107 @@
+# Fetcher-API 协议（Sidecar-Fetcher ↔ rsshub-gateway）
+
+版本：v1（2026-08-13）｜状态：实现中，与 `src/dispatcher.js` 和 `sidecar/fetcher-*` 同步演进
+
+Sidecar-Fetcher 是独立于网关基座的站点抓取进程，负责"向源站抓取数据、解析组装 RSS"。
+媒体代理、缓存、指标、降级回退全部由网关基座完成。本协议是两者之间唯一的契约。
+
+## 1 总体约定
+
+- 传输：HTTP/1.1 + JSON（`content-type: application/json; charset=utf-8`）。
+- 地址：网关通过 `gateway-routes.yaml` 中 `backend: "sidecar://host:port"` 注册，调用 `http://host:port/fetch`。
+- 超时：网关侧默认 20s（`createDispatcher` 的 `sidecarTimeoutMs`），覆盖 sidecar 冷启动（browser-fetch 首次拉起约 10-15s）；sidecar 应尽快返回。
+- 无鉴权（v1）：sidecar 仅在内网可达；如需保护，在 sidecar 前置反向代理上加认证。
+
+## 2 端点
+
+### 2.1 `POST /fetch` — 抓取并组装 RSS
+
+请求体（网关 → sidecar）：
+
+```json
+{
+  "routeId": "/iwara/users/:username/:kind?",
+  "params": { "username": "example", "kind": "video" },
+  "egressLane": "public",
+  "cookies": {},
+  "cacheTtl": 900
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `routeId` | string | 注册表中的路由模式，sidecar 据此校验是否支持 |
+| `params` | object | 从请求路径提取的参数（`:name`/`:name?`/`*`） |
+| `egressLane` | string | 建议出口域（`public`/`sticky`/`session`），sidecar 可忽略 |
+| `cookies` | object | 客户端 Cookie（可选，透传） |
+| `cacheTtl` | int | 网关建议的缓存 TTL（秒），sidecar 可用 `cacheHint.ttl` 覆盖 |
+
+响应体（sidecar → 网关）：
+
+```json
+{
+  "rssXml": "<?xml version=\"1.0\"...<rss>...</rss>",
+  "mediaUrls": ["https://source.example/thumbnail-00.jpg"],
+  "cacheHint": { "ttl": 900 }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `rssXml` | string | 是 | 完整 RSS 2.0/Atom XML 字符串，链接使用源站原始 URL |
+| `mediaUrls` | string[] | 否 | 源站原始媒体链接列表（缩略图/文件），供网关预判与统计 |
+| `cacheHint.ttl` | int | 否 | 覆盖网关缓存 TTL（秒）；缺省用请求的 `cacheTtl` 或网关默认 |
+
+网关收到后：按 `cacheHint.ttl` 缓存（kind `rss`），再经统一后处理（媒体链接重写为网关代理地址、指标、压缩）输出。
+
+### 2.2 `GET /healthz` — 健康检查
+
+```json
+{ "ok": true, "transport": "worker" }
+```
+
+`ok: false` 或非 200 视为不健康。
+
+## 3 错误约定
+
+sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
+
+| 状态码 | 含义 |
+| --- | --- |
+| 400 | 不支持的 `routeId` / 参数缺失或非法（如未知 ranking period） |
+| 404 | 源站对象不存在（如 iwara 用户不存在） |
+| 502 | 源站抓取失败 / sidecar 内部错误 |
+
+网关侧处理：`fallback_upstream: true` 的路由在任意错误（网络不可达、超时、非 2xx、`rssXml` 缺失）时自动降级到上游 RSSHub；
+未开启 fallback 的路由返回 502。sidecar 进程崩溃（连接拒绝）同样触发降级，不会影响网关与其他路由。
+
+## 4 路由模式
+
+`gateway-routes.yaml` 支持：
+
+- `:name` — 匹配一个路径段并捕获为参数（URL 解码）。
+- `:name?` — 可选尾段，缺省时不捕获。
+- `*` — 匹配剩余全部路径（必须是最后一段）。
+- 字面量段 — 精确匹配。
+- 注册顺序优先：多条路由命中时取第一条。
+
+内置路由优先级低于 Dispatcher：`routes.yaml` 注册了 `/ehviewer/ranking/:period?` 时，sidecar 将接管内置排名路由；
+未注册时内置路由保持现状。
+
+## 5 参考实现
+
+| Sidecar | 路由 | 源站 | 说明 |
+| --- | --- | --- | --- |
+| `sidecar/fetcher-iwara` | `/iwara/users/:username/:kind?` | api.iwara.tv | 用户视频/图片 feed；token 自动刷新；browser-fetch 过 Cloudflare |
+| `sidecar/fetcher-eh` | `/ehviewer/ranking/:period?` | e-hentai.org | 排名 feed；`period` ∈ day/month/year/all |
+
+两者共用 `src/fetcher-server.js`（HTTP 脚手架：`/fetch`、`/healthz`、错误映射）与
+`src/browser-fetch.js`（curl_cffi 浏览器指纹 + Mihomo 出口）。
+
+## 6 新增站点指引
+
+1. 新建 `sidecar/fetcher-<name>/fetcher.js`：实现 `createXxxFetcher({ fetchJson/fetchHtml })` 与 `handleFetch(body)`，返回 `{ rssXml, mediaUrls, cacheHint }`，错误抛 `HttpError(status, message)`。
+2. 新建 `sidecar/fetcher-<name>/server.js`：复用 `createFetcherServer` + `browser-fetch`，端口 `FETCHER_PORT`。
+3. 在 `gateway-routes.yaml` 注册路由，`fallback_upstream: true` 保持可用性。
+4. 在 `docker-compose` 疑难站点增强模板中增加服务（同镜像，`command: ["fetcher-<name>"]`）。
+5. 优先向上游 RSSHub 提交路由改进；仅 CF 强校验等场景才开发 sidecar。

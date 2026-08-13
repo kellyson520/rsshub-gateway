@@ -62,6 +62,7 @@ test('dispatcher routes to the sidecar and applies the unified feed transform', 
     let rsshubCalls = 0;
     const server = createGatewayServer({
       secret: 'secret',
+      cache: false,
       routesFile,
       fetchRssHub: async () => {
         rsshubCalls += 1;
@@ -95,6 +96,7 @@ test('dispatcher falls back to upstream RSSHub when the sidecar fails and fallba
     let rsshubCalls = 0;
     const server = createGatewayServer({
       secret: 'secret',
+      cache: false,
       routesFile,
       fetchRssHub: async () => {
         rsshubCalls += 1;
@@ -120,6 +122,7 @@ test('dispatcher returns 502 when the sidecar fails without fallback', async () 
     let rsshubCalls = 0;
     const server = createGatewayServer({
       secret: 'secret',
+      cache: false,
       routesFile,
       fetchRssHub: async () => {
         rsshubCalls += 1;
@@ -178,6 +181,7 @@ test('dispatcher unmatched paths still proxy upstream RSSHub transparently', asy
     let rsshubCalls = 0;
     const server = createGatewayServer({
       secret: 'secret',
+      cache: false,
       routesFile,
       fetchRssHub: async () => {
         rsshubCalls += 1;
@@ -188,6 +192,41 @@ test('dispatcher unmatched paths still proxy upstream RSSHub transparently', asy
     assert.equal(response.status, 200);
     assert.match(body, /<title>Upstream<\/title>/);
     assert.equal(rsshubCalls, 1);
+  } finally {
+    await new Promise((resolve) => sidecar.server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('dispatcher sidecar overrides a builtin ranking route when registered', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-int-'));
+  const sidecar = await sidecarServer(async () => ({
+    status: 200,
+    rssXml: `<?xml version="1.0"?><rss version="2.0"><channel><title>EhSidecar</title><item><title>Ranked</title><link>https://e-hentai.org/g/1/2/</link></item></channel></rss>`,
+    mediaUrls: [],
+    cacheHint: { ttl: 300 },
+  }));
+  try {
+    const routesFile = path.join(root, 'routes.yaml');
+    await writeFile(routesFile, `
+routes:
+  - routeId: "/ehviewer/ranking/:period?"
+    backend: "sidecar://127.0.0.1:${sidecar.port}"
+    fallback_upstream: true
+`);
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache: false,
+      routesFile,
+      fetchExternalDocument: async () => {
+        throw new Error('builtin ranking must not be used');
+      },
+    });
+    const { response, body } = await request(server, '/ehviewer/ranking/month');
+    assert.equal(response.status, 200);
+    assert.match(body, /<title>EhSidecar<\/title>/);
+    assert.equal(sidecar.calls.length, 1);
+    assert.equal(sidecar.calls[0].params.period, 'month');
   } finally {
     await new Promise((resolve) => sidecar.server.close(resolve));
     await rm(root, { recursive: true, force: true });

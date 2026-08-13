@@ -123,7 +123,7 @@ test('fetcher supports image kind', async () => {
 
 test('fetcher-iwara HTTP server wires /fetch and /healthz', async () => {
   const { fetchJson } = fakeIwaraApi();
-  const { createFetcherServer } = await import('../sidecar/fetcher-iwara/server.js');
+  const { createFetcherServer } = await import('../src/fetcher-server.js');
   const fetcher = createIwaraFetcher({ fetchJson, tokenProvider: async () => 'refresh' });
   const server = createFetcherServer({ fetcher });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

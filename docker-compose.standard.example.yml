@@ -1,0 +1,45 @@
+# 标准配套模式（推荐）：RSSHub 实例 + rsshub-gateway，不启用任何 Sidecar-Fetcher。
+# 全部请求透传上游 RSSHub；网关只做媒体代理、缓存、出口隧道、监控增强。
+#
+# 使用：
+#   cp docker-compose.standard.example.yml docker-compose.yml
+#   cp config/sources.example.json config/sources.json      # 可选，源站会话
+#   cp config/mihomo/config.example.yaml config/mihomo/config.yaml  # 按需填订阅
+#   mkdir -p config/mihomo && cp config/mihomo/config.example.yaml config/mihomo/config.yaml
+#   docker compose up -d --build
+services:
+  rsshub:
+    image: diygod/rsshub:chromium-bundled
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks:
+      - gateway
+
+  gateway:
+    build: .
+    container_name: rsshub-gateway
+    restart: unless-stopped
+    depends_on:
+      - rsshub
+    ports:
+      - 127.0.0.1:1300:1300
+    environment:
+      RSSHUB_URL: http://rsshub:1200
+      GATEWAY_SECRET: change-me-to-a-long-random-secret
+      GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
+      GATEWAY_CACHE_MAX_BYTES: "5368709120"
+      # Dispatcher 路由注册表：不配置 = 纯透明增强网关
+      GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/sources.json:/app/config/sources.json:ro
+      - gateway-cache:/var/cache/rsshub-gateway
+    networks:
+      - gateway
+
+networks:
+  gateway: {}
+
+volumes:
+  gateway-cache: {}

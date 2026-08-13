@@ -270,39 +270,6 @@ export function createRequestHandler(deps) {
       });
       return;
     }
-    const rankingMatch = requestUrl.pathname.match(/^\/ehviewer\/ranking(?:\/(month|year|all))?$/);
-    if (rankingMatch) {
-      const period = rankingMatch[1] || 'day';
-      try {
-        const remote = await fetchExternalDocument(rankingTarget(period), undefined, 'html');
-        if (!remote.ok) {
-          writeText(res, remote.status, 'source unavailable\n');
-          return;
-        }
-        const body = await readLimited(remote);
-        const feed = renderRankingFeed(parseRankingHtml(body, { period }));
-        const output = transformFeed(feed, {
-          baseUrl: publicBaseUrl(req),
-          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
-          secret,
-          signedTargetMetadata: { egressScope: 'public' },
-        });
-        writeText(res, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
-      } catch (error) {
-        if (error instanceof GatewayUpstreamError) {
-          logger.error('ehviewer_failure', {
-            source: error.source,
-            code: error.code,
-            status: error.status,
-            attempts: error.attempts,
-          });
-          writeGatewayError(res, error);
-        } else {
-          writeText(res, 502, 'source unavailable\n');
-        }
-      }
-      return;
-    }
     const dispatched = dispatcher?.match(requestUrl.pathname) || null;
     if (dispatched?.route.backend.startsWith('sidecar://')) {
       const { route, params } = dispatched;
@@ -346,6 +313,39 @@ export function createRequestHandler(deps) {
         await serveRssHubPassthrough(req, res, requestUrl, attribution);
         return;
       }
+    }
+    const rankingMatch = requestUrl.pathname.match(/^\/ehviewer\/ranking(?:\/(month|year|all))?$/);
+    if (rankingMatch) {
+      const period = rankingMatch[1] || 'day';
+      try {
+        const remote = await fetchExternalDocument(rankingTarget(period), undefined, 'html');
+        if (!remote.ok) {
+          writeText(res, remote.status, 'source unavailable\n');
+          return;
+        }
+        const body = await readLimited(remote);
+        const feed = renderRankingFeed(parseRankingHtml(body, { period }));
+        const output = transformFeed(feed, {
+          baseUrl: publicBaseUrl(req),
+          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
+          secret,
+          signedTargetMetadata: { egressScope: 'public' },
+        });
+        writeText(res, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+      } catch (error) {
+        if (error instanceof GatewayUpstreamError) {
+          logger.error('ehviewer_failure', {
+            source: error.source,
+            code: error.code,
+            status: error.status,
+            attempts: error.attempts,
+          });
+          writeGatewayError(res, error);
+        } else {
+          writeText(res, 502, 'source unavailable\n');
+        }
+      }
+      return;
     }
     if (requestUrl.pathname.startsWith('/ehviewer/ranking/')) {
       writeText(res, 404, 'not found\n');

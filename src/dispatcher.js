@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
-const DEFAULT_SIDECAR_TIMEOUT_MS = 10_000;
+const DEFAULT_SIDECAR_TIMEOUT_MS = 20_000;
 
 function compilePattern(routeId) {
   const segments = String(routeId).split('/').filter(Boolean);

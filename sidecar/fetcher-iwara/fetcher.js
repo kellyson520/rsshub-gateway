@@ -6,13 +6,8 @@ import {
   renderIwaraFeed,
 } from '../../src/adapters/iwara.js';
 
-export class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
+import { HttpError } from '../../src/fetcher-server.js';
+export { HttpError };
 const SUPPORTED_ROUTE_IDS = new Set([
   '/iwara/users/:username/:kind?',
   '/iwara/users/:username',

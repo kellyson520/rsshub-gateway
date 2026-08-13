@@ -23,6 +23,12 @@ routes:
   # - routeId: "/iwara/users/:username/:kind?"
   #   backend: "builtin://iwara"
 
+  # 示例：使用独立 fetcher-eh sidecar 服务 E-Hentai 排名 feed
+  - routeId: "/ehviewer/ranking/:period?"
+    backend: "sidecar://fetcher-eh:8001"
+    fallback_upstream: true
+    cacheTtl: 300
+
   # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
   # - routeId: "/custom/:id"
   #   backend: "sidecar://fetcher-custom:8000"

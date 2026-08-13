@@ -16,6 +16,9 @@ case "${1:-}" in
   fetcher-iwara)
     exec node sidecar/fetcher-iwara/server.js
     ;;
+  fetcher-eh)
+    exec node sidecar/fetcher-eh/server.js
+    ;;
   *)
     exec node src/server.js
     ;;

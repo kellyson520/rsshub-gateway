@@ -1,0 +1,71 @@
+# 疑难站点增强模式：RSSHub + rsshub-gateway + 按需启用的 Sidecar-Fetcher。
+# 绝大多数路由走 RSSHub；gateway-routes.yaml 注册的个别路由由 sidecar 兜底；
+# sidecar 故障自动回退 RSSHub（fallback_upstream: true），不中断服务。
+#
+# 使用：同 standard 模板，另需：
+#   cp gateway-routes.example.yaml gateway-routes.yaml   # 注册 sidecar 路由
+#   docker compose up -d --build
+services:
+  rsshub:
+    image: diygod/rsshub:chromium-bundled
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks:
+      - gateway
+
+  gateway:
+    build: .
+    container_name: rsshub-gateway
+    restart: unless-stopped
+    depends_on:
+      - rsshub
+    ports:
+      - 127.0.0.1:1300:1300
+    environment:
+      RSSHUB_URL: http://rsshub:1200
+      GATEWAY_SECRET: change-me-to-a-long-random-secret
+      GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
+      GATEWAY_CACHE_MAX_BYTES: "5368709120"
+      GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/sources.json:/app/config/sources.json:ro
+      - ./gateway-routes.yaml:/app/config/gateway-routes.yaml:ro
+      - gateway-cache:/var/cache/rsshub-gateway
+    networks:
+      - gateway
+
+  fetcher-iwara:
+    build: .
+    container_name: fetcher-iwara
+    restart: unless-stopped
+    command: ["fetcher-iwara"]
+    environment:
+      FETCHER_PORT: "8000"
+      FETCHD_PROXY: http://127.0.0.1:7890
+      SOURCE_CONFIG_FILE: /app/config/sources.json
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/sources.json:/app/config/sources.json:ro
+    networks:
+      - gateway
+
+  fetcher-eh:
+    build: .
+    container_name: fetcher-eh
+    restart: unless-stopped
+    command: ["fetcher-eh"]
+    environment:
+      FETCHER_PORT: "8001"
+      FETCHD_PROXY: http://127.0.0.1:7890
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+    networks:
+      - gateway
+
+networks:
+  gateway: {}
+
+volumes:
+  gateway-cache: {}
