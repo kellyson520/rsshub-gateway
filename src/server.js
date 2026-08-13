@@ -35,6 +35,7 @@ import {
 } from './adapters/iwara.js';
 import { createRequestService } from './infrastructure/request-service.js';
 import { createLeaseStore, createSignedChunk } from './download-lease.js';
+import { createDownloadSessionStore } from './download-session.js';
 import { createRequestHandler } from './request-handler.js';
 import { installGracefulShutdown } from './graceful-shutdown.js';
 import { createLeaseProxy } from './lease-proxy.js';
@@ -879,6 +880,7 @@ export function createGatewayServer(options = {}) {
     : { enqueue: () => {} };
 
   const leaseStore = options.leaseStore || createLeaseStore();
+  const downloadSessions = createDownloadSessionStore();
   const leaseBackfillQueue = leaseBackfillEnabled ? createLeaseBackfillQueue({
     mediaTransport,
     fetchExternal,
@@ -922,6 +924,7 @@ export function createGatewayServer(options = {}) {
     currentEhPrefetchConcurrency,
     discoverCachedEhGallery,
     discoverEhGallery,
+    downloadSessions,
     egressAdapter,
     egressPool,
     egressProbeTargets,

@@ -1757,6 +1757,73 @@ test('serves chunk manifests and signed chunk ranges for media', async () => {
   }
 });
 
+test('download sessions track chunk progress for resume', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-'));
+  const mediaBytes = Buffer.alloc(1024 * 1024, 7);
+  const target = 'https://page.example.hath.network/h/video.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), target);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const createdResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(createdResponse.status, 200);
+    const session = await createdResponse.json();
+    assert.equal(session.count, 4);
+    assert.equal(session.doneChunks, 0);
+    assert.equal(session.doneBytes, 0);
+    assert.equal(session.chunks.length, 4);
+    assert.deepEqual(session.chunks.map((chunk) => chunk.status), ['pending', 'pending', 'pending', 'pending']);
+    assert.equal(session.chunks[0].size, 262144);
+
+    const chunkUrl = new URL(session.chunks[0].url);
+    const chunkResponse = await fetch(`http://127.0.0.1:${port}${chunkUrl.pathname}${chunkUrl.search}`);
+    assert.equal(chunkResponse.status, 206);
+    assert.equal(chunkResponse.headers.get('content-range'), `bytes 0-262143/${1024 * 1024}`);
+    await chunkResponse.text();
+
+    const progressResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${session.id}`);
+    assert.equal(progressResponse.status, 200);
+    const progress = await progressResponse.json();
+    assert.equal(progress.doneChunks, 1);
+    assert.equal(progress.doneBytes, 262144);
+    assert.equal(progress.chunks[0].status, 'done');
+    assert.equal(progress.chunks[1].status, 'pending');
+
+    const missingResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/not-a-session`);
+    assert.equal(missingResponse.status, 404);
+    const postOther = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`, { method: 'POST' });
+    assert.equal(postOther.status, 405);
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
 test('media download mode adds content-disposition', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-download-'));
   const mediaBytes = Buffer.alloc(1024, 7);

@@ -32,6 +32,26 @@ import {
   renderIwaraReaderPage,
 } from './adapters/iwara.js';
 
+function downloadSessionView(session) {
+  return {
+    id: session.id,
+    size: session.size,
+    chunkSize: session.chunkSize,
+    count: session.chunks.length,
+    doneChunks: session.chunks.filter((chunk) => chunk.status === 'done').length,
+    doneBytes: session.doneBytes,
+    urls: session.chunks.map((chunk) => chunk.url),
+    chunks: session.chunks.map((chunk) => ({
+      index: chunk.index,
+      start: chunk.start,
+      end: chunk.end,
+      size: chunk.size,
+      status: chunk.status,
+      url: chunk.url,
+    })),
+  };
+}
+
 function sourceMetricName(source) {
   const name = String(source || '')
     .trim()
@@ -50,6 +70,7 @@ export function createRequestHandler(deps) {
     currentEhPrefetchConcurrency,
     discoverCachedEhGallery,
     discoverEhGallery,
+    downloadSessions,
     egressAdapter,
     egressPool,
     egressProbeTargets,
@@ -101,7 +122,9 @@ export function createRequestHandler(deps) {
     warmEhMedia
   } = deps;
   async function handleRequest(req, res, attribution) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const downloadCreate = req.method === 'POST'
+      && /^\/_gateway\/download\/[^/]+$/.test(String(req.url || '').split('?')[0]);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate) {
       writeText(res, 405, 'method not allowed\n');
       return;
     }
@@ -325,6 +348,71 @@ export function createRequestHandler(deps) {
       }
       return;
     }
+    const downloadMatch = requestUrl.pathname.match(/^\/_gateway\/download\/([^/]+)$/);
+    if (downloadMatch) {
+      if (req.method === 'POST') {
+        let verified;
+        try {
+          verified = verifySignedTarget(downloadMatch[1], secret);
+        } catch {
+          writeText(res, 403, 'resource unavailable\n');
+          return;
+        }
+        const wanted = Number.parseInt(requestUrl.searchParams.get('chunks') || '', 10);
+        const size = await mediaSizeFor(verified.url);
+        if (!size) {
+          writeText(res, 503, 'size unavailable\n');
+          return;
+        }
+        const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
+        const sessionId = crypto.randomUUID();
+        const entries = [];
+        for (let index = 0; index < count; index += 1) {
+          const start = index * chunkSize;
+          const end = Math.min(size - 1, start + chunkSize - 1);
+          const token = createSignedChunk({
+            url: verified.url,
+            start,
+            end,
+            secret,
+            metadata: {
+              egressScope: verified.egressScope,
+              source: verified.source,
+              sessionId,
+              index,
+            },
+          });
+          entries.push({
+            index,
+            start,
+            end,
+            size: end - start + 1,
+            url: `${publicBaseUrl(req)}/_gateway/chunk/${token}`,
+          });
+        }
+        const session = downloadSessions.create({
+          id: sessionId,
+          target: verified.url,
+          size,
+          chunkSize,
+          chunks: entries,
+        });
+        recordMetric('download_session_created');
+        writeJson(res, 200, downloadSessionView(session));
+        return;
+      }
+      if (req.method === 'GET') {
+        const session = downloadSessions.get(downloadMatch[1]);
+        if (!session) {
+          writeText(res, 404, 'download session not found\n');
+          return;
+        }
+        writeJson(res, 200, downloadSessionView(session));
+        return;
+      }
+      writeText(res, 405, 'method not allowed\n');
+      return;
+    }
     const chunkMatch = requestUrl.pathname.match(/^\/_gateway\/chunk\/(.+)$/);
     if (chunkMatch) {
       let chunk;
@@ -355,8 +443,19 @@ export function createRequestHandler(deps) {
         headers['content-disposition'] = `attachment; filename="chunk-${chunk.start}-${chunk.end}.bin"`;
         res.writeHead(remote.status, headers);
         if (req.method === 'HEAD') return res.end();
-        if (remote.body) Readable.fromWeb(remote.body).pipe(res);
-        else res.end();
+        if (remote.body) {
+          const stream = Readable.fromWeb(remote.body);
+          if (chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
+            stream.on('end', () => {
+              if (downloadSessions.markChunkDone(chunk.sessionId, chunk.index)) {
+                recordMetric('download_chunk_completed');
+              }
+            });
+          }
+          stream.pipe(res);
+        } else {
+          res.end();
+        }
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
           writeGatewayError(res, error);
