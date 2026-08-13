@@ -11,6 +11,13 @@
 - [x] Step 3: 全量测试通过（264+ 基线）
 - [x] Step 4: README 更新探测语义
 - [x] Step 5: 新增 `.github/workflows/ci.yml`（node 24，npm ci + npm test）
-- [ ] Step 6: 生产同步重建；验证 infra healthyScopes/sessionLanes 与 GitHub Actions 首次运行
+- [x] Step 6: 生产同步重建；验证 infra healthyScopes/sessionLanes 与 GitHub Actions 首次运行
 
 **注：** `allowSessionRetry`（upstream.js）需要调用方先解析好 `sessionDispatcher/sessionCredentials` 才有效，而文档/媒体链路已走 `fetchGatewayTarget` 的认证挑战升级（server.js `authenticationChallenge`），故不强行全局接线。
+
+## 结果
+
+- 生产 12 条公共 lane 全部恢复 `['public','sticky']`；`adapter.sessionLanes` 从 0 → 12（启动即分配）。
+- 修复过程中发现并补上生产 mihomo 配置缺失的 `SESSION_LANE_01..12` 组与 `7921..7932` 监听器（原配置只有 EGRESS_LANE，会话 lane 的 PUT 快速失败 → 静默降级 → 502）。
+- `config/mihomo/config.example.yaml` 补齐完整组/监听器形态，README 记录部署前提。
+- 回归：healthz/readyz ok、ehviewer ranking 200、iwara feed 200、media 206 分片、metrics 正常；全量 267/267 通过。
