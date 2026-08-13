@@ -154,6 +154,19 @@ export function createMihomoEgressAdapter({
     });
   }
 
+  async function probeTarget(target, dispatcher, method, laneId) {
+    const response = await probeFetchImpl(target, {
+      method,
+      dispatcher,
+      redirect: 'manual',
+      headers: { 'x-probe-lane': laneId },
+      signal: AbortSignal.timeout(sourceProbeTimeoutMs),
+    });
+    const ok = response.status >= 200 && response.status < 400;
+    await response.body?.cancel();
+    return ok;
+  }
+
   async function probeLane(lane, scope) {
     const targets = sourceProbeTargets[scope] || [];
     if (!targets.length) return true;
@@ -161,17 +174,26 @@ export function createMihomoEgressAdapter({
     const cached = probeResults.get(cacheKey);
     if (cached && now() - cached.at < sourceProbeCacheMs) return cached.ok;
     let ok = false;
-    try {
-      const response = await probeFetchImpl(targets[0], {
-        method: 'HEAD',
-        dispatcher: lane.dispatcher,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(sourceProbeTimeoutMs),
-      });
-      ok = response.status >= 200 && response.status < 400;
-      await response.body?.cancel();
-    } catch {
-      ok = false;
+    for (const target of targets) {
+      let targetOk = false;
+      try {
+        targetOk = await probeTarget(target, lane.dispatcher, 'HEAD', lane.id);
+      } catch {
+        targetOk = false;
+      }
+      if (!targetOk) {
+        // Some sites reject HEAD probes (403 bot guard, 405/501 method policy)
+        // while serving GET traffic; retry once with GET and discard the body.
+        try {
+          targetOk = await probeTarget(target, lane.dispatcher, 'GET', lane.id);
+        } catch {
+          targetOk = false;
+        }
+      }
+      if (targetOk) {
+        ok = true;
+        break;
+      }
     }
     probeResults.set(cacheKey, { at: now(), ok });
     return ok;
