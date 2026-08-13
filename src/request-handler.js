@@ -57,6 +57,9 @@ function withPrefetchStatus(view, target, prefetchStatus) {
   return { ...view, prefetch: prefetchStatus?.(target) ?? null };
 }
 
+const DEFAULT_PREFETCH_WAIT_MS = 30_000;
+const MAX_PREFETCH_WAIT_MS = 60_000;
+
 function sourceMetricName(source) {
   const name = String(source || '')
     .trim()
@@ -354,6 +357,31 @@ export function createRequestHandler(deps) {
           writeText(res, 502, 'source unavailable\n');
         }
       }
+      return;
+    }
+    const downloadWaitMatch = requestUrl.pathname.match(/^\/_gateway\/download\/([^/]+)\/wait$/);
+    if (downloadWaitMatch) {
+      if (req.method !== 'GET') {
+        writeText(res, 405, 'method not allowed\n');
+        return;
+      }
+      const session = await downloadSessions.get(downloadWaitMatch[1]);
+      if (!session) {
+        writeText(res, 404, 'download session not found\n');
+        return;
+      }
+      const waitMs = Math.min(
+        Math.max(Number.parseInt(requestUrl.searchParams.get('timeout') || '', 10) || DEFAULT_PREFETCH_WAIT_MS, 0),
+        MAX_PREFETCH_WAIT_MS,
+      );
+      const deadline = Date.now() + waitMs;
+      let prefetch;
+      while (true) {
+        prefetch = prefetchStatus?.(session.target) ?? null;
+        if (!prefetch || prefetch.status === 'done' || Date.now() >= deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(1, deadline - Date.now()))));
+      }
+      writeJson(res, 200, { prefetch, timedOut: prefetch ? prefetch.status !== 'done' : false });
       return;
     }
     const downloadMatch = requestUrl.pathname.match(/^\/_gateway\/download\/([^/]+)$/);

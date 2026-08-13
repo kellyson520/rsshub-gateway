@@ -2454,3 +2454,190 @@ test('download session for a non-video target reports no prefetch', async () => 
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('download session wait resolves once the video prefetch completes', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-wait-'));
+  const cache = createResponseCache({ root });
+  const mediaBytes = Buffer.alloc(12 * 1024 * 1024, 4);
+  const videoId = 'wait-video';
+  const target = `https://www.iwara.tv/video/${videoId}`;
+  const cdnUrl = 'https://cdn.iwara.tv/video/wait.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache,
+    downloadSessionFile: path.join(root, 'download-sessions.json'),
+    sourceConfig: { iwara: { token: fakeIwaraAccessToken() } },
+    fetchdFetch: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl === `https://api.iwara.tv/video/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ({ fileUrl: `https://api.iwara.tv/file/${videoId}` }) };
+      }
+      if (requestUrl === `https://api.iwara.tv/file/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ([{ name: '1080', src: { view: cdnUrl } }]) };
+      }
+      throw new Error(`unexpected fetchd url ${requestUrl}`);
+    },
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), cdnUrl);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const createdResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(createdResponse.status, 200);
+    const created = await createdResponse.json();
+    const startedAt = Date.now();
+    const waitResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${created.id}/wait?timeout=5000`);
+    assert.equal(waitResponse.status, 200);
+    const waited = await waitResponse.json();
+    assert.equal(waited.timedOut, false);
+    assert.equal(waited.prefetch.status, 'done');
+    assert.equal(waited.prefetch.fetchedSlices, 3);
+    assert.equal(waited.prefetch.totalSlices, 3);
+    assert.ok(Date.now() - startedAt >= 50, 'wait should block until the prefetch finishes');
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('download session wait reports timedOut while the prefetch is still running', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-wait-timeout-'));
+  const cache = createResponseCache({ root });
+  const mediaBytes = Buffer.alloc(12 * 1024 * 1024, 7);
+  const videoId = 'wait-timeout-video';
+  const target = `https://www.iwara.tv/video/${videoId}`;
+  const cdnUrl = 'https://cdn.iwara.tv/video/wait-timeout.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache,
+    downloadSessionFile: path.join(root, 'download-sessions.json'),
+    sourceConfig: { iwara: { token: fakeIwaraAccessToken() } },
+    fetchdFetch: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl === `https://api.iwara.tv/video/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ({ fileUrl: `https://api.iwara.tv/file/${videoId}` }) };
+      }
+      if (requestUrl === `https://api.iwara.tv/file/${videoId}`) {
+        return { ok: true, status: 200, json: async () => ([{ name: '1080', src: { view: cdnUrl } }]) };
+      }
+      throw new Error(`unexpected fetchd url ${requestUrl}`);
+    },
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), cdnUrl);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const createdResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(createdResponse.status, 200);
+    const created = await createdResponse.json();
+    const waitResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${created.id}/wait?timeout=250`);
+    assert.equal(waitResponse.status, 200);
+    const waited = await waitResponse.json();
+    assert.equal(waited.timedOut, true);
+    assert.equal(waited.prefetch.status, 'running');
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('download session wait returns immediately for non-video targets and 404s for missing sessions', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsession-wait-null-'));
+  const mediaBytes = Buffer.alloc(1024 * 1024, 3);
+  const target = 'https://page.example.hath.network/h/video.mp4';
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: createResponseCache({ root }),
+    downloadSessionFile: path.join(root, 'download-sessions.json'),
+    fetchExternal: async (url, request = {}) => {
+      assert.equal(String(url), target);
+      if (request.range) {
+        const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+        assert.ok(match, `unexpected range ${request.range}`);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        return new Response(mediaBytes.subarray(start, end + 1), {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+            'accept-ranges': 'bytes',
+          },
+        });
+      }
+      return new Response(mediaBytes, {
+        status: 200,
+        headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+      });
+    },
+  });
+  try {
+    const token = createSignedTarget(target, 'secret');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const createdResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${token}?chunks=4`, { method: 'POST' });
+    assert.equal(createdResponse.status, 200);
+    const created = await createdResponse.json();
+    const startedAt = Date.now();
+    const waitResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/${created.id}/wait?timeout=5000`);
+    assert.equal(waitResponse.status, 200);
+    const waited = await waitResponse.json();
+    assert.equal(waited.prefetch, null);
+    assert.equal(waited.timedOut, false);
+    assert.ok(Date.now() - startedAt < 500, 'non-video wait should return immediately');
+    const missingResponse = await fetch(`http://127.0.0.1:${port}/_gateway/download/not-a-session/wait`);
+    assert.equal(missingResponse.status, 404);
+    const postWait = await fetch(`http://127.0.0.1:${port}/_gateway/download/${created.id}/wait`, { method: 'POST' });
+    assert.equal(postWait.status, 405);
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
