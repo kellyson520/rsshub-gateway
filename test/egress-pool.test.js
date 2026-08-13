@@ -178,3 +178,88 @@ test('filters lanes by healthyScopes and applies host scope overrides', async ()
   assert.ok(['lane-a', 'lane-b'].includes(publicLease.laneId));
   publicLease.release({ status: 200 });
 });
+
+test('prefers the lower-latency lane when loads are tied', async () => {
+  let clock = 0;
+  const pool = createEgressPool({
+    lanes: [
+      { id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') },
+      { id: 'lane-b', proxyName: 'node-b', proxyUrl: 'http://127.0.0.1:7902', dispatcher: dispatcher('b') },
+    ],
+    minConcurrencyPerLane: 3,
+    maxConcurrencyPerLane: 6,
+    now: () => clock,
+  });
+  const seedA = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 100;
+  seedA.release({ status: 200 });
+  const seedB = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 400;
+  seedB.release({ status: 200 });
+
+  const first = await pool.acquire({ host: 'e-hentai.org' });
+  const second = await pool.acquire({ host: 'e-hentai.org' });
+  assert.equal(first.laneId, 'lane-a');
+  assert.equal(second.laneId, 'lane-b');
+  first.release({ status: 200 });
+  second.release({ status: 200 });
+});
+
+test('exposes per-lane latency samples in stats', async () => {
+  let clock = 0;
+  const pool = createEgressPool({
+    lanes: [{ id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') }],
+    now: () => clock,
+  });
+  const lease = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 250;
+  lease.release({ status: 200 });
+  const lane = pool.stats().lanes[0];
+  assert.equal(lane.samples, 1);
+  assert.equal(lane.ewmaMs, 250);
+});
+
+test('keeps latency state across lane refreshes', async () => {
+  let clock = 0;
+  const pool = createEgressPool({
+    lanes: [{ id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') }],
+    now: () => clock,
+  });
+  const lease = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 150;
+  lease.release({ status: 200 });
+  pool.setLanes([{ id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') }]);
+  const lane = pool.stats().lanes[0];
+  assert.equal(lane.samples, 1);
+  assert.equal(lane.ewmaMs, 150);
+});
+
+test('clamps extreme durations when scoring lane latency', async () => {
+  let clock = 0;
+  const pool = createEgressPool({
+    lanes: [{ id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') }],
+    now: () => clock,
+  });
+  const lease = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 30_000;
+  lease.release({ status: 200 });
+  assert.equal(pool.stats().lanes[0].ewmaMs, 10_000);
+});
+
+test('smooths latency samples with an exponential moving average', async () => {
+  let clock = 0;
+  const pool = createEgressPool({
+    lanes: [{ id: 'lane-a', proxyName: 'node-a', proxyUrl: 'http://127.0.0.1:7901', dispatcher: dispatcher('a') }],
+    now: () => clock,
+  });
+  for (let index = 0; index < 3; index += 1) {
+    const lease = await pool.acquire({ host: 'e-hentai.org' });
+    clock += 100;
+    lease.release({ status: 200 });
+  }
+  assert.equal(pool.stats().lanes[0].ewmaMs, 100);
+  const lease = await pool.acquire({ host: 'e-hentai.org' });
+  clock += 400;
+  lease.release({ status: 200 });
+  assert.equal(pool.stats().lanes[0].ewmaMs, 160);
+});

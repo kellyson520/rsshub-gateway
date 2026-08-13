@@ -5,6 +5,8 @@ const DEFAULT_MAX_CONCURRENCY_PER_LANE = 6;
 const DEFAULT_SUCCESS_RAMP_AFTER = 6;
 const DEFAULT_COOLDOWN_MS = 500;
 const DEFAULT_BACKGROUND_RESERVE_PER_LANE = 1;
+const EWMA_ALPHA = 0.2;
+const MAX_LATENCY_SAMPLE_MS = 10_000;
 const RETRYABLE_STATUSES = new Set([408, 425, 429]);
 
 function safeEvent(onEvent, event) {
@@ -70,6 +72,8 @@ export function createEgressPool(options = {}) {
       cooldownUntil: 0,
       siteHealth: new Map(),
       healthyScopes: lane.healthyScopes ? new Set(lane.healthyScopes) : null,
+      ewmaMs: 0,
+      samples: 0,
     };
   }
 
@@ -133,8 +137,16 @@ export function createEgressPool(options = {}) {
     candidates.sort((left, right) => left.active - right.active || left.id.localeCompare(right.id));
     const leastActive = candidates[0].active;
     const tied = candidates.filter((lane) => lane.active === leastActive);
-    const lane = tied[cursor % tied.length];
-    cursor = (cursor + 1) % Math.max(1, tied.length);
+    const measured = tied.filter((lane) => lane.samples > 0);
+    if (!measured.length || measured.length < tied.length) {
+      const lane = tied[cursor % tied.length];
+      cursor = (cursor + 1) % Math.max(1, tied.length);
+      return lane;
+    }
+    const fastest = Math.min(...measured.map((lane) => lane.ewmaMs));
+    const fastestLanes = measured.filter((lane) => lane.ewmaMs === fastest);
+    const lane = fastestLanes[cursor % fastestLanes.length];
+    cursor = (cursor + 1) % Math.max(1, fastestLanes.length);
     return lane;
   }
 
@@ -151,10 +163,12 @@ export function createEgressPool(options = {}) {
     }, Math.max(1, nextCooldown - now()));
   }
 
-  function recordResult(lane, result = {}) {
+  function recordResult(lane, result = {}, durationMs = 0) {
     const status = Number(result.status);
     const hostKey = result.host ? String(result.host).toLowerCase() : undefined;
     if (isSuccess(status)) {
+      lane.ewmaMs = lane.samples ? lane.ewmaMs * (1 - EWMA_ALPHA) + durationMs * EWMA_ALPHA : durationMs;
+      lane.samples += 1;
       if (hostKey) {
         siteTracker.reset(lane.id, hostKey);
         lane.siteHealth.delete(hostKey);
@@ -183,6 +197,7 @@ export function createEgressPool(options = {}) {
 
   function makeLease(lane, context = {}) {
     lane.active += 1;
+    const startedAt = now();
     let released = false;
     return {
       laneId: lane.id,
@@ -194,7 +209,8 @@ export function createEgressPool(options = {}) {
         if (released) return;
         released = true;
         lane.active = Math.max(0, lane.active - 1);
-        recordResult(lane, { ...result, host: result.host || context.host });
+        const durationMs = Math.min(Math.max(0, now() - startedAt), MAX_LATENCY_SAMPLE_MS);
+        recordResult(lane, { ...result, host: result.host || context.host }, durationMs);
         drain();
       },
     };
@@ -250,6 +266,8 @@ export function createEgressPool(options = {}) {
         targetConcurrency: lane.targetConcurrency,
         siteBlocked: [...lane.siteHealth.keys()],
         healthyScopes: lane.healthyScopes ? [...lane.healthyScopes] : null,
+        samples: lane.samples,
+        ewmaMs: lane.samples ? Math.round(lane.ewmaMs) : undefined,
       })),
     }),
   };
