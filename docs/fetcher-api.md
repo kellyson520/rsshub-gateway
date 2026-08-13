@@ -101,8 +101,9 @@ sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
 | --- | --- | --- | --- |
 | `sidecar/fetcher-iwara` | `/iwara/users/:username/:kind?` | api.iwara.tv | 用户视频/图片 feed；token 自动刷新；browser-fetch 过 Cloudflare |
 | `sidecar/fetcher-eh` | `/ehviewer/ranking/:period?` | e-hentai.org | 排名 feed；`period` ∈ day/month/year/all |
+| `sidecar/fetcher-ggjav` | `/ggjav/home/:page?`、`/ggjav/:kind/:page?`（censored/uncensored/amateur/cartoon/chinese/europe）、`/ggjav/video/:id`、`/ggjav/model/:name/:page?`、`/ggjav/genre/:tag/:page?` | ggjav.com | JAV 影片 feed（最新/分类/单集/女優/标签）；CDN 封面走网关媒体代理 |
 
-两者共用 `src/fetcher-server.js`（HTTP 脚手架：`/fetch`、`/healthz`、错误映射）与
+三者共用 `src/fetcher-server.js`（HTTP 脚手架：`/fetch`、`/healthz`、错误映射）与
 `src/browser-fetch.js`（curl_cffi 浏览器指纹 + Mihomo 出口）。
 
 ## 6 运行时路由注册（无需重启网关）

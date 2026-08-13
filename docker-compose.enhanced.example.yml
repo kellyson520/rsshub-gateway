@@ -36,6 +36,7 @@ services:
       # 疑难站点增强：sidecar 默认开启（容器内独立进程）；纯透明模式设为 false
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
+      GATEWAY_SIDECAR_GGJAV: "true"
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro

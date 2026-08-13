@@ -240,4 +240,25 @@ listeners:
     proxy: SESSION_LANE_12
 
 rules:
+  # 成人平台源站/CDN 走 PUBLIC 负载均衡（节点轮换，抗单点封禁）
+  - DOMAIN-SUFFIX,ggjav.com,PUBLIC
+  - DOMAIN-SUFFIX,ggjav.tv,PUBLIC
+  - DOMAIN-SUFFIX,mgstage.com,PUBLIC
+  - DOMAIN-SUFFIX,jdbstatic.com,PUBLIC
+  - DOMAIN-SUFFIX,jpgcdn.com,PUBLIC
+  - DOMAIN-SUFFIX,jable.tv,PUBLIC
+  - DOMAIN-SUFFIX,dmm.co.jp,PUBLIC
+  - DOMAIN-SUFFIX,e-hentai.org,PUBLIC
+  - DOMAIN-SUFFIX,ehgt.org,PUBLIC
+  - DOMAIN-SUFFIX,hath.network,PUBLIC
+  - DOMAIN-SUFFIX,exhentai.org,STICKY
+  - DOMAIN-SUFFIX,x.com,STICKY
+  - DOMAIN-SUFFIX,twitter.com,STICKY
+  - DOMAIN-SUFFIX,twimg.com,STICKY
+  - DOMAIN-SUFFIX,instagram.com,STICKY
+  - DOMAIN-SUFFIX,cdninstagram.com,STICKY
+  - DOMAIN-SUFFIX,fbcdn.net,STICKY
+  - DOMAIN-SUFFIX,iwara.tv,STICKY
+  - DOMAIN-SUFFIX,t.me,STICKY
+  - DOMAIN-SUFFIX,telesco.pe,STICKY
   - MATCH,PROXY

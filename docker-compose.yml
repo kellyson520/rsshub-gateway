@@ -46,6 +46,7 @@ services:
       # 疑难站点增强模式（单容器）：sidecar 默认开启，独立进程；关闭设 false
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
+      GATEWAY_SIDECAR_GGJAV: "true"
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301

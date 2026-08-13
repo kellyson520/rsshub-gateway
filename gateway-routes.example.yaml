@@ -33,6 +33,29 @@ routes:
     fallback_upstream: true
     cacheTtl: 300
 
+  # 示例：fetcher-ggjav sidecar 服务 GGJAV 成人影片 feed（单容器，进程隔离）
+  # 顺序即优先级：video/model/genre 必须先于 /ggjav/:kind/:page?
+  - routeId: "/ggjav/video/:id"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 86400
+  - routeId: "/ggjav/model/:name/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/genre/:tag/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/home/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/:kind/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+
   # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
   # - routeId: "/custom/:id"
   #   backend: "sidecar://fetcher-custom:8000"

@@ -34,6 +34,7 @@ services:
       # 纯透明模式：显式关闭容器内默认开启的疑难站点 sidecar
       GATEWAY_SIDECAR_IWARA: "false"
       GATEWAY_SIDECAR_EH: "false"
+      GATEWAY_SIDECAR_GGJAV: "false"
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro

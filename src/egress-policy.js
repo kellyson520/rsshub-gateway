@@ -22,9 +22,15 @@ const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'missav.com',
   'missav.ai',
   'javdb.com',
+  'jdbstatic.com',
   'javbus.com',
   'javbus.one',
   'jpgcdn.com',
+  'mgstage.com',
+  'jable.tv',
+  'dmm.co.jp',
+  'ggjav.com',
+  'ggjav.tv',
 ]);
 
 const DEFAULT_PUBLIC_REQUEST_HOSTS = Object.freeze([
