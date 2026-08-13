@@ -1,6 +1,6 @@
 # 下载会话创建时全文件切片预取 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** `POST /_gateway/download/:mediaToken` 创建下载会话时，后台按切片把整个视频文件预取入缓存，客户端并发拉分片（分片端点走并行组装）直接命中缓存，不再竞争同一上游连接，显著提升多连接下载速度并让后续 seek 秒开。
 
@@ -26,7 +26,7 @@
 - Modify: `src/media/media-transport.js`
 - Test: `test/media-transport.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `test/media-transport.test.js` 末尾追加 4 个用例：
 
@@ -228,12 +228,12 @@ test('prefetchVideoFile probes the size when not provided and no-ops for non-vid
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test --test-name-pattern="prefetchVideoFile" test/media-transport.test.js`
 Expected: FAIL（`TypeError: transport.prefetchVideoFile is not a function`，4 个用例全红）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/media/media-transport.js`：
 
@@ -313,12 +313,14 @@ b) 在 `fillVideoSlices` 函数之后、`assembleSliceRange` 之前加入：
 
 c) 在 return 对象中 `fillVideoSlices,` 之后加入 `prefetchVideoFile,`。
 
-- [ ] **Step 4: 运行确认通过**
+实现说明（最终版）：worker 循环统计 `failed`（fetch 非 ok / store 失败 / 异常均计入），`Promise.all` 后若 `failed > 0` 输出单条 `logger.warn('media_prefetch_partial', { target, fetched, failed, total })`，与 lease-backfill 的失败日志风格一致。
+
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test --test-name-pattern="prefetchVideoFile" test/media-transport.test.js`，再 Run: `node --test test/media-transport.test.js`
 Expected: PASS（新增 4 个用例全过，旧用例不回归）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add test/media-transport.test.js src/media/media-transport.js
@@ -331,7 +333,7 @@ git commit -m "feat: prefetch full video slices when a download session is creat
 - Modify: `src/server.js`、`src/request-handler.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `test/server.test.js` 中 `download sessions track chunk progress for resume` 测试之后追加：
 
@@ -419,12 +421,12 @@ test('download session creation prefetches the whole video into the slice cache'
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test --test-name-pattern="prefetch" test/server.test.js`
 Expected: FAIL（`waitFor` 超时：未接线预取，切片从未入缓存）。
 
-- [ ] **Step 3: 实现接线**
+- [x] **Step 3: 实现接线**
 
 `src/request-handler.js`：
 a) deps 解构中 `prefetchEhGallery,` 之后加入 `prefetchVideoFile,`；
@@ -444,12 +446,12 @@ b) `downloadSessions.create({ ... })` 之后、`recordMetric('download_session_c
     prefetchVideoFile: mediaTransport.prefetchVideoFile,
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test --test-name-pattern="prefetch" test/server.test.js`，再 Run: `node --test --test-name-pattern="download sessions" test/server.test.js`
 Expected: PASS（新增用例 + 既有下载会话用例全过）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add test/server.test.js src/request-handler.js src/server.js
@@ -458,24 +460,24 @@ git commit -m "feat: prefetch video slices on download session creation"
 
 ### Task 3: 全量验证 + 负载压测
 
-- [ ] **Step 1: 全量测试（root）**
+- [x] **Step 1: 全量测试（root）**
 
 Run: `npm test`
 Expected: `# fail 0`，315+ 用例全过。
 
-- [ ] **Step 2: 非 root 容器全量**
+- [x] **Step 2: 非 root 容器全量**
 
 Run: `docker run --rm -v "$PWD":/app -w /app -u node:node node:24-bookworm-slim sh -c "npm test 2>&1 | grep -E '^ℹ (tests|pass|fail)'"`
 Expected: `pass` 数量与 root 一致，`fail 0`。
 
-- [ ] **Step 3: 负载压测**
+- [x] **Step 3: 负载压测**
 
 Run: `/tmp/stress5.sh`（6 个 CPU 满载进程 + 全量套件循环）
 Expected: 多轮全绿；若新用例暴露时序 flaky，定位并修复后重跑。
 
 ### Task 4: 生产部署验证 + README + 推送
 
-- [ ] **Step 1: 同步生产并重建**
+- [x] **Step 1: 同步生产并重建**
 
 ```bash
 cp src/media/media-transport.js src/request-handler.js src/server.js /opt/1panel/apps/rsshub-gateway/src/
@@ -484,18 +486,20 @@ cd /opt/1panel/apps/rsshub-gateway && docker compose up -d --build
 
 Expected: 容器 `rsshub-gateway` 重启成功，`curl -s 127.0.0.1:1300/_gateway/infra` 200。
 
-- [ ] **Step 2: 真实 iwara 视频验证**
+- [x] **Step 2: 真实 iwara 视频验证**
 
-用 `SECRET=$(cat /opt/1panel/apps/rsshub-gateway/secrets/gateway_secret)` + `createSignedTarget('https://www.iwara.tv/video/PvEvwqwuGmtLH1', secret, undefined, undefined, { egressScope: 'public', source: 'iwara' })` 建会话；等几秒后拉分片并观察：
-- `/_gateway/metrics` 出现 `rsshub_gateway_media_prefetch_slices_total`
-- 分片下载直接从缓存 206 返回、无上游 range 请求（日志/速率对比）
-- 磁盘占用可控（`du` 缓存目录），第二次建同视频会话不重复拉取
+用 `SECRET=$(cat /opt/1panel/apps/rsshub-gateway/secrets/gateway_secret)` + `createSignedTarget(视频URL, secret, undefined, undefined, { egressScope: 'public', source: 'iwara' })` 建会话验证：
+- 48MB（`PvEvwqwuGmtLH1`）：12/12 切片全部入缓存；28.8MB（`hVBuYOvOCXv5Oo`）：7/7；`9AKF2MIBK2FwcF`：8 片 <8s 完成（>4MB/s）
+- `/_gateway/metrics` 出现 `rsshub_gateway_media_prefetch_slices_total`（事件计数含 count/total）
+- 二次建同视频会话：0.6s 返回、指标不变、无新 range 请求（缓存跳过生效）
+- 缓存命中后分片下载 12MB 仅 1.35s（8.9MB/s，纯磁盘）
+- 未出现 `media_prefetch_partial`；慢速视频（acheron.iwara.tv 单连接 0.7-1.2MB/s）预取速度受上游 CDN 节点限制，属预期
 
-- [ ] **Step 3: README 更新**
+- [x] **Step 3: README 更新**
 
 `README.md` 的 "Video transport, chunks and one-time download leases" 段落，在 "Large range requests..." 之后补充：下载会话创建即后台全文件切片预取（`sliceFillConcurrency` 并发、`priority: 'background'`、同视频 inflight 去重、受 `videoCacheMaxFileBytes` 与全局缓存上限约束），并发拉分片/seek 直接命中缓存；指标 `rsshub_gateway_media_prefetch_slices_total`。
 
-- [ ] **Step 4: 勾选计划 + 提交推送**
+- [x] **Step 4: 勾选计划 + 提交推送**
 
 ```bash
 git add -A && git commit -m "docs: document download session video prefetch" && git push origin main
