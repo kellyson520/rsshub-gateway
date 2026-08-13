@@ -41,7 +41,7 @@
 
 ### Task 4: 全量验证 + 部署 + 推送
 
-- [ ] **Step 1:** `npm test`（root 全量）+ 非 root 容器全量 + 压测防 flaky。
-- [ ] **Step 2:** 生产同步（`src/dispatcher.js`、`src/request-handler.js`、`src/server.js`、`src/fetcher-server.js`、两个 sidecar server），重建；生产默认无 token → 端点 404 零回归；临时设 token 验证 sidecar 自动注册→列表→注销链路。
-- [ ] **Step 3:** 提交（`feat: runtime route registration for sidecar fetchers` + docs），推送，CI 绿。
-- [ ] **Step 4:** 本计划全部勾选。
+- [x] **Step 1:** `npm test`（root 全量 372）+ 非 root 容器全量 372 + 压测 10 轮全绿。
+- [x] **Step 2:** 生产同步 + 重建；默认无 token → 端点 404 零回归；临时 token 验证自动注册→feed 200→SIGTERM 注销→列表空；恢复生产配置。
+- [x] **Step 3:** 提交 `ed69118`，推送，CI 绿。
+- [x] **Step 4:** 本计划全部勾选。
