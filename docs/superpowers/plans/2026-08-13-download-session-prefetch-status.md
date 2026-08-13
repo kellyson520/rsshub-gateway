@@ -1,6 +1,6 @@
 # 下载会话预取状态可观测性 + 预取开关/并发参数 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** `GET/POST /_gateway/download/:mediaToken|:sessionId` 的响应携带 `prefetch` 字段，报告该视频的后台整片预取进度（`running`/`done`、已取/总切片数、失败数、起止时间）；并暴露 `GATEWAY_VIDEO_PREFETCH`（开关，默认 true）与 `GATEWAY_VIDEO_PREFETCH_CONCURRENCY`（并发，默认 4）两个配置，让客户端下载器可感知预热进度、运维可在磁盘/带宽紧张时关闭或调低。
 
@@ -27,7 +27,7 @@
 - Modify: `src/media/media-transport.js`
 - Test: `test/media-transport.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `test/media-transport.test.js` 末尾追加 2 个用例：
 
@@ -132,12 +132,12 @@ test('prefetchStatus is null without activity and resets on a new prefetch', asy
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test --test-name-pattern="prefetchStatus" test/media-transport.test.js`
 Expected: FAIL（`transport.prefetchStatus is not a function`，2 个用例全红）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/media/media-transport.js`：
 
@@ -186,12 +186,12 @@ e) `prefetchVideoFile` 之后新增：
 
 f) return 对象 `prefetchVideoFile,` 之后加入 `prefetchStatus,`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test --test-name-pattern="prefetchStatus" test/media-transport.test.js`，再 Run: `node --test test/media-transport.test.js`
 Expected: PASS（新增 2 个用例全过，旧用例不回归）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add test/media-transport.test.js src/media/media-transport.js
@@ -204,7 +204,7 @@ git commit -m "feat: expose video prefetch progress and concurrency knob"
 - Modify: `src/options.js`、`src/server.js`、`src/request-handler.js`
 - Test: `test/server.test.js`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `test/server.test.js` 中 `download session creation prefetches the whole video into the slice cache` 测试之后追加 3 个用例：
 
@@ -391,12 +391,12 @@ test('download session for a non-video target reports no prefetch', async () => 
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `node --test --test-name-pattern="prefetch progress|can be disabled|non-video target" test/server.test.js`
 Expected: FAIL（`created.prefetch` 为 undefined：未接线 `prefetchStatus`/`videoPrefetchEnabled`）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/options.js`：
 a) `const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;` 之后加入：
@@ -444,12 +444,12 @@ b) deps 解构中 `prefetchVideoFile,` 之后加入 `prefetchStatus, videoPrefet
 c) POST 分支：`if (prefetchVideoFile) {` 改为 `if (prefetchVideoFile && videoPrefetchEnabled !== false) {`；`writeJson(res, 200, downloadSessionView(session));` 改为 `writeJson(res, 200, withPrefetchStatus(downloadSessionView(session), session.target, prefetchStatus));`。
 d) GET 分支：`writeJson(res, 200, downloadSessionView(session));` 同样改为 `withPrefetchStatus(...)`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `node --test --test-name-pattern="prefetch progress|can be disabled|non-video target" test/server.test.js`，再 Run: `node --test --test-name-pattern="download session" test/server.test.js`
 Expected: PASS（新增 3 个用例 + 既有下载会话用例全过）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add test/server.test.js src/options.js src/server.js src/request-handler.js
@@ -458,24 +458,24 @@ git commit -m "feat: report download session prefetch status and add prefetch kn
 
 ### Task 3: 全量验证 + 负载压测
 
-- [ ] **Step 1: 全量测试（root）**
+- [x] **Step 1: 全量测试（root）**
 
 Run: `npm test`
 Expected: `# fail 0`，325 个用例全过。
 
-- [ ] **Step 2: 非 root 容器全量**
+- [x] **Step 2: 非 root 容器全量**
 
 Run: `docker run --rm -v "$PWD":/app -w /app -u node:node node:24-bookworm-slim sh -c "npm test 2>&1 | grep -E '^ℹ (tests|pass|fail)'"`
 Expected: `pass` 数量与 root 一致，`fail 0`。
 
-- [ ] **Step 3: 负载压测**
+- [x] **Step 3: 负载压测**
 
 Run: `/tmp/stress5.sh`
 Expected: 10 轮全绿，无时序 flaky。
 
 ### Task 4: 生产部署验证 + README + 推送
 
-- [ ] **Step 1: 同步生产并重建**
+- [x] **Step 1: 同步生产并重建**
 
 ```bash
 cp src/media/media-transport.js src/options.js src/server.js src/request-handler.js /opt/1panel/apps/rsshub-gateway/src/
@@ -484,18 +484,18 @@ cd /opt/1panel/apps/rsshub-gateway && docker compose up -d --build
 
 Expected: 容器重启成功；`curl -s 127.0.0.1:1300/_gateway/infra` 200。
 
-- [ ] **Step 2: 真实 iwara 视频验证**
+- [x] **Step 2: 真实 iwara 视频验证**
 
-用生产 secret + `createSignedTarget` 对未缓存视频建会话：
-- POST 响应含 `prefetch.status: "running"`、`totalSlices` 随视频大小
-- 轮询 `GET /_gateway/download/:sessionId` 直到 `prefetch.status === "done"`，`fetchedSlices === totalSlices`
-- 非视频目标会话 `prefetch === null`（如 E-Hentai 图片目标）
+用生产 secret + `createSignedTarget` 对未缓存视频建会话（`08rib4KGMk4Xou/4k-queencard`，30.7MB/8 片）：
+- POST 响应立即为 `prefetch: {"status":"running","fetchedSlices":0,"totalSlices":null,...}`
+- 轮询 `GET /_gateway/download/:sessionId`：t+3s `totalSlices:8`，t+6s `fetchedSlices:2`，t+12s `7/8`，t+18s `{"status":"done","fetchedSlices":8,"totalSlices":8,"failedSlices":0,...}`
+- 进度实时可见、完成后字段完整；非视频目标会话 `prefetch === null`（由测试覆盖）
 
-- [ ] **Step 3: README 更新**
+- [x] **Step 3: README 更新**
 
 "Video transport, chunks and one-time download leases" 段落中下载会话描述处补充：会话视图（POST/GET）携带 `prefetch` 字段（`status: running|done`、`fetchedSlices/totalSlices/failedSlices/startedAt/completedAt`），客户端可据此等待预热完成后再并发拉片；`GATEWAY_VIDEO_PREFETCH=false` 可关闭会话预取，`GATEWAY_VIDEO_PREFETCH_CONCURRENCY`（默认 4，范围 1-8）调节整片预取并发。
 
-- [ ] **Step 4: 勾选计划 + 提交推送**
+- [x] **Step 4: 勾选计划 + 提交推送**
 
 ```bash
 git add -A && git commit -m "docs: document download session prefetch status and knobs" && git push origin main
