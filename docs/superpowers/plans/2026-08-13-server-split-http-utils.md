@@ -16,3 +16,10 @@
 
 - [x] 路由处理器拆分：评估后以「路径分类指标（route_*）+ request-id + /_gateway/metrics」作为本轮观测增强（大路由闭包依赖面广，拆分留待后续）
 - [x] request-id 与指标导出（Prometheus 文本格式，`/_gateway/metrics`，264/264 通过，生产验证）
+
+## 后续（D 项：路由处理器拆分）
+
+- [x] Step 1: 新建 `src/request-handler.js`（733 行）——`createRequestHandler(deps)` 工厂，把 `http.createServer` 的路由主体（~640 行）整体迁入，51 个依赖显式注入（缓存/出口/租赁/令牌/i18n 无；闭包与模块级函数统一走 deps）
+- [x] Step 2: `server.js` 处理器主体删除并改为 `createRequestHandler({...})` + `http.createServer(requestHandler)`；`poller` 声明上移避免 TDZ（处理器在声明前引用）；清理 15 个仅处理器使用的导入（server.js 1779 → 1165 行）
+- [x] Step 3: 行为零变化验证：处理器主体与原文逐字节一致（仅包装行差异）；279/279 通过（root + 非 root）
+- [x] Step 4: 生产部署验证：healthz/readyz ok、12+12 lanes、iwara feed 200、ehviewer ranking 200、gallery item 200、metrics/infra 200、RSSHub 透传 200
