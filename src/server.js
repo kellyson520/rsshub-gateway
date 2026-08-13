@@ -1076,6 +1076,9 @@ export function createGatewayServer(options = {}) {
     }
     const requestStartedAt = Date.now();
     const requestUrl = new URL(req.url || '/', 'http://gateway.internal');
+    const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 64);
+    res.setHeader('x-request-id', requestId);
+    recordMetric('gateway_request', { path: requestUrl.pathname });
     if (requestUrl.pathname === '/healthz') {
       writeText(res, 200, 'ok\n');
       return;
@@ -1094,6 +1097,45 @@ export function createGatewayServer(options = {}) {
       } catch {
         writeJson(res, 503, { ready: false, rsshub: 'unavailable', openCircuits: client.openCircuits?.() || [] });
       }
+      return;
+    }
+    if (requestUrl.pathname === '/_gateway/metrics') {
+      const cacheStats = cache ? cache.stats() : null;
+      const egressStats = egressPool.stats();
+      const backfillStats = leaseBackfillQueue ? leaseBackfillQueue.stats() : null;
+      const lines = [
+        '# TYPE rsshub_gateway_requests_total counter',
+        `rsshub_gateway_requests_total ${metricCounts.get('gateway_request') || 0}`,
+        '# TYPE rsshub_gateway_cache_hits_total counter',
+        `rsshub_gateway_cache_hits_total ${cacheStats?.counters?.hits || 0}`,
+        '# TYPE rsshub_gateway_cache_misses_total counter',
+        `rsshub_gateway_cache_misses_total ${cacheStats?.counters?.misses || 0}`,
+        '# TYPE rsshub_gateway_cache_bytes gauge',
+        `rsshub_gateway_cache_bytes ${cacheStats?.bytes || 0}`,
+        '# TYPE rsshub_gateway_cache_entries gauge',
+        `rsshub_gateway_cache_entries ${cacheStats?.entries || 0}`,
+        '# TYPE rsshub_gateway_egress_lanes gauge',
+        `rsshub_gateway_egress_lanes ${egressStats.lanes?.length || 0}`,
+        '# TYPE rsshub_gateway_egress_active gauge',
+        `rsshub_gateway_egress_active ${egressStats.active || 0}`,
+      ];
+      for (const [metric, count] of metricCounts) {
+        if (/^[a-z0-9_]+$/.test(metric)) {
+          lines.push(`# TYPE rsshub_gateway_${metric}_total counter`);
+          lines.push(`rsshub_gateway_${metric}_total ${count}`);
+        }
+      }
+      if (backfillStats) {
+        lines.push('# TYPE rsshub_gateway_lease_backfill_completed counter');
+        lines.push(`rsshub_gateway_lease_backfill_completed ${backfillStats.completed}`);
+        lines.push('# TYPE rsshub_gateway_lease_backfill_failed counter');
+        lines.push(`rsshub_gateway_lease_backfill_failed ${backfillStats.failed}`);
+        lines.push('# TYPE rsshub_gateway_lease_backfill_skipped counter');
+        lines.push(`rsshub_gateway_lease_backfill_skipped ${backfillStats.skipped}`);
+        lines.push('# TYPE rsshub_gateway_lease_backfill_bytes gauge');
+        lines.push(`rsshub_gateway_lease_backfill_bytes ${backfillStats.bytesFilled}`);
+      }
+      writeText(res, 200, `${lines.join('\n')}\n`, 'text/plain; version=0.0.4; charset=utf-8');
       return;
     }
     if (requestUrl.pathname === '/_gateway/infra') {
@@ -1598,6 +1640,7 @@ export function createGatewayServer(options = {}) {
             source: adapter.name,
             state: readerState,
             durationMs: Date.now() - requestStartedAt,
+            requestId,
           });
           writeBuffer(res, status, encoded.body, 'text/html; charset=utf-8', encoded.headers);
         } else {

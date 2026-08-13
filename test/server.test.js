@@ -1811,3 +1811,21 @@ test('lease creation triggers backfill and revoke cancels it', async () => {
   assert.equal(typeof payload.leaseBackfill.completed, 'number');
   await server.leaseProxy.close();
 });
+
+test('metrics endpoint exports prometheus text counters and request ids flow through', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+    fetchExternal: async () => new Response('nope', { status: 404 }),
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const response = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`, { headers: { 'x-request-id': 'req-abc-123' } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-request-id'), 'req-abc-123');
+  const body = await response.text();
+  assert.match(body, /# TYPE rsshub_gateway_requests_total counter/);
+  assert.match(body, /rsshub_gateway_cache_hits_total \d+/);
+  assert.match(body, /rsshub_gateway_egress_lanes \d+/);
+  await new Promise((resolve) => server.close(resolve));
+});
