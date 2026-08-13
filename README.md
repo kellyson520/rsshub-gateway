@@ -86,6 +86,22 @@ The signed-target allowlist covers the media CDNs used by RSSHub feeds (imgur, D
 
 While the client downloads, the gateway runs a one-time **lease backfill**: video slices are fetched in the background through the same egress pool and slice pipeline used by normal playback (`#slice=` cache keys), so the second play is served from the gateway cache without re-downloading from the source. Backfill is best-effort and bounded — it stops when the lease is revoked or expires, deduplicates concurrent leases for the same video, respects the video cache size cap, and skips when the cache lacks headroom for the expected size (a default 128 MiB eviction budget lets a fresh download displace older entries; larger videos are skipped when the cache is full). Tune it with `GATEWAY_LEASE_BACKFILL` (default `true`) and `GATEWAY_LEASE_BACKFILL_CONCURRENCY` (default `2`, range 0–8); `GET /_gateway/infra` exposes `leaseBackfill` counters (`running/completed/failed/skipped/bytesFilled`). CONNECT requests there are tunneled by the OpenResty Lua location (`@__lease_connect`, see `/www/sites/kellson.dpdns.org/proxy/lease-tunnel.lua` on the gateway host) to the lease proxy on `127.0.0.1:1301`, forwarding `Proxy-Authorization` untouched and appending `X-Lease-Client-IP: $remote_addr` so per-client rate limits (8 CONNECTs/minute/IP) see the real client instead of the reverse proxy. The lease proxy validates the Basic Auth credentials, allows only the leased host, enforces the byte/concurrency caps, and chains upstream through the container's Mihomo egress so one-time leases let downloaders use the full bandwidth without the gateway relaying media bytes.
 
+## Dispatcher routing and Sidecar-Fetcher plugins
+
+The gateway base does not implement site-scraping business logic. A config-driven Dispatcher (`src/dispatcher.js`) owns the route registry: when `gateway-routes.yaml` (path overridable with `GATEWAY_ROUTES_FILE`) is absent, the gateway is a pure transparent enhancement proxy and every unmatched path is forwarded to upstream RSSHub (`RSSHUB_URL`). Registering a route maps a path pattern (`:name` single segment, `:name?` optional trailing segment, `*` remainder) to a backend:
+
+```yaml
+routes:
+  - routeId: "/iwara/users/:username/:kind?"
+    backend: "sidecar://fetcher-iwara:8000"
+    fallback_upstream: true
+    cacheTtl: 900
+```
+
+Backends are either `sidecar://host:port` (a standalone Fetcher process speaking the Fetcher-API) or `builtin://iwara` (the gateway's built-in adapter). On a sidecar match the gateway POSTs `{ routeId, params, egressLane, cookies, cacheTtl }` to `http://host:port/fetch` and expects `{ rssXml, mediaUrls, cacheHint }`; the response is cached like any RSS document (TTL from `cacheHint.ttl` or the route's `cacheTtl`) and passes through the same unified post-processing (media link rewriting, metrics, Brotli) as upstream RSSHub output. When a sidecar fails and `fallback_upstream: true`, the gateway automatically degrades to the upstream RSSHub route instead of failing; without it the request returns 502. A sidecar crash therefore never takes down a feed or the gateway.
+
+`sidecar/fetcher-iwara/server.js` is the reference Sidecar-Fetcher: a standalone HTTP process implementing the Fetcher-API for `/iwara/users/:username/:kind?`. It reuses the shared `src/adapters/iwara.js` feed rendering and the browser-fingerprint transport (`src/browser-fetch.js`, curl_cffi through Mihomo `FETCHD_PROXY`), so Cloudflare-protected sources work without the gateway embedding scraping logic. It is optional and off by default; the docker-compose template contains a commented `fetcher-iwara` service (same image, `command: ["fetcher-iwara"]`, mihomo started by the entrypoint) for the "疑难站点增强模式" deployment. See `gateway-routes.example.yaml` for a fully annotated registry.
+
 ## Verification
 
 

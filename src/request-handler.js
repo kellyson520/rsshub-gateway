@@ -78,6 +78,7 @@ export function createRequestHandler(deps) {
     currentEhPrefetchConcurrency,
     discoverCachedEhGallery,
     discoverEhGallery,
+    dispatcher,
     downloadSessions,
     egressAdapter,
     egressPool,
@@ -301,6 +302,50 @@ export function createRequestHandler(deps) {
         }
       }
       return;
+    }
+    const dispatched = dispatcher?.match(requestUrl.pathname) || null;
+    if (dispatched?.route.backend.startsWith('sidecar://')) {
+      const { route, params } = dispatched;
+      try {
+        const output = await fetchCachedDocument({
+          cache,
+          fetcher: async () => {
+            const result = await dispatcher.callSidecar(route, params, {
+              egressLane: 'public',
+              cookies: req.headers.cookie,
+            });
+            return new Response(result.rssXml, {
+              status: 200,
+              headers: { 'content-type': 'application/rss+xml; charset=utf-8' },
+            });
+          },
+          requestUrl: `${requestUrl.pathname}${requestUrl.search}`,
+          cacheUrl: new URL(requestUrl.pathname, 'http://gateway.internal').toString(),
+          kind: 'rss',
+          logger,
+          request: { priority: 'foreground' },
+        });
+        const body = await readLimited(output);
+        const transformed = transformFeed(body, {
+          baseUrl: publicBaseUrl(req),
+          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
+          secret,
+          signedTargetMetadata: { egressScope: 'public' },
+        });
+        writeText(res, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+        return;
+      } catch (error) {
+        logger.error('sidecar_route_failure', { routeId: route.routeId, error: error.message });
+        if (!route.fallbackUpstream) {
+          writeGatewayError(res, new GatewayUpstreamError(
+            `sidecar unavailable: ${error.message}`,
+            { code: 'SIDECAR_UNAVAILABLE', source: route.backend, status: 502, attempts: 1 },
+          ));
+          return;
+        }
+        await serveRssHubPassthrough(req, res, requestUrl, attribution);
+        return;
+      }
     }
     if (requestUrl.pathname.startsWith('/ehviewer/ranking/')) {
       writeText(res, 404, 'not found\n');
@@ -891,6 +936,10 @@ export function createRequestHandler(deps) {
       }
       return;
     }
+    await serveRssHubPassthrough(req, res, requestUrl, attribution);
+  }
+
+  async function serveRssHubPassthrough(req, res, requestUrl, attribution) {
     attribution.source = requestUrl.pathname.split('/')[1] || '';
     try {
       const rsshubPath = `${requestUrl.pathname}${requestUrl.search}`;

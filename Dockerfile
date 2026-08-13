@@ -15,6 +15,7 @@ RUN apk add --no-cache \
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY src ./src
+COPY sidecar ./sidecar
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh
 

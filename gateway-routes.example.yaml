@@ -1,0 +1,29 @@
+# rsshub-gateway 路由注册表（Dispatcher）
+#
+# 默认行为：不配置本文件（或文件缺失）时，网关是完全透明的 RSSHub 增强网关，
+# 所有未匹配内置路由的路径都透传给上游 RSSHub（RSSHUB_URL）。
+#
+# 配置方式：
+#   1. 将本文件复制为 gateway-routes.yaml（或通过 GATEWAY_ROUTES_FILE 指定路径）；
+#   2. 按需注册自定义路由。backend 支持两种：
+#      - sidecar://host:port  调用独立 Sidecar-Fetcher 进程（Fetcher-API，POST /fetch）
+#      - builtin://iwara      使用网关内置适配器
+#   3. fallback_upstream: true 时，sidecar 故障自动降级回上游 RSSHub，不中断服务。
+#
+# 路径模式：:name 匹配单个路径段，:name? 为可选尾段，* 匹配剩余路径。
+
+routes:
+  # 示例：使用独立 fetcher-iwara sidecar 服务 iwara 用户 feed
+  - routeId: "/iwara/users/:username/:kind?"
+    backend: "sidecar://fetcher-iwara:8000"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：保持使用网关内置 iwara 适配器
+  # - routeId: "/iwara/users/:username/:kind?"
+  #   backend: "builtin://iwara"
+
+  # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
+  # - routeId: "/custom/:id"
+  #   backend: "sidecar://fetcher-custom:8000"
+  #   fallback_upstream: false

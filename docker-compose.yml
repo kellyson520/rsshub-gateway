@@ -41,6 +41,8 @@ services:
       RSSHUB_URL: http://rsshub:1200
       SOURCE_CONFIG_FILE: /app/config/sources.json
       GATEWAY_LEASE_PROXY_PORT: "1301"
+      # Dispatcher 路由注册表（缺省=纯透明增强网关）
+      GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301
@@ -49,10 +51,31 @@ services:
       - ./config/gateway-cache:/var/cache/rsshub-gateway
       - ./config/sources.json:/app/config/sources.json:ro
       - ./secrets/gateway_secret:/run/secrets/gateway_secret:ro
+      # 取消注释以启用 Dispatcher 路由注册表（可选 sidecar 兜底路由）
+      # - ./gateway-routes.yaml:/app/config/gateway-routes.yaml:ro
     networks:
       1panel-network:
         aliases:
           - rsshub-gateway
+
+  # 可选：fetcher-iwara Sidecar-Fetcher（架构文档 v0.2 疑难站点增强模式）
+  # 取消注释并按需挂载 gateway-routes.yaml 中注册 sidecar://fetcher-iwara:8000
+  # fetcher-iwara:
+  #   build: .
+  #   container_name: fetcher-iwara
+  #   restart: unless-stopped
+  #   command: ["fetcher-iwara"]
+  #   environment:
+  #     FETCHER_PORT: "8000"
+  #     FETCHD_PROXY: http://127.0.0.1:7890
+  #     SOURCE_CONFIG_FILE: /app/config/sources.json
+  #   volumes:
+  #     - ./config/sources.json:/app/config/sources.json:ro
+  #     - ./config/mihomo:/root/.config/mihomo
+  #   networks:
+  #     1panel-network:
+  #       aliases:
+  #         - fetcher-iwara
 
 networks:
   1panel-network:

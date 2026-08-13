@@ -11,4 +11,12 @@ trap cleanup EXIT INT TERM
 
 sleep 2
 kill -0 "$mihomo_pid"
-exec node src/server.js
+
+case "${1:-}" in
+  fetcher-iwara)
+    exec node sidecar/fetcher-iwara/server.js
+    ;;
+  *)
+    exec node src/server.js
+    ;;
+esac
