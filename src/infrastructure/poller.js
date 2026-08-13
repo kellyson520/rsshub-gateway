@@ -50,21 +50,31 @@ export function createPoller({
 
   function scheduleNext() {
     if (!running) return;
-    const next = [...tasks.values()].sort((a, b) => a.lastRunAt - b.lastRunAt)[0];
-    if (!next) return;
-    const jitter = next.intervalMs * next.jitterRatio;
-    const delay = Math.max(10, next.intervalMs - jitter + Math.random() * jitter * 2);
+    const scheduled = [...tasks.values()];
+    if (!scheduled.length) return;
+    const timestamp = now();
+    // A never-run task is due one interval after registration (start).
+    const earliest = Math.min(...scheduled.map((task) => (
+      task.lastRunAt > 0 ? task.lastRunAt + task.intervalMs - timestamp : task.intervalMs
+    )));
+    const base = Math.max(10, earliest);
+    const jitter = base * jitterRatio;
+    const delay = Math.max(10, base + Math.random() * jitter);
     timer = setTimeout(() => {
       timer = undefined;
-      tick();
-      scheduleNext();
+      // Await the tick so a slow task cannot overlap its own next run.
+      tick().finally(scheduleNext);
     }, delay);
     timer.unref?.();
   }
 
   async function tick() {
+    // Only tasks whose own interval has elapsed run; the timer wakes at the
+    // earliest due time across all tasks, not at a global cadence.
+    const timestamp = now();
     for (const task of tasks.values()) {
       if (!running) return;
+      if (timestamp - task.lastRunAt < task.intervalMs) continue;
       try {
         await runTask(task);
       } catch {

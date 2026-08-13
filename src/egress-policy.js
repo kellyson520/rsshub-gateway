@@ -84,7 +84,9 @@ export function parseHostList(value) {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).map((host) => host.trim().toLowerCase()).filter(Boolean);
+    }
   } catch {
     // Fall through to comma-separated parsing.
   }

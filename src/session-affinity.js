@@ -171,7 +171,13 @@ export function createSessionAffinity({
     let migrated = 0;
     for (const record of records.values()) {
       if (record.laneId !== normalizedLaneId) continue;
-      const replacement = chooseLane(record.fingerprint, lanes, unhealthyLanes);
+      let replacement;
+      try {
+        replacement = chooseLane(record.fingerprint, lanes, unhealthyLanes);
+      } catch {
+        // No healthy lane remains: stop instead of leaving the table half-migrated.
+        break;
+      }
       if (replacement === record.laneId) continue;
       record.laneId = replacement;
       record.updatedAt = current;

@@ -173,6 +173,7 @@ export function transformFeed(xml, options) {
       }
     });
   }
-  const output = normalizeNumericEntities($.xml());
-  return /^\s*<\?xml/.test(xml) ? output : output;
+  // cheerio re-serializes the document; keep the emitted XML declaration so
+  // output stays byte-compatible with RSSHub feeds (which always carry one).
+  return normalizeNumericEntities($.xml());
 }

@@ -172,6 +172,35 @@ test('dispatcher leaves the builtin iwara route untouched when routes file is ab
   }
 });
 
+test('malformed percent-encoding in iwara usernames is rejected without crashing', async () => {
+  const server = createGatewayServer({ secret: 'secret', cache: false, routesFile: '/tmp/absent-routes.yaml' });
+  const { response } = await request(server, '/iwara/users/%zz/video');
+  assert.equal(response.status, 400);
+});
+
+test('malformed percent-encoding in a sidecar route parameter never crashes or matches', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-int-'));
+  const sidecar = await sidecarServer(async () => ({ status: 502, error: 'boom' }));
+  try {
+    const routesFile = path.join(root, 'routes.yaml');
+    await writeFile(routesFile, routesYaml(sidecar.port));
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache: false,
+      routesFile,
+      fetchRssHub: async () => new Response(UPSTREAM_FEED, { status: 200, headers: { 'content-type': 'application/rss+xml' } }),
+    });
+    // The dispatcher rejects the malformed segment instead of crashing; the
+    // builtin iwara handler then answers 400 for the bad encoding.
+    const { response } = await request(server, '/iwara/users/%zz/video');
+    assert.equal(response.status, 400);
+    assert.equal(sidecar.calls.length, 0);
+  } finally {
+    await new Promise((resolve) => sidecar.server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('dispatcher unmatched paths still proxy upstream RSSHub transparently', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-int-'));
   const sidecar = await sidecarServer(async () => ({ status: 502, error: 'boom' }));

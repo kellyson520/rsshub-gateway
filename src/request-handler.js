@@ -10,7 +10,7 @@ import { createInitialReaderManifest, mergeResolvedPage } from './reader-manifes
 import { createSignedChunk, verifySignedChunk } from './download-lease.js';
 import { chunkSizeFor } from './media/chunks.js';
 import { pumpResumableRange } from './media/resumable-range.js';
-import { encodeHtmlResponse } from './http-encoding.js';
+import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
 import {
   fetchCachedDocument,
   isEhImagePageTarget,
@@ -72,6 +72,25 @@ function sourceMetricName(source) {
     .replace(/^_+|_+$/g, '')
     .slice(0, 32);
   return name ? `source_${name}_duration_seconds` : null;
+}
+
+// Unified post-processing text writer: brotli/gzip edge compression for every
+// text-ish response (charter: 所有流量统一经过后处理层) and correct HEAD
+// semantics (headers without a body).
+function writeEncodedText(res, req, status, body, contentType = 'text/plain; charset=utf-8', headers = {}) {
+  // Compute headers exactly as a GET would (content-encoding + compressed
+  // content-length), then suppress the body for HEAD so HEAD answers are
+  // faithful previews of GET.
+  const encoded = encodeTextResponse({
+    body,
+    contentType,
+    acceptEncoding: req.headers['accept-encoding'],
+    method: 'GET',
+    headers,
+  });
+  res.writeHead(status, { 'content-type': contentType, ...encoded.headers });
+  if (req.method === 'HEAD') res.end();
+  else res.end(encoded.body);
 }
 
 export function createRequestHandler(deps) {
@@ -414,14 +433,18 @@ export function createRequestHandler(deps) {
     const dispatched = dispatcher?.match(requestUrl.pathname) || null;
     if (dispatched?.route.backend.startsWith('sidecar://')) {
       const { route, params } = dispatched;
+      attribution.source = route.routeId.split('/').filter(Boolean)[0] || 'sidecar';
       try {
+        let sidecarHint = null;
         const output = await fetchCachedDocument({
           cache,
           fetcher: async () => {
             const result = await dispatcher.callSidecar(route, params, {
               egressLane: 'public',
               cookies: req.headers.cookie,
+              requestId,
             });
+            sidecarHint = result.cacheHint || null;
             return new Response(result.rssXml, {
               status: 200,
               headers: { 'content-type': 'application/rss+xml; charset=utf-8' },
@@ -440,7 +463,15 @@ export function createRequestHandler(deps) {
           secret,
           signedTargetMetadata: { egressScope: 'public' },
         });
-        writeText(res, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+        // Honor the Fetcher-API cacheHint.ttl (falls back to the route cacheTtl,
+        // then the gateway default) so sidecar feeds expire on the reader side
+        // consistently with the gateway's own rss cache kind.
+        const feedTtl = Number.isInteger(sidecarHint?.ttl) && sidecarHint.ttl > 0
+          ? sidecarHint.ttl
+          : (Number.isInteger(route.cacheTtl) && route.cacheTtl > 0 ? route.cacheTtl : 300);
+        writeEncodedText(res, req, output.status, transformed, 'application/rss+xml; charset=utf-8', {
+          'cache-control': `public, max-age=${feedTtl}`,
+        });
         return;
       } catch (error) {
         logger.error('sidecar_route_failure', { routeId: route.routeId, error: error.message });
@@ -451,7 +482,7 @@ export function createRequestHandler(deps) {
           ));
           return;
         }
-        await serveRssHubPassthrough(req, res, requestUrl, attribution);
+        await serveRssHubPassthrough(req, res, requestUrl, attribution, requestId);
         return;
       }
     }
@@ -472,7 +503,7 @@ export function createRequestHandler(deps) {
           secret,
           signedTargetMetadata: { egressScope: 'public' },
         });
-        writeText(res, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+        writeEncodedText(res, req, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
           logger.error('ehviewer_failure', {
@@ -495,7 +526,13 @@ export function createRequestHandler(deps) {
     const iwaraFeedMatch = requestUrl.pathname.match(/^\/iwara\/users\/([^/]+)(?:\/(video|image))?$/);
     if (iwaraFeedMatch) {
       attribution.source = 'iwara';
-      const username = decodeURIComponent(iwaraFeedMatch[1]);
+      let username;
+      try {
+        username = decodeURIComponent(iwaraFeedMatch[1]);
+      } catch {
+        writeText(res, 400, 'invalid username encoding\n');
+        return;
+      }
       const kind = iwaraFeedMatch[2] || 'video';
       try {
         const output = await fetchCachedDocument({
@@ -528,7 +565,7 @@ export function createRequestHandler(deps) {
           secret,
           signedTargetMetadata: { egressScope: 'public' },
         });
-        writeText(res, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+        writeEncodedText(res, req, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
       } catch (error) {
         if (error instanceof GatewayUpstreamError) {
           logger.error('iwara_failure', {
@@ -1077,7 +1114,7 @@ export function createRequestHandler(deps) {
       }
       return;
     }
-    await serveRssHubPassthrough(req, res, requestUrl, attribution);
+    await serveRssHubPassthrough(req, res, requestUrl, attribution, requestId);
   }
 
   async function readRequestBody(req) {
@@ -1089,23 +1126,27 @@ export function createRequestHandler(deps) {
     });
   }
 
-  async function serveRssHubPassthrough(req, res, requestUrl, attribution) {
+  async function serveRssHubPassthrough(req, res, requestUrl, attribution, requestId) {
     attribution.source = requestUrl.pathname.split('/')[1] || '';
     try {
       const rsshubPath = `${requestUrl.pathname}${requestUrl.search}`;
       const rsshubTarget = new URL(rsshubPath, process.env.RSSHUB_URL || 'http://rsshub:1200').toString();
+      // HEAD responses carry no body: never cache them under the GET key, and
+      // forward the method so upstream RSSHub answers with headers only.
       const remote = await fetchCachedDocument({
-        cache,
+        cache: req.method === 'HEAD' ? null : cache,
         fetcher: fetchRssHub,
         requestUrl: rsshubPath,
         cacheUrl: rsshubTarget,
         kind: 'rss',
         logger,
         request: {
+          method: req.method,
           headers: {
             host: req.headers.host || 'localhost:1300',
             'x-forwarded-host': req.headers.host || 'localhost:1300',
             'x-forwarded-proto': req.headers['x-forwarded-proto'] || 'https',
+            'x-request-id': requestId,
           },
         },
       });
@@ -1117,7 +1158,14 @@ export function createRequestHandler(deps) {
         secret,
         signedTargetMetadata: { egressScope: 'public' },
       }) : body;
-      writeText(res, remote.status, output, contentType || 'application/octet-stream');
+      // Preserve upstream entity headers so reader caches and validators behave
+      // exactly as they would against RSSHub directly (interface compatibility).
+      const upstreamHeaders = {};
+      for (const name of ['etag', 'last-modified', 'cache-control', 'expires', 'content-disposition', 'content-language']) {
+        const value = remote.headers.get(name);
+        if (value) upstreamHeaders[name] = value;
+      }
+      writeEncodedText(res, req, remote.status, output, contentType || 'application/octet-stream', upstreamHeaders);
     } catch (error) {
       if (error instanceof GatewayUpstreamError) {
         logger.error('rsshub_failure', {
@@ -1138,6 +1186,15 @@ export function createRequestHandler(deps) {
     const attribution = { source: null };
     try {
       await handleRequest(req, res, attribution);
+    } catch (error) {
+      // Last-resort boundary: a gateway request must never take the process
+      // down through an unhandled rejection.
+      logger.error('request_crashed', { error: error?.message });
+      if (!res.headersSent) {
+        writeText(res, 502, 'upstream unavailable\n');
+      } else {
+        res.destroy();
+      }
     } finally {
       const durationMs = Date.now() - startedAt;
       recordDuration('request_duration_seconds', durationMs);

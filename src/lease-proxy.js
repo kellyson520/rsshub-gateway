@@ -106,7 +106,10 @@ export function createLeaseProxy({
   }
 
   function completeLease(lease, reason) {
-    const done = lease.revoked || (lease.activeConnections === 0 && lease.usedBytes > 0);
+    // A one-time lease is spent once its established tunnels have all closed,
+    // even when no bytes flowed (idle/aborted tunnel): requiring usedBytes > 0
+    // left zero-byte sessions' credentials valid until TTL expiry.
+    const done = lease.revoked || (lease.activeConnections === 0 && (lease.usedBytes > 0 || lease.completedConnections > 0));
     if (done) {
       leaseStore.revoke(lease.username);
       onEvent({ event: 'lease_completed', username: lease.username, usedBytes: lease.usedBytes, reason });
@@ -147,21 +150,34 @@ export function createLeaseProxy({
     proxySocket.on('close', () => {
       if (!tunnelEstablished) rejectConnect(clientSocket, 502, 'upstream proxy closed\n');
     });
-    proxySocket.once('data', (chunk) => {
-      const text = chunk.toString('latin1');
-      if (!/^HTTP\/1\.[01] 200/i.test(text)) {
+    // The upstream CONNECT response can arrive split across TCP chunks.
+    // Accumulate until the header terminator so a partial first chunk is not
+    // misread as a refusal and header bytes are never leaked into the tunnel.
+    let handshakeBuffer = Buffer.alloc(0);
+    let handshakeDone = false;
+    proxySocket.on('data', (chunk) => {
+      if (handshakeDone) return;
+      handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
+      if (handshakeBuffer.length > 64 * 1024) {
+        proxySocket.destroy();
+        if (!tunnelEstablished) rejectConnect(clientSocket, 502, 'upstream proxy handshake too large\n');
+        return;
+      }
+      const headerEnd = handshakeBuffer.indexOf('\r\n\r\n');
+      if (headerEnd < 0) return;
+      const headerText = handshakeBuffer.slice(0, headerEnd).toString('latin1');
+      if (!/^HTTP\/1\.[01] 200/i.test(headerText)) {
         rejectConnect(clientSocket, 502, 'upstream proxy refused\n');
         proxySocket.destroy();
         return;
       }
-      const remainder = text.includes('\r\n\r\n')
-        ? text.slice(text.indexOf('\r\n\r\n') + 4)
-        : '';
+      handshakeDone = true;
+      const remainder = handshakeBuffer.slice(headerEnd + 4);
       tunnelEstablished = true;
       lease.activeConnections += 1;
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head && head.length) proxySocket.write(head);
-      if (remainder) clientSocket.write(Buffer.from(remainder, 'latin1'));
+      if (remainder.length) clientSocket.write(remainder);
       pipeTunnel(clientSocket, proxySocket, lease, (updatedLease) => {
         completeLease(updatedLease, 'session_end');
       });

@@ -54,7 +54,7 @@ export function createLeaseBackfillQueue({
 
   async function run(lease) {
     const target = String(lease.targetUrl || '');
-    const stop = stops.get(lease.username) || { stopped: false };
+    const stop = stops.get(target) || { stopped: false };
     let host = 'unknown';
     try {
       host = new URL(target).hostname;
@@ -98,6 +98,7 @@ export function createLeaseBackfillQueue({
       logger.warn('lease_backfill_failed', { host, error: error.message });
     } finally {
       active.delete(target);
+      stops.delete(target);
       running -= 1;
       stats.running = running;
     }
@@ -115,7 +116,12 @@ export function createLeaseBackfillQueue({
       stats.skipped += 1;
       return Promise.resolve();
     }
-    stops.set(lease.username, { stopped: false });
+    // Stop flags are keyed by target (the dedup unit), and track every lease
+    // username sharing that target so cancel(username) only halts the task
+    // once all of its leases are gone.
+    if (!stops.has(target)) stops.set(target, { stopped: false, usernames: new Set() });
+    const stop = stops.get(target);
+    stop.usernames.add(lease.username);
     running += 1;
     stats.running = running;
     const task = run(lease);
@@ -124,8 +130,14 @@ export function createLeaseBackfillQueue({
   }
 
   function cancel(username) {
-    const stop = stops.get(String(username));
-    if (stop) stop.stopped = true;
+    const name = String(username);
+    for (const [target, stop] of stops) {
+      stop.usernames.delete(name);
+      if (!stop.usernames.size) {
+        stop.stopped = true;
+        stops.delete(target);
+      }
+    }
   }
 
   return {

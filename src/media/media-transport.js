@@ -10,7 +10,10 @@ export function sliceRanges(start, end, size, {
 } = {}) {
   const slice = Math.max(SLICE_ALIGN, Math.ceil(sliceSize / SLICE_ALIGN) * SLICE_ALIGN);
   const from = Math.max(0, Number(start) || 0);
-  const to = Math.min(size - 1, Number(end) ?? size - 1);
+  // Number(undefined) is NaN and NaN ?? fallback does NOT fall back: an omitted
+  // end must mean "to EOF", not an empty plan.
+  const endValue = end === undefined || end === null ? size - 1 : Number(end);
+  const to = Number.isFinite(endValue) ? Math.min(size - 1, endValue) : size - 1;
   if (from > to || !Number.isSafeInteger(size) || size <= 0) return { slice, ranges: [] };
   const firstIndex = Math.floor(from / slice);
   const prefetchEnd = Math.min(size - 1, Math.max(to, firstIndex * slice + lookahead - 1));
@@ -86,7 +89,7 @@ export function createMediaTransport({
   createSignedChunk,
   routeRequest,
   resolveSession = async () => null,
-  sessionNamespace = (session) => (session?.fingerprint ? `session:${session.fingerprint}` : 'session'),
+  sessionNamespace = (session) => (session?.fingerprint ? `session:${session.fingerprint}` : `session:${session?.id || 'unknown'}`),
   namespaceFor = (scope, session) => (scope === 'session' ? sessionNamespace(session) : scope),
   adapterFor = () => ({ name: 'unknown' }),
   onImageWarmup,
@@ -597,11 +600,12 @@ export function createMediaTransport({
         void worker();
       }
     }
-    const firstMissing = parts.find((item) => !item.ranged);
-    if (firstMissing) {
-      await firstMissing.ready;
-      if (firstMissing.error) return null;
-    }
+    // Resolve every missing slice before committing to a 206 with a fixed
+    // content-length: a mid-stream failure would otherwise truncate a body the
+    // client already trusts. On any failure, fall back to the single-range
+    // fetch path instead of emitting a corrupt range response.
+    await Promise.all(parts.filter((item) => !item.ranged).map((item) => item.ready));
+    if (parts.some((item) => !item.ranged)) return null;
     async function* bytes() {
       for (let index = 0; index < parts.length; index += 1) {
         const item = parts[index];

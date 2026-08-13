@@ -20,14 +20,17 @@ export function createSiteFailureTracker({
   function record(laneId, host, status) {
     const k = key(laneId, host);
     const current = now();
-    const state = states.get(k);
+    let state = states.get(k);
     if (!state || current - state.lastAt > windowMs) {
-      states.set(k, { count: 1, firstAt: current, lastAt: current, trippedAt: undefined });
-      return false;
+      state = { count: 0, firstAt: current, lastAt: current, trippedAt: undefined };
+      states.set(k, state);
     }
     state.lastAt = current;
     state.count += 1;
-    if (state.count >= threshold && state.trippedAt === undefined) {
+    // Trip again after every additional threshold of failures, so a persistently
+    // blocked host re-arms the caller's cooldown instead of being blocked once
+    // and then hammered forever.
+    if (state.count >= threshold && state.count % threshold === 0) {
       state.trippedAt = current;
       return true;
     }

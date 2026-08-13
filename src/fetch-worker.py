@@ -66,7 +66,10 @@ def run_request(payload):
     proxy = payload.get("proxy") or DEFAULT_PROXY
     if not isinstance(proxy, str):
         return {"ok": False, "code": "invalid_proxy", "error": "proxy must be a string"}
-    max_body = int(payload.get("maxBody") or DEFAULT_MAX_BODY)
+    try:
+        max_body = int(payload.get("maxBody") or DEFAULT_MAX_BODY)
+    except (TypeError, ValueError):
+        max_body = DEFAULT_MAX_BODY
     started = time.monotonic()
     try:
         response = requests.request(

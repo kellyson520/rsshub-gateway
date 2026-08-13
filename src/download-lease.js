@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
@@ -58,7 +59,13 @@ export function createLeaseStore({ now = Date.now } = {}) {
 
   function verify(username, password) {
     const lease = leases.get(String(username));
-    if (!lease || lease.revoked || lease.password !== String(password) || now() >= lease.expiresAt) {
+    if (!lease || lease.revoked || now() >= lease.expiresAt) {
+      return null;
+    }
+    // Constant-time comparison, matching the HMAC verification style elsewhere.
+    const provided = Buffer.from(String(password));
+    const expected = Buffer.from(lease.password);
+    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
       return null;
     }
     return lease;
@@ -124,6 +131,8 @@ export function createSignedChunk({ url, start, end, secret, now: nowValue = Mat
   return `${payload}.${signature}`;
 }
 
+const CHUNK_METADATA_KEYS = new Set(['egressScope', 'source', 'sessionId', 'index']);
+
 export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1000)) {
   const [payload, signature] = String(token).split('.');
   if (!payload || !signature) throw new Error('malformed chunk token');
@@ -139,5 +148,24 @@ export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1
   if (!Number.isInteger(data.start) || !Number.isInteger(data.end) || data.start < 0 || data.end < data.start) {
     throw new Error('invalid chunk range');
   }
+  // Defense in depth: the chunk carries an outbound fetch target, so it must
+  // stay inside the same host allowlist as signed item/media targets, and its
+  // metadata keys/values must match what the signer can actually emit.
+  if (Object.keys(data).some((key) => !['url', 'exp', 'start', 'end', ...CHUNK_METADATA_KEYS].includes(key))) {
+    throw new Error('chunk metadata is not allowed');
+  }
+  if (data.egressScope !== undefined && !EGRESS_SCOPES.has(data.egressScope)) {
+    throw new Error('chunk egress scope is not allowed');
+  }
+  if (data.source !== undefined && !/^[a-z][a-z0-9_-]{0,31}$/.test(String(data.source))) {
+    throw new Error('chunk source is not allowed');
+  }
+  let targetAllowed = false;
+  try {
+    targetAllowed = isAllowedTarget(data.url);
+  } catch {
+    targetAllowed = false;
+  }
+  if (!targetAllowed) throw new Error('chunk target is not allowed');
   return data;
 }

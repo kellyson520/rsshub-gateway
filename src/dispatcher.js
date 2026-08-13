@@ -66,7 +66,13 @@ function matchSegments(pattern, segments) {
     if (part.type === 'literal') {
       if (value !== part.value) return null;
     } else if (part.type === 'param' || part.type === 'optional') {
-      params[part.name] = decodeURIComponent(value);
+      try {
+        params[part.name] = decodeURIComponent(value);
+      } catch {
+        // Malformed percent-encoding must reject the match, never crash the
+        // process: the request then falls through to upstream RSSHub.
+        return null;
+      }
     }
     segmentIndex += 1;
   }
@@ -78,6 +84,25 @@ function sidecarUrl(backend) {
   const hostPort = backend.slice('sidecar://'.length).replace(/\/$/, '');
   if (!hostPort) return null;
   return `http://${hostPort}`;
+}
+
+function cookiesObject(cookies) {
+  if (cookies === undefined || cookies === null) return {};
+  if (typeof cookies === 'string') {
+    const parsed = {};
+    for (const part of cookies.split(';')) {
+      const separator = part.indexOf('=');
+      if (separator <= 0) continue;
+      const name = part.slice(0, separator).trim();
+      const value = part.slice(separator + 1).trim();
+      if (name && !(name in parsed)) parsed[name] = value;
+    }
+    return parsed;
+  }
+  if (typeof cookies === 'object') {
+    return Object.fromEntries(Object.entries(cookies).map(([name, value]) => [String(name), String(value)]));
+  }
+  return {};
 }
 
 export function createDispatcher({
@@ -138,19 +163,24 @@ export function createDispatcher({
     return null;
   }
 
-  async function callSidecar(route, params, { egressLane, cookies, cacheTtl } = {}) {
+  async function callSidecar(route, params, { egressLane, cookies, cacheTtl, requestId } = {}) {
     const baseUrl = sidecarUrl(route.backend);
     if (!baseUrl) throw new Error(`unsupported backend: ${route.backend}`);
     let response;
     try {
       response = await fetchImpl(`${baseUrl}/fetch`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(requestId ? { 'x-request-id': requestId } : {}),
+        },
         body: JSON.stringify({
           routeId: route.routeId,
           params,
           egressLane,
-          cookies,
+          // Fetcher-API contract: cookies is an object; normalize the raw Cookie
+          // header the gateway may hand over so sidecars always get {name: value}.
+          cookies: cookiesObject(cookies),
           cacheTtl: cacheTtl ?? route.cacheTtl,
         }),
         signal: AbortSignal.timeout(sidecarTimeoutMs),

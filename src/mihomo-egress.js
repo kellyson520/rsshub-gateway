@@ -112,7 +112,9 @@ export function createMihomoEgressAdapter({
   let lastLanes = [];
   let degraded = false;
   const probeResults = new Map();
-  const unhealthySessionNodes = new Set();
+  // node -> first-banned timestamp; entries become retriable after the probe
+  // cache window so a transient block cannot permanently consume session nodes.
+  const unhealthySessionNodes = new Map();
   const sessionSlots = Array.from({ length: sessionLanesLimit }, (_, index) => ({
     id: sessionLaneId(index),
     group: sessionLaneGroup(index),
@@ -270,10 +272,18 @@ export function createMihomoEgressAdapter({
         }
       }
       nextLanes.sort((left, right) => Number.parseInt(left.id.slice(5), 10) - Number.parseInt(right.id.slice(5), 10));
-      if (sourceProbeUrl && !nextLanes.length && lastLanes.length) {
+      if (PROBE_SCOPES.length && !nextLanes.length && lastLanes.length) {
         degraded = true;
         safeEvent(onEvent, { state: 'degraded', lanes: lastLanes.length, code: 'EGRESS_SOURCE_PROBE_FAILED' });
         return lastLanes;
+      }
+      // Retire dispatchers that the new snapshot no longer references; undici
+      // close() waits for in-flight requests, so active leases are unaffected.
+      const retained = new Set(nextLanes.map((lane) => lane.dispatcher));
+      for (const lane of lastLanes) {
+        if (!retained.has(lane.dispatcher)) {
+          void lane.dispatcher?.close?.().catch(() => {});
+        }
       }
       lastLanes = nextLanes;
       degraded = nextLanes.length === 0;
@@ -341,7 +351,12 @@ export function createMihomoEgressAdapter({
         .map((slot) => slot.proxyName));
       for (const slot of sessionSlots) {
         if (slot.proxyName && !slot.unhealthy) continue;
-        const node = nodes.find((candidate) => !occupied.has(candidate) && !unhealthySessionNodes.has(candidate));
+        const node = nodes.find((candidate) => {
+          if (occupied.has(candidate)) return false;
+          const bannedAt = unhealthySessionNodes.get(candidate);
+          if (bannedAt === undefined) return true;
+          return now() - bannedAt >= sourceProbeCacheMs;
+        });
         if (!node) continue;
         const assigned = await assignSessionLane(slot.id, node);
         if (assigned) occupied.add(node);
@@ -357,7 +372,7 @@ export function createMihomoEgressAdapter({
   async function markSessionLaneUnhealthy(laneId) {
     const slot = sessionSlotFor(laneId);
     if (!slot) return false;
-    if (slot.proxyName) unhealthySessionNodes.add(slot.proxyName);
+    if (slot.proxyName) unhealthySessionNodes.set(slot.proxyName, now());
     slot.unhealthy = true;
     slot.healthyScopes = undefined;
     await slot.dispatcher?.close().catch(() => {});

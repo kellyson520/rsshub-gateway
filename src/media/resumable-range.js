@@ -4,7 +4,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function pipeAttempt(stream, res, onBytes) {
+function pipeAttempt(stream, res, onBytes, onAbort) {
   return new Promise((resolve) => {
     let bytes = 0;
     let pending = 0;
@@ -15,6 +15,7 @@ function pipeAttempt(stream, res, onBytes) {
     const settle = () => {
       if (sourceDone && pending === 0) {
         res.off?.('drain', onDrain);
+        cleanupListeners();
         resolve({ bytes, error });
       }
     };
@@ -37,9 +38,20 @@ function pipeAttempt(stream, res, onBytes) {
     stream.on('end', () => finish());
     stream.on('error', (err) => finish(err));
     stream.on('aborted', () => finish(new Error('upstream stream aborted')));
+    const onClientClose = () => {
+      // A client that leaves mid-stream must stop the upstream pull: otherwise
+      // the resumed Readable keeps draining the remaining range through egress.
+      finish(new Error('client response closed'));
+      stream.destroy();
+      onAbort?.();
+    };
+    res.on?.('close', onClientClose);
+    const cleanupListeners = () => {
+      res.off?.('close', onClientClose);
+    };
     stream.on('data', (chunk) => {
       if (res.destroyed || res.writableEnded) {
-        finish(new Error('client response closed'));
+        onClientClose();
         return;
       }
       pending += 1;
@@ -104,7 +116,11 @@ export async function pumpResumableRange({
       onResume?.(written, attempt);
     }
     if (!current?.body) break;
-    const { bytes, error } = await pipeAttempt(Readable.fromWeb(current.body), res, (n) => onBytes?.(written + n));
+    const stream = Readable.fromWeb(current.body);
+    const { bytes, error } = await pipeAttempt(stream, res, (n) => onBytes?.(written + n), () => {
+      stream.destroy();
+      current.body?.cancel?.().catch(() => {});
+    });
     written += bytes;
     attempt += 1;
     if (written >= expectedBytes) break;

@@ -125,6 +125,7 @@ export function createUpstreamClient({
     sessionCredentials,
     allowSessionRetry = false,
     authChallenge,
+    method = 'GET',
   } = {}) {
     let current = new URL(url);
     const original = new URL(url);
@@ -176,6 +177,7 @@ export function createUpstreamClient({
               response = await fetchImpl(current, {
                 dispatcher: sessionDispatcher || dispatcher,
                 headers: requestHeaders,
+                method,
                 redirect: 'manual',
                 signal: controller.signal,
               });
@@ -190,6 +192,7 @@ export function createUpstreamClient({
               response = await fetchImpl(current, {
                 ...(useProxy ? { dispatcher: lease?.dispatcher || dispatcher } : {}),
                 headers: requestHeaders,
+                method,
                 redirect: 'manual',
                 signal: controller.signal,
               });
@@ -212,7 +215,12 @@ export function createUpstreamClient({
 
           if (response.status >= 300 && response.status < 400) {
             const location = response.headers.get('location');
-            if (!location) return responseWithLease(response, lease);
+            if (!location) {
+              // Terminal outcome: clear the half-open probe so the circuit
+              // cannot wedge open on redirects that skip success recording.
+              if (circuit) breaker.recordSuccess(source);
+              return responseWithLease(response, lease);
+            }
             if (useProxy && allowSessionRetry && !sessionRetried && currentScope !== 'session'
               && sessionDispatcher && sessionCredentials
               && isAuthenticationRedirect(response)) {
@@ -224,7 +232,12 @@ export function createUpstreamClient({
               current = original;
               continue;
             }
-            if (!allowTarget) return responseWithLease(response, lease);
+            if (!allowTarget) {
+              // Terminal outcome (RSSHub passthrough never follows redirects):
+              // clear the half-open probe so the circuit cannot wedge open.
+              if (circuit) breaker.recordSuccess(source);
+              return responseWithLease(response, lease);
+            }
             await response.body?.cancel();
             lease?.release({ status: response.status });
             lease = undefined;
@@ -302,7 +315,10 @@ export function createUpstreamClient({
           attempts: attempt,
         });
       }
-      await sleep(Math.min(retryDelay(attempt), remaining));
+      const retryAfterDelay = retryableFailure?.retryAfter !== undefined && retryableFailure.retryAfter > 0
+        ? retryableFailure.retryAfter * 1000
+        : retryDelay(attempt);
+      await sleep(Math.min(retryAfterDelay, remaining));
     }
     throw new GatewayUpstreamError(`upstream request failed for ${source}`, {
       code: 'UPSTREAM_RETRY_EXHAUSTED',
@@ -353,10 +369,18 @@ export function createUpstreamClient({
     });
   }
 
-  async function fetchRssHub(pathAndQuery, rsshubUrl, headers = {}, { timeout } = {}) {
+  async function fetchRssHub(pathAndQuery, rsshubUrl, headers = {}, { timeout, method = 'GET' } = {}) {
     const base = rsshubUrl || process.env.RSSHUB_URL || 'http://rsshub:1200';
     const target = new URL(pathAndQuery, base);
-    return requestWithPolicy(target, { headers, timeout: timeout ?? totalTimeoutMs, source: 'rsshub', useProxy: false, allowTarget: false, recordResponseFailures: false });
+    return requestWithPolicy(target, {
+      headers,
+      method: method === 'HEAD' ? 'HEAD' : 'GET',
+      timeout: timeout ?? totalTimeoutMs,
+      source: 'rsshub',
+      useProxy: false,
+      allowTarget: false,
+      recordResponseFailures: false,
+    });
   }
 
   return {

@@ -357,10 +357,19 @@ export function createResponseCache({
         const rangeStart = Math.max(0, Number(start) || 0);
         const rangeEnd = Number.isInteger(end) ? Math.min(end, entry.size - 1) : entry.size - 1;
         if (rangeStart > rangeEnd) return null;
+        const filePath = path.join(cacheRoot, entry.file);
+        try {
+          // Eager stat closes most of the eviction race: createReadStream reports
+          // a missing file asynchronously, after the 206 has already committed.
+          const stat = fs.statSync(filePath);
+          if (!stat.isFile() || stat.size !== entry.size) return null;
+        } catch {
+          return null;
+        }
         counters.rangeReads += 1;
         counters.rangeBytes += Math.min(rangeEnd, entry.size - 1) - rangeStart + 1;
         try {
-          return fs.createReadStream(path.join(cacheRoot, entry.file), { start: rangeStart, end: rangeEnd });
+          return fs.createReadStream(filePath, { start: rangeStart, end: rangeEnd });
         } catch {
           return null;
         }

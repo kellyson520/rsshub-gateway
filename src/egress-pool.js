@@ -57,7 +57,9 @@ export function createEgressPool(options = {}) {
       previous.proxyName = String(lane.proxyName || lane.id);
       previous.proxyUrl = String(lane.proxyUrl || '');
       previous.dispatcher = lane.dispatcher;
-      if (lane.healthyScopes && previous.healthyScopes === null) previous.healthyScopes = new Set(lane.healthyScopes);
+      // Probe results change across refreshes: always take the latest scopes
+      // instead of freezing the first snapshot on the lane state.
+      if (lane.healthyScopes) previous.healthyScopes = new Set(lane.healthyScopes);
       if (!previous.siteHealth) previous.siteHealth = new Map();
       return previous;
     }
@@ -98,8 +100,14 @@ export function createEgressPool(options = {}) {
 
   function availableLanes(priority = 'foreground') {
     const timestamp = now();
-    const reserve = priority === 'background' ? backgroundReservePerLane : 0;
-    return [...laneStates.values()].filter((lane) => lane.active < Math.max(0, lane.targetConcurrency - reserve) && lane.cooldownUntil <= timestamp);
+    return [...laneStates.values()].filter((lane) => {
+      // Keep at least one slot for background work even when the configured
+      // reserve would starve it (min concurrency <= reserve).
+      const reserve = priority === 'background'
+        ? Math.min(backgroundReservePerLane, Math.max(0, lane.targetConcurrency - 1))
+        : 0;
+      return lane.active < Math.max(0, lane.targetConcurrency - reserve) && lane.cooldownUntil <= timestamp;
+    });
   }
 
   function effectiveScope(host, scope) {

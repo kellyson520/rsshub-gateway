@@ -362,7 +362,10 @@ function renderGenericReaderPage({ url, html, baseUrl, secret, signedTargetMetad
       audio: ['src', 'controls'],
       source: ['src', 'type'],
     },
-    allowedSchemes: ['https'],
+    // Allow http in addition to https: deployments without TLS termination
+    // (publicBaseUrl falls back to https://) would otherwise have every
+    // rewritten gateway link stripped from the reader output.
+    allowedSchemes: ['http', 'https'],
   });
   const title = $('title').first().text().trim() || url;
   return renderDocument(title, `<main class="reader"><p class="reader-source"><a href="${escapeHtml(url)}">原始来源</a></p>${safe}</main>`);

@@ -29,6 +29,20 @@ test('captures task failures without stopping the loop', async () => {
   assert.ok(poller.stats().tasks[0].failures >= 1);
 });
 
+
+test('runs each task on its own interval instead of a global cadence', async () => {
+  const poller = createPoller({ intervalMs: 10_000, jitterRatio: 0 });
+  let slowRuns = 0;
+  let fastRuns = 0;
+  poller.register('slow', async () => { slowRuns += 1; }, { interval: 200 });
+  poller.register('fast', async () => { fastRuns += 1; }, { interval: 40 });
+  poller.start();
+  await new Promise((resolve) => setTimeout(resolve, 170));
+  poller.stop();
+  assert.ok(fastRuns >= 3, `expected >=3 fast runs, got ${fastRuns}`);
+  assert.ok(slowRuns <= 1, `expected <=1 slow runs, got ${slowRuns}`);
+});
+
 test('runs immediately when requested', async () => {
   const poller = createPoller({ intervalMs: 10_000, jitterRatio: 0 });
   let runs = 0;

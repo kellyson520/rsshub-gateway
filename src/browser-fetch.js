@@ -188,7 +188,10 @@ export function createBrowserFetchClient({
       const message = await sendRaw(payload);
       return messageToResponse(message);
     } catch (error) {
-      if (!closing && httpFallbackUrl && error.code === 'FETCHD_WORKER_EXIT') {
+      // The doc contract is "fall back to the standalone HTTP sidecar when a
+      // worker cannot be spawned": honor that for spawn failures too, not only
+      // for mid-request worker exits.
+      if (!closing && httpFallbackUrl && ['FETCHD_WORKER_EXIT', 'FETCHD_UNAVAILABLE'].includes(error.code)) {
         const fallback = createFetchdClient({ baseUrl: httpFallbackUrl });
         return fallback(url, options);
       }
