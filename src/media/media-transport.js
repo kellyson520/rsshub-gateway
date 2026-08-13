@@ -81,6 +81,7 @@ export function createMediaTransport({
   sliceSize = 4 * 1024 * 1024,
   sliceLookaheadBytes = 16 * 1024 * 1024,
   sliceFillConcurrency = 4,
+  prefetchConcurrency = sliceFillConcurrency,
   mediaBrowserCacheSeconds = 300,
   createSignedChunk,
   routeRequest,
@@ -97,6 +98,8 @@ export function createMediaTransport({
 } = {}) {
   const knownVideoSizes = new Map();
   const videoPrefetchInflight = new Map();
+  const videoPrefetchStates = new Map();
+  const PREFETCH_STATES_CAP = 1000;
   const KNOWN_SIZE_CAP = knownSizeCap;
   function rememberVideoSize(target, size) {
     const timestamp = now();
@@ -460,6 +463,11 @@ export function createMediaTransport({
     if (!cache || !isVideoTarget(target)) return 0;
     const inflight = videoPrefetchInflight.get(target);
     if (inflight) return inflight;
+    const state = { status: 'running', fetched: 0, failed: 0, total: null, startedAt: now(), completedAt: null };
+    videoPrefetchStates.set(target, state);
+    if (videoPrefetchStates.size > PREFETCH_STATES_CAP) {
+      videoPrefetchStates.delete(videoPrefetchStates.keys().next().value);
+    }
     const promise = (async () => {
       try {
         const resolved = await resolveMediaUrl(target);
@@ -480,8 +488,7 @@ export function createMediaTransport({
         }
         const plan = sliceRanges(0, fileSize - 1, fileSize, { sliceSize, lookahead: fileSize });
         if (!plan.ranges.length) return 0;
-        let fetched = 0;
-        let failed = 0;
+        state.total = plan.ranges.length;
         let next = 0;
         async function worker() {
           while (next < plan.ranges.length) {
@@ -499,33 +506,48 @@ export function createMediaTransport({
               });
               if (response?.ok) {
                 const stored = await storeVideoSlice(target, 'public', part, response);
-                if (stored) fetched += 1;
-                else failed += 1;
+                if (stored) state.fetched += 1;
+                else state.failed += 1;
               } else {
-                failed += 1;
+                state.failed += 1;
               }
             } catch {
               // Background prefetch failures must never surface.
-              failed += 1;
+              state.failed += 1;
             }
           }
         }
         const workers = [];
-        for (let index = 0; index < Math.min(sliceFillConcurrency, plan.ranges.length); index += 1) {
+        for (let index = 0; index < Math.min(prefetchConcurrency, plan.ranges.length); index += 1) {
           workers.push(worker());
         }
         await Promise.all(workers);
-        if (failed > 0) {
-          logger.warn('media_prefetch_partial', { target, fetched, failed, total: plan.ranges.length });
+        if (state.failed > 0) {
+          logger.warn('media_prefetch_partial', { target, fetched: state.fetched, failed: state.failed, total: plan.ranges.length });
         }
-        if (fetched > 0) onMetric('media_prefetch_slices', { count: fetched, total: plan.ranges.length });
-        return fetched;
+        if (state.fetched > 0) onMetric('media_prefetch_slices', { count: state.fetched, total: plan.ranges.length });
+        return state.fetched;
       } finally {
+        state.status = 'done';
+        state.completedAt = now();
         videoPrefetchInflight.delete(target);
       }
     })();
     videoPrefetchInflight.set(target, promise);
     return promise;
+  }
+
+  function prefetchStatus(target) {
+    const state = videoPrefetchStates.get(target);
+    if (!state) return null;
+    return {
+      status: state.status,
+      fetchedSlices: state.fetched,
+      totalSlices: state.total,
+      failedSlices: state.failed,
+      startedAt: state.startedAt,
+      completedAt: state.completedAt,
+    };
   }
 
   async function assembleSliceRange(target, resolvedUrl, namespace, parsed, size) {
@@ -801,6 +823,7 @@ export function createMediaTransport({
     imageVariantCacheUrl,
     fillVideoSlices,
     prefetchVideoFile,
+    prefetchStatus,
     sliceKey,
     rememberVideoSize,
     knownVideoSize,
