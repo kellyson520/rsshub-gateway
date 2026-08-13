@@ -11,6 +11,7 @@ import {
   iwaraVideoId,
   iwaraThumbnailUrl,
   iwaraVideoPageUrl,
+  refreshIwaraAccessToken,
   selectIwaraVariant,
   renderIwaraFeed,
   renderIwaraReaderPage,
@@ -43,6 +44,60 @@ async function waitFor(predicate, timeout = 1000) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   assert.fail('timed out waiting for background work');
+}
+
+test('refreshes an iwara access token from a refresh token', async () => {
+  let requested;
+  const result = await refreshIwaraAccessToken(async (url, options) => {
+    requested = { url: String(url), method: options.method, body: options.body };
+    return { token: 'access-1', refreshToken: 'refresh-2', expires: 3600 };
+  }, 'refresh-0');
+
+  assert.equal(requested.method, 'POST');
+  assert.ok(String(requested.url).endsWith('/auth/refresh'));
+  assert.deepEqual(JSON.parse(requested.body), { refreshToken: 'refresh-0' });
+  assert.equal(result.token, 'access-1');
+  assert.equal(result.refreshToken, 'refresh-2');
+  assert.equal(result.expiresMs, 3600 * 1000);
+});
+
+test('interprets epoch-second expires values from the refresh endpoint', async () => {
+  const now = Date.parse('2026-08-13T00:00:00Z');
+  const result = await refreshIwaraAccessToken(
+    async () => ({ token: 'access-1', expires: Math.floor(now / 1000) + 7200 }),
+    'refresh-0',
+    { now: () => now },
+  );
+  assert.equal(result.expiresMs, 7200 * 1000);
+});
+
+test('rejects refresh responses without an access token', async () => {
+  await assert.rejects(
+    () => refreshIwaraAccessToken(async () => ({ expires: 3600 }), 'refresh-0'),
+    /missing access token/,
+  );
+  await assert.rejects(() => refreshIwaraAccessToken(async () => ({}), ''), /refresh token is required/);
+});
+
+
+function makeJwt(payload) {
+  const enc = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc(payload)}.fake-signature`;
+}
+
+function jsonResponse(payload) {
+  const body = Buffer.from(JSON.stringify(payload));
+  return {
+    status: 200,
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    body,
+    json: async () => JSON.parse(body.toString('utf8')),
+  };
+}
+
+function missingResponse() {
+  return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
 }
 
 test('recognizes iwara video targets and ids', () => {
@@ -141,6 +196,90 @@ test('serves an iwara user video feed through the gateway', async () => {
   const enclosureMatch = body.match(/<enclosure url="https:\/\/[^"]*\/_gateway\/media\/([^"]+)"[^>]*\/>/);
   assert.ok(enclosureMatch, 'enclosure media token missing');
   assert.equal(verifySignedTarget(enclosureMatch[1], 'secret').url, 'https://iwara.tv/video/abc123/some-title');
+});
+
+test('refreshes an iwara refresh token and uses the access token for API calls', async () => {
+  const calls = [];
+  const refreshJwt = makeJwt({ type: 'refresh_token', exp: 2_000_000_000 });
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { iwara: { token: refreshJwt } },
+    fetchdFetch: async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method, headers: options.headers, body: options.body });
+      if (String(url).includes('/auth/refresh')) return jsonResponse({ token: 'access-1', refreshToken: 'refresh-2', expires: 3600 });
+      if (String(url).includes('/profile/kelpie')) return jsonResponse({ user: { id: 'user-1', name: 'kelpie' } });
+      if (String(url).includes('/videos?user=user-1')) return jsonResponse({ results: [video] });
+      return missingResponse();
+    },
+  });
+  const { response, body } = await request(server, '/iwara/users/kelpie/video');
+  assert.equal(response.status, 200);
+  assert.match(body, /<title>kelpie&apos;s iwara<\/title>/);
+  const refresh = calls.filter((call) => String(call.url).includes('/auth/refresh'));
+  assert.equal(refresh.length, 1);
+  assert.equal(refresh[0].method, 'POST');
+  assert.deepEqual(JSON.parse(refresh[0].body), { refreshToken: refreshJwt });
+  const profile = calls.find((call) => String(call.url).includes('/profile/kelpie'));
+  assert.equal(profile.headers.authorization, 'Bearer access-1');
+  const videos = calls.find((call) => String(call.url).includes('/videos?user=user-1'));
+  assert.equal(videos.headers.authorization, 'Bearer access-1');
+});
+
+test('falls back to the configured iwara token when refresh fails', async () => {
+  const calls = [];
+  const refreshJwt = makeJwt({ type: 'refresh_token', exp: 2_000_000_000 });
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { iwara: { token: refreshJwt } },
+    fetchdFetch: async (url, options = {}) => {
+      calls.push({ url: String(url), headers: options.headers });
+      if (String(url).includes('/auth/refresh')) throw new Error('refresh endpoint down');
+      if (String(url).includes('/profile/kelpie')) return jsonResponse({ user: { id: 'user-1', name: 'kelpie' } });
+      if (String(url).includes('/videos?user=user-1')) return jsonResponse({ results: [video] });
+      return missingResponse();
+    },
+  });
+  const { response } = await request(server, '/iwara/users/kelpie/video');
+  assert.equal(response.status, 200);
+  const profile = calls.find((call) => String(call.url).includes('/profile/kelpie'));
+  assert.equal(profile.headers.authorization, `Bearer ${refreshJwt}`);
+});
+
+test('uses the resolved iwara access token for session requests', async () => {
+  const seen = [];
+  const refreshJwt = makeJwt({ type: 'refresh_token', exp: 2_000_000_000 });
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    sourceConfig: { iwara: { token: refreshJwt } },
+    fetchdFetch: async (url) => {
+      if (String(url).includes('/auth/refresh')) return jsonResponse({ token: 'access-1', refreshToken: 'refresh-2', expires: 3600 });
+      return missingResponse();
+    },
+    fetchExternal: async (url, options = {}) => {
+      seen.push({ url: String(url), options });
+      return new Response('iwara page', { status: 200, headers: { 'content-type': 'text/html' } });
+    },
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      sessionLanes: () => [{ id: 'session-lane-01', proxyName: 'node-a', dispatcher: { proxyUrl: 'http://127.0.0.1:7921' } }],
+      markSessionLaneUnhealthy: async () => true,
+      stats: () => ({ degraded: false, lanes: 0, sessionLanes: 1 }),
+    },
+    sessionAffinity: {
+      resolve: async () => ({ laneId: 'session-lane-01' }),
+      markLaneUnhealthy: async () => 0,
+    },
+  });
+  const token = createSignedTarget('https://iwara.tv/user/kelpie', 'secret', 300, undefined, { egressScope: 'session', source: 'iwara' });
+  const { response } = await request(server, `/_gateway/item/${token}`);
+  assert.equal(response.status, 200);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].options.sessionCredentials?.token, 'access-1');
 });
 
 test('returns 404 for an unknown iwara user', async () => {

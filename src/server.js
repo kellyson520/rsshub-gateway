@@ -83,6 +83,7 @@ import {
   fetchIwaraVideoDetail,
   isIwaraVideoTarget,
   iwaraVideoId,
+  refreshIwaraAccessToken,
   renderIwaraFeed,
   renderIwaraReaderPage,
   resolveIwaraVideoStream,
@@ -686,23 +687,47 @@ export function createGatewayServer(options = {}) {
   const fetchdFetch = requestService.fetchdFetch;
   const fetchJsonViaFetchd = requestService.fetchJsonViaFetchd;
   const iwaraAccessToken = { value: null, expiresAt: 0 };
+  const iwaraRefreshToken = { value: null };
   const iwaraResolutionCache = new Map();
+  const IWARA_ACCESS_DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
+  const IWARA_REFRESH_RETRY_MS = 15 * 60 * 1000;
+
+  function decodeJwtPayload(value) {
+    try {
+      const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
+      return payload && typeof payload === 'object' ? payload : null;
+    } catch {
+      return null;
+    }
+  }
 
   async function iwaraToken() {
     const credentials = sourceConfig.iwara;
     if (!credentials?.token) return null;
     const now = Date.now();
     if (iwaraAccessToken.value && iwaraAccessToken.expiresAt > now + 60_000) return iwaraAccessToken.value;
-    let expiresAt = now + 2 * 60 * 60 * 1000;
-    try {
-      const payload = JSON.parse(Buffer.from(String(credentials.token).split('.')[1] || '', 'base64url').toString('utf8'));
-      if (Number.isFinite(payload?.exp)) expiresAt = payload.exp * 1000;
-    } catch {
-      // Fall back to the short-lived in-memory expiry when the token is not a JWT.
+    const payload = decodeJwtPayload(credentials.token);
+    if (payload?.type === 'access_token') {
+      iwaraAccessToken.value = credentials.token;
+      iwaraAccessToken.expiresAt = Number.isFinite(payload.exp) ? payload.exp * 1000 : now + IWARA_ACCESS_DEFAULT_TTL_MS;
+      return credentials.token;
     }
+    try {
+      const refreshSource = iwaraRefreshToken.value || credentials.token;
+      const refreshed = await refreshIwaraAccessToken(fetchJsonViaFetchd, refreshSource);
+      if (refreshed?.token) {
+        iwaraRefreshToken.value = refreshed.refreshToken || refreshSource;
+        iwaraAccessToken.value = refreshed.token;
+        iwaraAccessToken.expiresAt = now + Math.max(60_000, refreshed.expiresMs);
+        return refreshed.token;
+      }
+    } catch (error) {
+      logger.warn('iwara_token_refresh_failed', { error: error.message });
+    }
+    // Fall back to the configured token; refresh is retried after the retry window.
     iwaraAccessToken.value = credentials.token;
-    iwaraAccessToken.expiresAt = expiresAt;
-    return iwaraAccessToken.value;
+    iwaraAccessToken.expiresAt = now + IWARA_REFRESH_RETRY_MS;
+    return credentials.token;
   }
 
   async function resolveIwaraVideo(target) {
@@ -794,7 +819,11 @@ export function createGatewayServer(options = {}) {
     sessionAffinity.setLaneIds?.(egressAdapter.sessionLanes().map((lane) => lane.id));
     const affinity = await sessionAffinity.resolve(adapter.name, credentials);
     const lane = egressAdapter.sessionLanes().find((entry) => entry.id === affinity.laneId);
-    return lane?.dispatcher ? { ...affinity, dispatcher: lane.dispatcher, credentials } : null;
+    if (!lane?.dispatcher) return null;
+    const sessionCredentials = adapter.name === 'iwara'
+      ? { ...credentials, token: (await iwaraToken()) || credentials.token }
+      : credentials;
+    return { ...affinity, dispatcher: lane.dispatcher, credentials: sessionCredentials };
   }
 
   async function authenticationChallenge(adapter, response) {
@@ -1101,10 +1130,21 @@ export function createGatewayServer(options = {}) {
       try {
         const rsshub = await fetchRssHub('/healthz', { timeout: 3_000 });
         const body = await readLimited(rsshub, 16 * 1024);
-        const ready = rsshub.ok && body.trim() === 'ok';
+        const rsshubReady = rsshub.ok && body.trim() === 'ok';
+        const egress = egressAdapter?.verifyGroups ? await egressAdapter.verifyGroups() : null;
+        const egressReady = egress ? egress.ready : true;
+        const ready = rsshubReady && egressReady;
         const payload = {
           ready,
-          rsshub: ready ? 'ok' : 'unavailable',
+          rsshub: rsshubReady ? 'ok' : 'unavailable',
+          ...(egress ? {
+            egress: {
+              ready: egress.ready,
+              lanes: egressAdapter.lanes().length,
+              sessionLanes: egressAdapter.sessionLanes().length,
+              missingGroups: egress.missing,
+            },
+          } : {}),
           openCircuits: client.openCircuits?.() || [],
         };
         writeJson(res, ready ? 200 : 503, payload);

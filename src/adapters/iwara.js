@@ -169,6 +169,33 @@ export async function fetchIwaraVideoDetail(fetchJson, videoId, { token } = {}) 
   });
 }
 
+export async function refreshIwaraAccessToken(fetchJson, refreshToken, { now = Date.now } = {}) {
+  if (!refreshToken) throw new Error('iwara refresh token is required');
+  const data = await fetchJson(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+    timeout: 15_000,
+  });
+  if (!data?.token) throw new Error('iwara refresh response missing access token');
+  let expiresMs = 2 * 60 * 60 * 1000;
+  const expires = Number(data.expires);
+  if (Number.isFinite(expires)) {
+    if (expires >= 1e12) {
+      expiresMs = Math.max(0, expires - now());
+    } else if (expires >= 1e9) {
+      expiresMs = Math.max(0, expires * 1000 - now());
+    } else {
+      expiresMs = Math.max(0, expires * 1000);
+    }
+  }
+  return {
+    token: String(data.token),
+    refreshToken: data.refreshToken ? String(data.refreshToken) : String(refreshToken),
+    expiresMs: expiresMs || 2 * 60 * 60 * 1000,
+  };
+}
+
 export async function resolveIwaraVideoStream(fetchJson, detail) {
   if (!detail?.fileUrl) return null;
   const variants = await fetchJson(detail.fileUrl, { timeout: 25_000 });

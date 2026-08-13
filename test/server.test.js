@@ -1116,6 +1116,59 @@ test('returns readiness JSON without changing liveness behavior', async () => {
   assert.deepEqual(JSON.parse(body), { ready: true, rsshub: 'ok', openCircuits: [] });
 });
 
+test('readyz includes egress preflight and fails when lane groups are missing', async () => {
+  const server = createGatewayServer({
+    client: {
+      fetchRssHub: async () => new Response('ok', { status: 200 }),
+      openCircuits: () => [],
+    },
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      verifyGroups: async () => ({ ready: false, missing: ['SESSION_LANE_01'] }),
+      lanes: () => [],
+      sessionLanes: () => [],
+      markSessionLaneUnhealthy: async () => true,
+      stats: () => ({}),
+    },
+  });
+  const { response, body } = await request(server, '/readyz');
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(JSON.parse(body), {
+    ready: false,
+    rsshub: 'ok',
+    egress: { ready: false, lanes: 0, sessionLanes: 0, missingGroups: ['SESSION_LANE_01'] },
+    openCircuits: [],
+  });
+});
+
+test('readyz passes when egress lane groups are complete', async () => {
+  const server = createGatewayServer({
+    client: {
+      fetchRssHub: async () => new Response('ok', { status: 200 }),
+      openCircuits: () => [],
+    },
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      verifyGroups: async () => ({ ready: true, missing: [] }),
+      lanes: () => [{ id: 'lane-01' }],
+      sessionLanes: () => [{ id: 'session-lane-01' }],
+      markSessionLaneUnhealthy: async () => true,
+      stats: () => ({}),
+    },
+  });
+  const { response, body } = await request(server, '/readyz');
+
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(body);
+  assert.equal(payload.ready, true);
+  assert.deepEqual(payload.egress, { ready: true, lanes: 1, sessionLanes: 1, missingGroups: [] });
+});
+
 test('returns 503 readiness when RSSHub is unavailable', async () => {
   const server = createGatewayServer({
     client: {

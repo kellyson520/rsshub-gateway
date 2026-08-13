@@ -236,6 +236,23 @@ export function createMihomoEgressAdapter({
     return [...primaryNodes, ...fallbackNodes];
   }
 
+  async function verifyGroups() {
+    try {
+      const payload = await request('/proxies');
+      const names = new Set(Object.keys(payload?.proxies || {}));
+      const missing = [];
+      for (let index = 0; index < lanesLimit; index += 1) {
+        if (!names.has(laneGroup(index))) missing.push(laneGroup(index));
+      }
+      for (let index = 0; index < sessionLanesLimit; index += 1) {
+        if (!names.has(sessionLaneGroup(index))) missing.push(sessionLaneGroup(index));
+      }
+      return { ready: missing.length === 0, missing };
+    } catch (error) {
+      return { ready: false, missing: [], error: error?.message || 'mihomo controller unavailable' };
+    }
+  }
+
   async function refreshPublicLanes() {
     try {
       const nodes = await proxyCandidates();
@@ -365,6 +382,7 @@ export function createMihomoEgressAdapter({
     refresh: refreshPublicLanes,
     refreshPublicLanes,
     refreshSessionLanes,
+    verifyGroups,
     sessionLanes,
     assignSessionLane,
     releaseSessionLane,

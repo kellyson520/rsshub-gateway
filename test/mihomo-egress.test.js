@@ -431,6 +431,63 @@ test('keeps a scope excluded when HEAD and GET both fail', async () => {
   assert.deepEqual([...lanes[0].healthyScopes], ['public']);
 });
 
+test('verifyGroups reports missing lane groups', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    laneCount: 2,
+    sessionLaneCount: 2,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/proxies')) {
+        return new Response(JSON.stringify({ proxies: {
+          EGRESS_LANE_01: { type: 'Selector' },
+          EGRESS_LANE_02: { type: 'Selector' },
+          SESSION_LANE_01: { type: 'Selector' },
+        } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  const result = await adapter.verifyGroups();
+
+  assert.equal(result.ready, false);
+  assert.deepEqual(result.missing, ['SESSION_LANE_02']);
+});
+
+test('verifyGroups passes when every lane group exists', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    laneCount: 1,
+    sessionLaneCount: 1,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/proxies')) {
+        return new Response(JSON.stringify({ proxies: {
+          EGRESS_LANE_01: { type: 'Selector' },
+          SESSION_LANE_01: { type: 'Selector' },
+        } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  const result = await adapter.verifyGroups();
+
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.missing, []);
+});
+
+test('verifyGroups reports controller errors as not ready', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    fetchImpl: async () => { throw new Error('connection refused'); },
+  });
+
+  const result = await adapter.verifyGroups();
+
+  assert.equal(result.ready, false);
+  assert.ok(result.error);
+});
+
 test('excludes lanes that fail the required public probe', async () => {
   const adapter = createMihomoEgressAdapter({
     controllerUrl: 'http://127.0.0.1:9090',
