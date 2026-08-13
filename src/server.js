@@ -341,6 +341,8 @@ export function createGatewayServer(options = {}) {
     sessionAffinityRoot,
     sessionAffinityFile,
     downloadSessionFile,
+    videoPrefetchEnabled,
+    videoPrefetchConcurrency,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,
@@ -597,6 +599,7 @@ export function createGatewayServer(options = {}) {
     mediaCacheMaxFileBytes,
     videoCacheMaxFileBytes,
     mediaBrowserCacheSeconds,
+    prefetchConcurrency: videoPrefetchConcurrency,
     createSignedChunk,
     routeRequest: (target, requestOptions, routeMetadata) => fetchGatewayTarget(target, requestOptions, routeMetadata),
     adapterFor: adapterForUrl,
@@ -966,6 +969,7 @@ export function createGatewayServer(options = {}) {
     slowSourceThresholdMs,
     mediaSizeFor,
     prefetchVideoFile: mediaTransport.prefetchVideoFile,
+    prefetchStatus: mediaTransport.prefetchStatus,
     metricCounts,
     poller,
     prefetchEhGallery,
@@ -977,6 +981,7 @@ export function createGatewayServer(options = {}) {
     secret,
     signedTargetMetadata,
     videoCacheMaxFileBytes,
+    videoPrefetchEnabled,
     warmEhMedia,
   });
   const server = http.createServer(requestHandler);

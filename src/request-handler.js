@@ -53,6 +53,10 @@ function downloadSessionView(session) {
   };
 }
 
+function withPrefetchStatus(view, target, prefetchStatus) {
+  return { ...view, prefetch: prefetchStatus?.(target) ?? null };
+}
+
 function sourceMetricName(source) {
   const name = String(source || '')
     .trim()
@@ -112,6 +116,8 @@ export function createRequestHandler(deps) {
     poller,
     prefetchEhGallery,
     prefetchVideoFile,
+    prefetchStatus,
+    videoPrefetchEnabled,
     recordDuration,
     recordMetric,
     resolveForegroundEhPage,
@@ -399,13 +405,13 @@ export function createRequestHandler(deps) {
           chunkSize,
           chunks: entries,
         });
-        if (prefetchVideoFile) {
+        if (prefetchVideoFile && videoPrefetchEnabled !== false) {
           void prefetchVideoFile(verified.url, { size }).catch(() => {
             // Background slice prefetch must never affect session creation.
           });
         }
         recordMetric('download_session_created');
-        writeJson(res, 200, downloadSessionView(session));
+        writeJson(res, 200, withPrefetchStatus(downloadSessionView(session), session.target, prefetchStatus));
         return;
       }
       if (req.method === 'GET') {
@@ -414,7 +420,7 @@ export function createRequestHandler(deps) {
           writeText(res, 404, 'download session not found\n');
           return;
         }
-        writeJson(res, 200, downloadSessionView(session));
+        writeJson(res, 200, withPrefetchStatus(downloadSessionView(session), session.target, prefetchStatus));
         return;
       }
       writeText(res, 405, 'method not allowed\n');

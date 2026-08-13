@@ -29,6 +29,7 @@ const DEFAULT_EGRESS_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
 const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
 const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
+const DEFAULT_VIDEO_PREFETCH_CONCURRENCY = 4;
 
 export function resolveGatewayOptions(options = {}, env = process.env) {
   const logger = options.logger || createLogger();
@@ -272,6 +273,14 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
   const sessionAffinityRoot = options.sessionAffinityRoot || env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
   const sessionAffinityFile = options.sessionAffinityFile || env.SESSION_AFFINITY_FILE;
   const downloadSessionFile = options.downloadSessionFile || env.GATEWAY_DOWNLOAD_SESSION_FILE;
+  const videoPrefetchEnabled = options.videoPrefetchEnabled !== false
+    && String(env.GATEWAY_VIDEO_PREFETCH ?? '').toLowerCase() !== 'false';
+  const videoPrefetchConcurrency = boundedInteger(
+    options.videoPrefetchConcurrency ?? env.GATEWAY_VIDEO_PREFETCH_CONCURRENCY,
+    DEFAULT_VIDEO_PREFETCH_CONCURRENCY,
+    1,
+    8,
+  );
   return {
     logger,
     secret,
@@ -299,6 +308,8 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     sessionAffinityRoot,
     sessionAffinityFile,
     downloadSessionFile,
+    videoPrefetchEnabled,
+    videoPrefetchConcurrency,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,
