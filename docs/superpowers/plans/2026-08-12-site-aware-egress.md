@@ -32,7 +32,7 @@
 - Create: `src/infrastructure/site-failure-tracker.js`
 - Test: `test/site-failure-tracker.test.js`
 
-- [ ] **Step 1: 修正 spec 的 hosts 语义**
+- [x] **Step 1: 修正 spec 的 hosts 语义**
 
 在 `docs/superpowers/specs/2026-08-12-site-aware-egress-design.md` 中把：
 
@@ -48,7 +48,7 @@
 
 并同步第 2 节 `chooseLane` 描述：`若 probeTargets.hosts[host] 存在，用它覆盖请求作用域`。
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 Create `test/site-failure-tracker.test.js`:
 
@@ -93,12 +93,12 @@ test('stats exposes per lane and host counts', () => {
 });
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `node --test test/site-failure-tracker.test.js`
 Expected: FAIL（模块不存在，`ERR_MODULE_NOT_FOUND`）。
 
-- [ ] **Step 4: 实现**
+- [x] **Step 4: 实现**
 
 Create `src/infrastructure/site-failure-tracker.js`:
 
@@ -161,12 +161,12 @@ export function createSiteFailureTracker({
 }
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `node --test test/site-failure-tracker.test.js`
 Expected: PASS（3 个测试）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add src/infrastructure/site-failure-tracker.js test/site-failure-tracker.test.js docs/superpowers/specs/2026-08-12-site-aware-egress-design.md
