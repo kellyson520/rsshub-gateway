@@ -1921,3 +1921,30 @@ test('metrics endpoint exports prometheus text counters and request ids flow thr
   assert.match(body, /rsshub_gateway_route_healthz_duration_seconds_count \d+/);
   await new Promise((resolve) => server.close(resolve));
 });
+
+test('metrics attribute request durations per source', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    fetchRssHub: async () => new Response(feed, { headers: { 'content-type': 'application/xml' } }),
+    fetchExternal: async () => new Response('bytes', {
+      headers: { 'content-type': 'video/mp4', 'content-length': '5' },
+    }),
+  });
+  const mediaToken = createSignedTarget('https://x.com/user/status/1', 'secret', 3600, undefined, {
+    egressScope: 'public',
+    source: 'x',
+  });
+  const rsshub = await request(server, '/telegram/channel/foo');
+  assert.equal(rsshub.response.status, 200);
+  const media = await request(server, `/_gateway/media/${mediaToken}`);
+  assert.equal(media.response.status, 200);
+  const health = await request(server, '/healthz');
+  assert.equal(health.response.status, 200);
+  const { response, body } = await request(server, '/_gateway/metrics');
+  assert.equal(response.status, 200);
+  assert.match(body, /# TYPE rsshub_gateway_source_telegram_duration_seconds histogram/);
+  assert.match(body, /rsshub_gateway_source_telegram_duration_seconds_count 1/);
+  assert.match(body, /# TYPE rsshub_gateway_source_x_duration_seconds histogram/);
+  assert.match(body, /rsshub_gateway_source_x_duration_seconds_count 1/);
+  assert.doesNotMatch(body, /rsshub_gateway_source_healthz_duration_seconds/);
+});

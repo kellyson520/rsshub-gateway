@@ -32,6 +32,16 @@ import {
   renderIwaraReaderPage,
 } from './adapters/iwara.js';
 
+function sourceMetricName(source) {
+  const name = String(source || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+  return name ? `source_${name}_duration_seconds` : null;
+}
+
 export function createRequestHandler(deps) {
   const {
     cache,
@@ -89,7 +99,7 @@ export function createRequestHandler(deps) {
     videoCacheMaxFileBytes,
     warmEhMedia
   } = deps;
-  async function handleRequest(req, res) {
+  async function handleRequest(req, res, attribution) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       writeText(res, 405, 'method not allowed\n');
       return;
@@ -263,6 +273,7 @@ export function createRequestHandler(deps) {
     }
     const iwaraFeedMatch = requestUrl.pathname.match(/^\/iwara\/users\/([^/]+)(?:\/(video|image))?$/);
     if (iwaraFeedMatch) {
+      attribution.source = 'iwara';
       const username = decodeURIComponent(iwaraFeedMatch[1]);
       const kind = iwaraFeedMatch[2] || 'video';
       try {
@@ -322,6 +333,7 @@ export function createRequestHandler(deps) {
         writeText(res, 403, 'resource unavailable\n');
         return;
       }
+      attribution.source = chunk.source || 'unknown';
       try {
         const routed = await fetchGatewayMedia(
           chunk.url,
@@ -366,6 +378,7 @@ export function createRequestHandler(deps) {
         writeText(res, 503, 'lease proxy disabled\n');
         return;
       }
+      attribution.source = verified.source || 'unknown';
       try {
         const target = verified.url;
         let resolvedUrl = target;
@@ -427,6 +440,7 @@ export function createRequestHandler(deps) {
         writeText(res, 403, 'resource unavailable\n');
         return;
       }
+      attribution.source = routeMetadata.source;
       const chunksParam = gatewayMatch[1] === 'media' ? requestUrl.searchParams.get('chunks') : null;
       if (chunksParam !== null && chunksParam !== '') {
         const wanted = Number.parseInt(chunksParam, 10);
@@ -717,6 +731,7 @@ export function createRequestHandler(deps) {
       }
       return;
     }
+    attribution.source = requestUrl.pathname.split('/')[1] || '';
     try {
       const rsshubPath = `${requestUrl.pathname}${requestUrl.search}`;
       const rsshubTarget = new URL(rsshubPath, process.env.RSSHUB_URL || 'http://rsshub:1200').toString();
@@ -761,14 +776,17 @@ export function createRequestHandler(deps) {
 
   return async (req, res) => {
     const startedAt = Date.now();
+    const attribution = { source: null };
     try {
-      await handleRequest(req, res);
+      await handleRequest(req, res, attribution);
     } finally {
       const durationMs = Date.now() - startedAt;
       recordDuration('request_duration_seconds', durationMs);
       try {
         const pathname = new URL(req.url || '/', 'http://gateway.internal').pathname;
         recordDuration(`route_${routeBucket(pathname)}_duration_seconds`, durationMs);
+        const sourceMetric = sourceMetricName(attribution.source);
+        if (sourceMetric) recordDuration(sourceMetric, durationMs);
       } catch {
         // Routing metrics must never affect the response.
       }
