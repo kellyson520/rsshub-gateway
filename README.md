@@ -16,7 +16,7 @@ Source tokens are optional. Iwara, X, and Instagram use public fallback behavior
 
 ## Unified Cache
 
-The gateway caches small source documents by canonical upstream URL, never by expiring signed gateway tokens. RSS/XML responses use a 5-minute TTL; E-Hentai ranking, gallery, and image-detail HTML use a 3-day TTL. Cache writes are atomic, concurrent requests for the same document are coalesced, and expired documents are used only when an upstream refresh fails. The logical cache limit is 5 GB and the persistent application cache is mounted at `/var/cache/rsshub-gateway`.
+The gateway caches small source documents by canonical upstream URL, never by expiring signed gateway tokens. RSS/XML responses use a 5-minute TTL; E-Hentai ranking, gallery, and image-detail HTML use a 3-day TTL. Cache writes are atomic, concurrent requests for the same document are coalesced, and expired documents are used only when an upstream refresh fails. The logical cache limit is 5 GB and the persistent application cache is mounted at `/var/cache/rsshub-gateway`. Eviction is kind-aware: RSS entries leave first, then HTML, media, and finally image variants (`media-variant`), so variant regeneration cost is protected; entries of the same kind evict by least-recent use.
 
 Images use the gateway's persistent media cache with a 7-day TTL and the same 5 GB disk budget. E-Hentai continuous readers retain the original image as a fallback and advertise high-quality WebP candidates at 1280, 1920, and 2560 pixels. A candidate is cached only when it is smaller than the original and remains in the same public or session cache namespace. `GATEWAY_IMAGE_VARIANT_CONCURRENCY` defaults to 2 CPU tasks and `GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES` defaults to 32 MiB, so image conversion cannot exhaust outbound or request capacity.
 
@@ -99,6 +99,8 @@ curl -fsS http://127.0.0.1:1300/healthz
 curl -fsS http://127.0.0.1:1300/readyz
 sudo docker compose -f /home/ubuntu/.config/rsshub-gateway/docker-compose.yml up -d --build
 ```
+
+`GET /_gateway/metrics` exports Prometheus text counters (requests, cache hits/misses/bytes, egress lanes, lease-backfill, and all internal metric counters) for scraping; every response echoes `X-Request-Id` (incoming header or auto-generated) and gateway logs carry it for tracing. Per-route request counters (`route_feed`, `route_item`, `route_media`, `route_lease`, ...) are included.
 
 `/healthz` is a liveness check and does not call dependencies. `/readyz` checks the local RSSHub instance and reports the currently open source circuits. Mihomo's runtime `AUTO` health target is `https://t.me`, so Telegram access selects nodes that can reach the actual source rather than a generic connectivity endpoint. For a cold-start check, use an uncached test gallery with delayed pagination and record only status, HTML emission duration, first-media target kind, and the number of requests still active after HTML emission. A source `403`, `404`, `429`, or timeout is an upstream availability result and must not be counted as a successful client first-paint measurement. Do not put live signed URLs, tokens, cookies, proxy names, or private network addresses into logs or bug reports.
 
