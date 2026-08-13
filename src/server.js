@@ -352,6 +352,19 @@ async function prefetchEhGallery({
   };
 }
 
+function routeBucket(pathname) {
+  if (pathname === '/healthz') return 'healthz';
+  if (pathname === '/readyz') return 'readyz';
+  if (pathname.startsWith('/_gateway/lease/')) return 'lease';
+  if (pathname.startsWith('/_gateway/chunk/')) return 'chunk';
+  if (pathname.startsWith('/_gateway/infra')) return 'infra';
+  if (pathname.startsWith('/_gateway/metrics')) return 'metrics';
+  if (pathname.startsWith('/_gateway/item/')) return 'item';
+  if (pathname.startsWith('/_gateway/media/')) return 'media';
+  if (pathname.startsWith('/ehviewer/')) return 'ehviewer';
+  return 'feed';
+}
+
 export function createGatewayServer(options = {}) {
   const logger = options.logger || createLogger();
   const secret = options.secret || readSecret();
@@ -1079,6 +1092,7 @@ export function createGatewayServer(options = {}) {
     const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 64);
     res.setHeader('x-request-id', requestId);
     recordMetric('gateway_request', { path: requestUrl.pathname });
+    recordMetric(`route_${routeBucket(requestUrl.pathname)}`, { path: requestUrl.pathname });
     if (requestUrl.pathname === '/healthz') {
       writeText(res, 200, 'ok\n');
       return;
