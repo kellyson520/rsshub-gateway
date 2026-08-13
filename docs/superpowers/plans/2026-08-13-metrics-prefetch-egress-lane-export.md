@@ -34,6 +34,6 @@
 ### Task 3: 全量验证 + 部署 + 推送
 
 - [x] **Step 1:** `npm test`（root + 非 root）全绿。
-- [ ] **Step 2:** 生产同步（重建 gateway 镜像）+ 线上验证 `/_gateway/metrics` 含新系列、`/_gateway/infra` 含 feedPrefetch。
-- [ ] **Step 3:** 提交推送，CI 绿。
-- [ ] **Step 4:** 清理已合并 worktree。
+- [x] **Step 2:** 生产同步（重建 gateway 镜像）+ 线上验证 `/_gateway/metrics` 含新系列、`/_gateway/infra` 含 feedPrefetch。
+- [x] **Step 3:** 提交推送，CI 绿。
+- [x] **Step 4:** 清理已合并 worktree。
