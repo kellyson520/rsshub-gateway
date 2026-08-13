@@ -60,11 +60,11 @@ Expected: PASS（完整字节、done、指标 1）。
 Run: `npm test`
 Expected: `# pass` 等于 tests、`# fail 0`；非 root 容器同样通过。
 
-- [ ] **Step 6: 生产部署验证 + README**
+- [x] **Step 6: 生产部署验证 + README**
 
 同步 `src/media/resumable-range.js`、`src/request-handler.js` 到 `/opt/1panel/apps/rsshub-gateway/src/`，`docker compose up -d --build`；创建会话下载完整分片确认 `done`、`/_gateway/metrics` 正常；README Video transport 段落补一句断流自动续读。
 
-- [ ] **Step 7: 提交推送**
+- [x] **Step 7: 提交推送**
 
 ```bash
 git add -A && git commit -m "feat: resume truncated download chunks instead of refetching" && git push origin main
