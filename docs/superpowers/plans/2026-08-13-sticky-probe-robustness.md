@@ -15,6 +15,11 @@
 
 **注：** `allowSessionRetry`（upstream.js）需要调用方先解析好 `sessionDispatcher/sessionCredentials` 才有效，而文档/媒体链路已走 `fetchGatewayTarget` 的认证挑战升级（server.js `authenticationChallenge`），故不强行全局接线。
 
+## CI 修复
+
+- GitHub Actions 首次运行失败：`test/iwara.test.js` 的 `serves an iwara user video feed through the gateway` 未传 cache 选项，非 root runner 上默认缓存根 `/var/cache/rsshub-gateway` 无写权限 → EACCES → 502。
+- 修复：该用例补 `cache: false`（与同文件其他用例一致）；非 root（node:24-bookworm, `-u node:node`）与 root 均 267/267 通过。
+
 ## 结果
 
 - 生产 12 条公共 lane 全部恢复 `['public','sticky']`；`adapter.sessionLanes` 从 0 → 12（启动即分配）。

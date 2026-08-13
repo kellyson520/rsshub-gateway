@@ -108,6 +108,7 @@ test('serves an iwara user video feed through the gateway', async () => {
   const fetchdCalls = [];
   const server = createGatewayServer({
     secret: 'secret',
+    cache: false,
     fetchdFetch: async (url, options) => {
       fetchdCalls.push(String(url));
       if (url.includes('/profile/kelpie')) {
