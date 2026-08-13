@@ -1862,6 +1862,59 @@ test('migrates a session lane after repeated blocked statuses', async () => {
   assert.deepEqual(events, [['mark', 'session-lane-01'], ['affinity', 'session-lane-01']]);
 });
 
+test('session lane drill: a blocked lane is replaced and the next request succeeds', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-drill-'));
+  try {
+    const lanes = {
+      'session-lane-01': { id: 'session-lane-01', proxyName: 'node-a', dispatcher: { laneId: 'session-lane-01' } },
+      'session-lane-02': { id: 'session-lane-02', proxyName: 'node-b', dispatcher: { laneId: 'session-lane-02' } },
+    };
+    const marked = [];
+    const usedLanes = [];
+    let firstLane = null;
+    const server = createGatewayServer({
+      secret: 'secret',
+      sessionAffinityFile: path.join(root, 'affinity.json'),
+      sourceConfig: { x: { authToken: 'test-token' } },
+      egressBlockedStatuses: [403],
+      egressSiteFailureThreshold: 2,
+      egressAdapter: {
+        refresh: async () => [],
+        refreshPublicLanes: async () => [],
+        refreshSessionLanes: async () => Object.values(lanes),
+        sessionLanes: () => Object.values(lanes),
+        markSessionLaneUnhealthy: async (laneId) => {
+          marked.push(laneId);
+          delete lanes[laneId];
+          return true;
+        },
+        stats: () => ({}),
+      },
+      fetchExternal: async (url, options = {}) => {
+        const laneId = options.sessionDispatcher?.laneId;
+        usedLanes.push(laneId);
+        if (firstLane === null) firstLane = laneId;
+        if (laneId === firstLane) return new Response('blocked', { status: 403 });
+        return new Response('ok');
+      },
+    });
+    const token = createSignedTarget('https://x.com/example/status/1', 'secret', 300, undefined, { egressScope: 'session' });
+    for (let index = 0; index < 2; index += 1) {
+      const { response } = await request(server, `/_gateway/item/${token}`);
+      assert.equal(response.status, 403);
+    }
+    assert.equal(usedLanes[0], usedLanes[1]);
+    assert.equal(usedLanes[0], firstLane);
+    assert.deepEqual(marked, [firstLane]);
+    const { response, body } = await request(server, `/_gateway/item/${token}`);
+    assert.equal(response.status, 200);
+    assert.equal(body, 'ok');
+    assert.notEqual(usedLanes[2], firstLane);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
 test('lease creation triggers backfill and revoke cancels it', async () => {
   const probe = new (await import('node:http')).Server();
   await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
