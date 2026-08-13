@@ -1,10 +1,14 @@
-# 疑难站点增强模式：RSSHub + rsshub-gateway + 按需启用的 Sidecar-Fetcher。
+# 疑难站点增强模式（单容器）：RSSHub + rsshub-gateway，sidecar 以独立进程在网关容器内运行。
 # 绝大多数路由走 RSSHub；gateway-routes.yaml 注册的个别路由由 sidecar 兜底；
 # sidecar 故障自动回退 RSSHub（fallback_upstream: true），不中断服务。
 #
 # 使用：同 standard 模板，另需：
-#   cp gateway-routes.example.yaml gateway-routes.yaml   # 注册 sidecar 路由
+#   cp gateway-routes.example.yaml gateway-routes.yaml   # 注册 sidecar 路由（127.0.0.1:8000/8001）
 #   docker compose up -d --build
+#
+# sidecar 进程由容器 entrypoint 按 GATEWAY_SIDECAR_* 环境变量拉起，
+# 与网关基座进程隔离（宪章：站点抓取业务不进入基座进程），容器数量保持不变。
+# 如需多容器形态，可另建服务 command: ["fetcher-iwara"] 并把 backend 改为服务名。
 services:
   rsshub:
     image: diygod/rsshub:chromium-bundled
@@ -22,55 +26,21 @@ services:
       - rsshub
     ports:
       - 127.0.0.1:1300:1300
+      - 1301:1301
     environment:
       RSSHUB_URL: http://rsshub:1200
       GATEWAY_SECRET: change-me-to-a-long-random-secret
       GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
       GATEWAY_CACHE_MAX_BYTES: "5368709120"
       GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
-      # 允许 sidecar 启动时通过 /_gateway/dispatcher/routes 动态注册路由（无 token 则端点 404，等效关闭）
-      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
+      # 疑难站点增强：在容器内以独立进程启用 sidecar（默认关闭）
+      GATEWAY_SIDECAR_IWARA: "true"
+      GATEWAY_SIDECAR_EH: "true"
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro
       - ./gateway-routes.yaml:/app/config/gateway-routes.yaml:ro
       - gateway-cache:/var/cache/rsshub-gateway
-    networks:
-      - gateway
-
-  fetcher-iwara:
-    build: .
-    container_name: fetcher-iwara
-    restart: unless-stopped
-    command: ["fetcher-iwara"]
-    environment:
-      FETCHER_PORT: "8000"
-      FETCHD_PROXY: http://127.0.0.1:7890
-      SOURCE_CONFIG_FILE: /app/config/sources.json
-      # 启动时向网关动态注册 /iwara/users/:username/:kind?（需与 gateway 的 token 一致）
-      DISPATCHER_REGISTRATION_URL: http://gateway:1300
-      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
-      FETCHER_ADVERTISE_HOST: fetcher-iwara
-    volumes:
-      - ./config/mihomo:/root/.config/mihomo
-      - ./config/sources.json:/app/config/sources.json:ro
-    networks:
-      - gateway
-
-  fetcher-eh:
-    build: .
-    container_name: fetcher-eh
-    restart: unless-stopped
-    command: ["fetcher-eh"]
-    environment:
-      FETCHER_PORT: "8001"
-      FETCHD_PROXY: http://127.0.0.1:7890
-      # 启动时向网关动态注册 /ehviewer/ranking/:period?（需与 gateway 的 token 一致）
-      DISPATCHER_REGISTRATION_URL: http://gateway:1300
-      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
-      FETCHER_ADVERTISE_HOST: fetcher-eh
-    volumes:
-      - ./config/mihomo:/root/.config/mihomo
     networks:
       - gateway
 

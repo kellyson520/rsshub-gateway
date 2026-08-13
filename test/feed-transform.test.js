@@ -97,6 +97,20 @@ test('carries public route metadata into transformed feed links', () => {
   assert.equal(data.source, 'iwara');
 });
 
+test('decodes entity content exactly once without collapsing literal entities', () => {
+  const cdata = `<?xml version="1.0"?><rss><channel><item><link>https://www.iwara.tv/video/abc</link><description><![CDATA[<p>Fish &amp; Chips</p>]]></description></item></channel></rss>`;
+  const cdataOut = transformFeed(cdata, options);
+  assert.match(cdataOut, /Fish &amp; Chips/);
+  assert.doesNotMatch(cdataOut, /Fish & Chips/);
+
+  // Escaped (non-CDATA) descriptions get exactly one decode: the literal
+  // "&amp;amp;" must not collapse to a raw ampersand in the output.
+  const escaped = `<?xml version="1.0"?><rss><channel><item><link>https://www.iwara.tv/video/abc</link><description>&lt;p&gt;Fish &amp;amp; Chips&lt;/p&gt;</description></item></channel></rss>`;
+  const escapedOut = transformFeed(escaped, options);
+  assert.match(escapedOut, /Fish &amp; Chips/);
+  assert.doesNotMatch(escapedOut, /Fish & Chips/);
+});
+
 test('rewrites RSS enclosure and media attachment URLs to signed media routes', () => {
   const feed = `<?xml version="1.0"?><rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><item>
     <title>Video</title>

@@ -4,7 +4,7 @@ import { transformFeed } from './feed-transform.js';
 import { verifySignedTarget } from './signed-target.js';
 import { GatewayUpstreamError } from './upstream-errors.js';
 import { adapterForUrl } from './adapters/index.js';
-import { parseRankingHtml, rankingTarget, renderRankingFeed } from './adapters/ehviewer.js';
+
 import { renderReaderPage, renderUnavailablePage } from './reader.js';
 import { createInitialReaderManifest, mergeResolvedPage } from './reader-manifest.js';
 import { createSignedChunk, verifySignedChunk } from './download-lease.js';
@@ -24,12 +24,9 @@ import {
   writeText,
 } from './http-utils.js';
 import {
-  fetchIwaraUser,
   fetchIwaraVideoDetail,
-  fetchIwaraVideos,
   isIwaraVideoTarget,
   iwaraVideoId,
-  renderIwaraFeed,
   renderIwaraReaderPage,
 } from './adapters/iwara.js';
 
@@ -486,102 +483,14 @@ export function createRequestHandler(deps) {
         return;
       }
     }
-    const rankingMatch = requestUrl.pathname.match(/^\/ehviewer\/ranking(?:\/(month|year|all))?$/);
-    if (rankingMatch) {
-      const period = rankingMatch[1] || 'day';
-      try {
-        const remote = await fetchExternalDocument(rankingTarget(period), undefined, 'html');
-        if (!remote.ok) {
-          writeText(res, remote.status, 'source unavailable\n');
-          return;
-        }
-        const body = await readLimited(remote);
-        const feed = renderRankingFeed(parseRankingHtml(body, { period }));
-        const output = transformFeed(feed, {
-          baseUrl: publicBaseUrl(req),
-          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
-          secret,
-          signedTargetMetadata: { egressScope: 'public' },
-        });
-        writeEncodedText(res, req, 200, output, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
-      } catch (error) {
-        if (error instanceof GatewayUpstreamError) {
-          logger.error('ehviewer_failure', {
-            source: error.source,
-            code: error.code,
-            status: error.status,
-            attempts: error.attempts,
-          });
-          writeGatewayError(res, error);
-        } else {
-          writeText(res, 502, 'source unavailable\n');
-        }
-      }
-      return;
-    }
-    if (requestUrl.pathname.startsWith('/ehviewer/ranking/')) {
-      writeText(res, 404, 'not found\n');
-      return;
-    }
-    const iwaraFeedMatch = requestUrl.pathname.match(/^\/iwara\/users\/([^/]+)(?:\/(video|image))?$/);
-    if (iwaraFeedMatch) {
-      attribution.source = 'iwara';
-      let username;
-      try {
-        username = decodeURIComponent(iwaraFeedMatch[1]);
-      } catch {
-        writeText(res, 400, 'invalid username encoding\n');
-        return;
-      }
-      const kind = iwaraFeedMatch[2] || 'video';
-      try {
-        const output = await fetchCachedDocument({
-          cache,
-          fetcher: async () => {
-            const token = await iwaraToken();
-            const user = await fetchIwaraUser(fetchJsonViaFetchd, username, { token });
-            if (!user?.id) {
-              return new Response('user not found\n', {
-                status: 404,
-                headers: { 'content-type': 'text/plain; charset=utf-8' },
-              });
-            }
-            const videos = await fetchIwaraVideos(fetchJsonViaFetchd, user.id, { kind, token });
-            const feed = renderIwaraFeed({ username, kind, videos });
-            return new Response(feed, {
-              status: 200,
-              headers: { 'content-type': 'application/rss+xml; charset=utf-8' },
-            });
-          },
-          requestUrl: requestUrl.pathname,
-          cacheUrl: new URL(requestUrl.pathname, 'http://gateway.internal').toString(),
-          kind: 'rss',
-          request: { priority: 'foreground' },
-        });
-        const body = await readLimited(output);
-        const transformed = transformFeed(body, {
-          baseUrl: publicBaseUrl(req),
-          selfUrl: `${publicBaseUrl(req)}${requestUrl.pathname}${requestUrl.search}`,
-          secret,
-          signedTargetMetadata: { egressScope: 'public' },
-        });
-        writeEncodedText(res, req, output.status, transformed, 'application/rss+xml; charset=utf-8', { 'cache-control': 'public, max-age=300' });
-      } catch (error) {
-        if (error instanceof GatewayUpstreamError) {
-          logger.error('iwara_failure', {
-            source: error.source,
-            code: error.code,
-            status: error.status,
-            attempts: error.attempts,
-          });
-          writeGatewayError(res, error);
-        } else {
-          logger.error('iwara_failure', { code: 'IWARA_FEED_ERROR', status: 502, error: error.message });
-          writeText(res, 502, 'source unavailable\n');
-        }
-      }
-      return;
-    }
+    // /ehviewer/ranking* has no built-in handler: the charter forbids site
+    // scraping in the gateway base. It is served by the fetcher-eh sidecar when
+    // a route is registered, and transparently proxied to upstream RSSHub
+    // otherwise.
+    // /iwara/users/* has no built-in handler: the charter forbids site
+    // scraping in the gateway base. It is served by the fetcher-iwara sidecar
+    // when a route is registered, and transparently proxied to upstream RSSHub
+    // otherwise.
     const downloadWaitMatch = requestUrl.pathname.match(/^\/_gateway\/download\/([^/]+)\/wait$/);
     if (downloadWaitMatch) {
       if (req.method !== 'GET') {
@@ -857,7 +766,15 @@ export function createRequestHandler(deps) {
             const detail = await fetchIwaraVideoDetail(fetchJsonViaFetchd, iwaraVideoId(target), { token });
             if (detail?.id) {
               const page = renderIwaraReaderPage({ video: detail, baseUrl: publicBaseUrl(req), secret });
-              writeText(res, 200, page, 'text/html; charset=utf-8');
+              const encoded = encodeHtmlResponse({
+                body: page,
+                contentType: 'text/html; charset=utf-8',
+                acceptEncoding: req.headers['accept-encoding'],
+                method: 'GET',
+                minBytes: htmlBrotliMinBytes,
+                quality: htmlBrotliQuality,
+              });
+              writeBuffer(res, 200, encoded.body, 'text/html; charset=utf-8', encoded.headers);
               return;
             }
           } catch {
@@ -907,7 +824,15 @@ export function createRequestHandler(deps) {
               secret,
               signedTargetMetadata: signedTargetMetadata(adapter, 'session'),
             });
-            writeText(res, 503, page, 'text/html; charset=utf-8');
+            const encoded = encodeHtmlResponse({
+              body: page,
+              contentType: 'text/html; charset=utf-8',
+              acceptEncoding: req.headers['accept-encoding'],
+              method: 'GET',
+              minBytes: htmlBrotliMinBytes,
+              quality: htmlBrotliQuality,
+            });
+            writeBuffer(res, 503, encoded.body, 'text/html; charset=utf-8', encoded.headers);
           }
           return;
         }
@@ -1073,17 +998,20 @@ export function createRequestHandler(deps) {
         const renderedHtml = !unavailable && contentType.includes('html');
         if (renderedHtml) {
           const encodingStartedAt = Date.now();
+          // Compute headers exactly as a GET would (Node suppresses the body
+          // for HEAD requests) so HEAD/GET responses stay consistent.
           const encoded = encodeHtmlResponse({
             body: page,
             contentType: 'text/html; charset=utf-8',
             acceptEncoding: req.headers['accept-encoding'],
-            method: req.method,
+            method: 'GET',
             minBytes: htmlBrotliMinBytes,
             quality: htmlBrotliQuality,
           });
-          if (encoded.headers['content-encoding'] === 'br') {
-            recordMetric('html_brotli_encoded', {
+          if (encoded.headers['content-encoding']) {
+            recordMetric('html_compressed', {
               source: adapter.name,
+              encoding: encoded.headers['content-encoding'],
               bytesIn: Buffer.byteLength(page),
               bytesOut: encoded.body.length,
               durationMs: Date.now() - encodingStartedAt,

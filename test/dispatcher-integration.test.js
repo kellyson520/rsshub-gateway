@@ -139,43 +139,42 @@ test('dispatcher returns 502 when the sidecar fails without fallback', async () 
   }
 });
 
-test('dispatcher leaves the builtin iwara route untouched when routes file is absent', async () => {
+test('proxies the iwara feed to upstream RSSHub when no sidecar route is registered', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-int-'));
   try {
+    let rsshubCalls = 0;
     const server = createGatewayServer({
       secret: 'secret',
       cache: false,
       routesFile: path.join(root, 'absent.yaml'),
-      fetchdFetch: async (url) => {
-        if (url.includes('/profile/kelpie')) {
-          return {
-            status: 200, ok: true, headers: new Headers({ 'content-type': 'application/json' }),
-            body: Buffer.from(JSON.stringify({ user: { id: 'user-1', name: 'kelpie' } })),
-            json: async () => ({ user: { id: 'user-1', name: 'kelpie' } }),
-          };
-        }
-        if (url.includes('/videos?user=user-1')) {
-          return {
-            status: 200, ok: true, headers: new Headers({ 'content-type': 'application/json' }),
-            body: Buffer.from(JSON.stringify({ results: [{ id: 'abc123', title: 'Video', file: { id: 'f1' } }] })),
-            json: async () => ({ results: [{ id: 'abc123', title: 'Video', file: { id: 'f1' } }] }),
-          };
-        }
-        return { status: 404, ok: false, headers: new Headers(), body: Buffer.alloc(0), json: async () => ({}) };
+      fetchRssHub: async () => {
+        rsshubCalls += 1;
+        return new Response(UPSTREAM_FEED, { status: 200, headers: { 'content-type': 'application/rss+xml' } });
       },
     });
     const { response, body } = await request(server, '/iwara/users/kelpie/video');
     assert.equal(response.status, 200);
-    assert.match(body, /kelpie&apos;s iwara/);
+    assert.match(body, /<title>Upstream<\/title>/);
+    assert.equal(rsshubCalls, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test('malformed percent-encoding in iwara usernames is rejected without crashing', async () => {
-  const server = createGatewayServer({ secret: 'secret', cache: false, routesFile: '/tmp/absent-routes.yaml' });
+test('malformed percent-encoding in iwara usernames falls through to upstream without crashing', async () => {
+  let rsshubCalls = 0;
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    routesFile: '/tmp/absent-routes.yaml',
+    fetchRssHub: async () => {
+      rsshubCalls += 1;
+      return new Response('not found', { status: 404 });
+    },
+  });
   const { response } = await request(server, '/iwara/users/%zz/video');
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 404);
+  assert.equal(rsshubCalls, 1);
 });
 
 test('malformed percent-encoding in a sidecar route parameter never crashes or matches', async () => {
@@ -190,10 +189,11 @@ test('malformed percent-encoding in a sidecar route parameter never crashes or m
       routesFile,
       fetchRssHub: async () => new Response(UPSTREAM_FEED, { status: 200, headers: { 'content-type': 'application/rss+xml' } }),
     });
-    // The dispatcher rejects the malformed segment instead of crashing; the
-    // builtin iwara handler then answers 400 for the bad encoding.
-    const { response } = await request(server, '/iwara/users/%zz/video');
-    assert.equal(response.status, 400);
+    // The dispatcher rejects the malformed segment instead of crashing, so the
+    // request falls through to the upstream RSSHub passthrough untouched.
+    const { response, body } = await request(server, '/iwara/users/%zz/video');
+    assert.equal(response.status, 200);
+    assert.match(body, /<title>Upstream<\/title>/);
     assert.equal(sidecar.calls.length, 0);
   } finally {
     await new Promise((resolve) => sidecar.server.close(resolve));

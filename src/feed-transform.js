@@ -141,7 +141,13 @@ function rewriteEntry($, entry, options) {
   });
   $(entry).children().each((_, child) => {
     if (!['description', 'content', 'content:encoded'].includes(child.name)) return;
-    const content = decodeTextEntities($(child).text());
+    // cheerio (xmlMode, decodeEntities: true) already decoded ordinary text
+    // nodes once; CDATA content is NOT decoded by the parser, so decode it
+    // exactly once here. Decoding both would collapse literal entity text
+    // (e.g. "&amp;amp;" -> "&") and turn escaped markup text into live markup.
+    const text = $(child).text();
+    const hasCdata = $(child).contents().toArray().some((node) => node.type === 'cdata');
+    const content = hasCdata ? decodeTextEntities(text) : text;
     if (/<[a-z][\s\S]*>/i.test(content)) setCdata($, child, rewriteHtml(content, options));
   });
 }

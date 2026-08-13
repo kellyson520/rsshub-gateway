@@ -85,8 +85,15 @@ sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
 - 字面量段 — 精确匹配。
 - 注册顺序优先：多条路由命中时取第一条。
 
-内置路由优先级低于 Dispatcher：`routes.yaml` 注册了 `/ehviewer/ranking/:period?` 时，sidecar 将接管内置排名路由；
-未注册时内置路由保持现状。
+网关基座不包含任何站点抓取路由（宪章约束）：未注册的路由一律透传上游 RSSHub。
+`routes.yaml` 注册 `/ehviewer/ranking/:period?` 后由 fetcher-eh sidecar 服务该路径；
+注册 `/iwara/users/:username/:kind?` 后由 fetcher-iwara sidecar 服务。
+
+部署形态（均满足进程隔离）：
+- **单容器疑难站点增强模式（推荐）**：网关容器内通过 `GATEWAY_SIDECAR_IWARA=true` /
+  `GATEWAY_SIDECAR_EH=true` 以独立进程拉起 sidecar，路由 backend 写 `sidecar://127.0.0.1:8000` /
+  `sidecar://127.0.0.1:8001`（见 `docker-compose.enhanced.example.yml`）。
+- 多容器模式：sidecar 独立容器，backend 写 compose 服务名。
 
 ## 5 参考实现
 

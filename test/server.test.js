@@ -88,50 +88,54 @@ test('exposes aggregated infrastructure stats at /_gateway/infra', async () => {
   assert.ok(payload.limits.leaseMaxBytes > 0);
 });
 
-test('serves the EhViewer daily ranking as transformed RSS', async () => {
+test('proxies the EhViewer daily ranking to upstream RSSHub by default', async () => {
   const requested = [];
+  let rsshubCalls = 0;
   const server = createGatewayServer({
     secret: 'secret',
-    fetchExternal: async (url) => {
-      requested.push(String(url));
-      return new Response('<table class="gltc"><tbody><tr><td class="glname"><a href="https://e-hentai.org/g/123/abc/">Gallery</a></td></tr></tbody></table>', {
-        headers: { 'content-type': 'text/html' },
+    cache: false,
+    fetchRssHub: async (path) => {
+      requested.push(String(path));
+      rsshubCalls += 1;
+      return new Response(`<?xml version="1.0"?><rss version="2.0"><channel><title>Ranking</title><item><title>Gallery</title><link>https://e-hentai.org/g/123/abc/</link></item></channel></rss>`, {
+        headers: { 'content-type': 'application/rss+xml' },
       });
     },
   });
   const { response, body } = await request(server, '/ehviewer/ranking');
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get('content-type'), 'application/rss+xml; charset=utf-8');
-  assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
-  assert.deepEqual(requested, ['https://e-hentai.org/toplist.php?tl=15']);
+  assert.match(response.headers.get('content-type'), /rss/);
+  assert.deepEqual(requested, ['/ehviewer/ranking']);
   assert.match(body, /_gateway\/item/);
   assert.match(body, /Gallery/);
 });
 
-test('maps the EhViewer monthly ranking and rejects unknown periods', async () => {
+test('proxies EhViewer monthly and unknown periods to upstream RSSHub unchanged', async () => {
   const requested = [];
   let rsshubCalls = 0;
   const server = createGatewayServer({
     secret: 'secret',
-    fetchExternal: async (url) => {
-      requested.push(String(url));
-      return new Response('<table class="gltc"><tbody></tbody></table>', {
-        headers: { 'content-type': 'text/html' },
-      });
-    },
-    fetchRssHub: async () => {
+    cache: false,
+    fetchRssHub: async (path) => {
+      requested.push(String(path));
       rsshubCalls += 1;
-      return new Response('unexpected', { status: 200 });
+      if (String(path) === '/ehviewer/ranking/unknown') {
+        return new Response('not found', { status: 404 });
+      }
+      return new Response(`<?xml version="1.0"?><rss><channel><title>Monthly</title></channel></rss>`, {
+        headers: { 'content-type': 'application/rss+xml' },
+      });
     },
   });
   const monthly = await request(server, '/ehviewer/ranking/month');
   const unknown = await request(server, '/ehviewer/ranking/unknown');
 
   assert.equal(monthly.response.status, 200);
-  assert.deepEqual(requested, ['https://e-hentai.org/toplist.php?tl=13']);
+  assert.match(monthly.body, /Monthly/);
   assert.equal(unknown.response.status, 404);
-  assert.equal(rsshubCalls, 0);
+  assert.equal(rsshubCalls, 2);
+  assert.deepEqual(requested, ['/ehviewer/ranking/month', '/ehviewer/ranking/unknown']);
 });
 
 test('opens an E-Hentai gallery item as one ordered continuous image page', async () => {

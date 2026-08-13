@@ -5,10 +5,13 @@
 #
 # 配置方式：
 #   1. 将本文件复制为 gateway-routes.yaml（或通过 GATEWAY_ROUTES_FILE 指定路径）；
-#   2. 按需注册自定义路由。backend 支持两种：
-#      - sidecar://host:port  调用独立 Sidecar-Fetcher 进程（Fetcher-API，POST /fetch）
-#      - builtin://iwara      使用网关内置适配器
+#   2. 按需注册自定义路由，backend 使用 sidecar://host:port（Fetcher-API，POST /fetch）；
 #   3. fallback_upstream: true 时，sidecar 故障自动降级回上游 RSSHub，不中断服务。
+#
+# 疑难站点增强模式（单容器）：在同一个网关容器内以独立进程运行 sidecar，
+#   docker compose 环境变量 GATEWAY_SIDECAR_IWARA=true / GATEWAY_SIDECAR_EH=true
+#   此时 backend 指向容器内地址 127.0.0.1:8000 / 127.0.0.1:8001。
+# 多容器模式同样可用：backend 指向 compose 服务名（如 fetcher-iwara:8000）。
 #
 # 动态注册（无需重启网关）：设置 DISPATCHER_REGISTRATION_TOKEN 后，
 # /_gateway/dispatcher/routes 端点支持 GET（列表）/ POST（注册）/ DELETE（注销），
@@ -18,19 +21,15 @@
 # 路径模式：:name 匹配单个路径段，:name? 为可选尾段，* 匹配剩余路径。
 
 routes:
-  # 示例：使用独立 fetcher-iwara sidecar 服务 iwara 用户 feed
+  # 示例：fetcher-iwara sidecar 服务 iwara 用户 feed（单容器，进程隔离）
   - routeId: "/iwara/users/:username/:kind?"
-    backend: "sidecar://fetcher-iwara:8000"
+    backend: "sidecar://127.0.0.1:8000"
     fallback_upstream: true
     cacheTtl: 900
 
-  # 示例：保持使用网关内置 iwara 适配器
-  # - routeId: "/iwara/users/:username/:kind?"
-  #   backend: "builtin://iwara"
-
-  # 示例：使用独立 fetcher-eh sidecar 服务 E-Hentai 排名 feed
+  # 示例：fetcher-eh sidecar 服务 E-Hentai 排名 feed（单容器，进程隔离）
   - routeId: "/ehviewer/ranking/:period?"
-    backend: "sidecar://fetcher-eh:8001"
+    backend: "sidecar://127.0.0.1:8001"
     fallback_upstream: true
     cacheTtl: 300
 
