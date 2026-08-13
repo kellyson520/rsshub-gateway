@@ -693,12 +693,14 @@ export function createGatewayServer(options = {}) {
       const refreshSource = iwaraRefreshToken.value || credentials.token;
       const refreshed = await refreshIwaraAccessToken(fetchJsonViaFetchd, refreshSource);
       if (refreshed?.token) {
+        recordMetric('iwara_token_refreshed');
         iwaraRefreshToken.value = refreshed.refreshToken || refreshSource;
         iwaraAccessToken.value = refreshed.token;
         iwaraAccessToken.expiresAt = now + Math.max(60_000, refreshed.expiresMs);
         return refreshed.token;
       }
     } catch (error) {
+      recordMetric('iwara_token_refresh_failed');
       logger.warn('iwara_token_refresh_failed', { error: error.message });
     }
     // Fall back to the configured token; refresh is retried after the retry window.

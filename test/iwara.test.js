@@ -225,9 +225,15 @@ test('refreshes an iwara refresh token and uses the access token for API calls',
       return missingResponse();
     },
   });
-  const { response, body } = await request(server, '/iwara/users/kelpie/video');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const response = await fetch(`http://127.0.0.1:${port}/iwara/users/kelpie/video`);
+  const body = await response.text();
+  const metrics = await (await fetch(`http://127.0.0.1:${port}/_gateway/metrics`)).text();
+  await new Promise((resolve) => server.close(resolve));
   assert.equal(response.status, 200);
   assert.match(body, /<title>kelpie&apos;s iwara<\/title>/);
+  assert.match(metrics, /rsshub_gateway_iwara_token_refreshed_total 1/);
   const refresh = calls.filter((call) => String(call.url).includes('/user/token'));
   assert.equal(refresh.length, 1);
   assert.equal(refresh[0].method, 'POST');
@@ -253,8 +259,14 @@ test('falls back to the configured iwara token when refresh fails', async () => 
       return missingResponse();
     },
   });
-  const { response } = await request(server, '/iwara/users/kelpie/video');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const response = await fetch(`http://127.0.0.1:${port}/iwara/users/kelpie/video`);
+  await response.text();
+  const metrics = await (await fetch(`http://127.0.0.1:${port}/_gateway/metrics`)).text();
+  await new Promise((resolve) => server.close(resolve));
   assert.equal(response.status, 200);
+  assert.match(metrics, /rsshub_gateway_iwara_token_refresh_failed_total 1/);
   const profile = calls.find((call) => String(call.url).includes('/profile/kelpie'));
   assert.equal(profile.headers.authorization, `Bearer ${refreshJwt}`);
 });

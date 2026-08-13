@@ -14,3 +14,8 @@
 - [x] Step 6: 测试：适配器刷新函数、server token 缓存/回退/会话凭证、verifyGroups、readyz 预检；全量 + 非 root 双验证
 - [x] Step 7: README 更新（iwara 令牌刷新、readyz 语义）；生产部署验证（feed 200、无刷新失败日志、mihomo 日志确认 `/user/token` 走 STICKY、session 请求走 SESSION_LANE_01）；推送 GitHub 且 CI 绿
 - [x] 修正：实测 `api.iwara.tv/auth/refresh` 404，真实端点为 `POST /user/token` + `Authorization: Bearer`（返回 `{accessToken}`，JWT `exp` 驱动 TTL，refresh token 不轮换）；适配器/测试/README/计划同步更新
+
+## 后续（观测与磁盘预算）
+
+- [x] iwara 令牌刷新观测：`iwaraToken()` 成功/失败各加 `recordMetric` 计数（`rsshub_gateway_iwara_token_refreshed_total` / `_failed_total`，metrics 与 `/_gateway/infra` 可见）；两个 E2E 用例断言计数，279/279 通过，生产实测计数=1
+- [x] 磁盘预算：生产 `GATEWAY_CACHE_MAX_BYTES` 5GB → 4GB（磁盘 86%→84%，余量 5.3G→6.3G；kind-aware 淘汰按 rss<html<media<media-variant 顺序缩容）
