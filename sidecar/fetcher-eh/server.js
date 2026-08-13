@@ -1,8 +1,12 @@
 import { createBrowserFetchClient } from '../../src/browser-fetch.js';
-import { createFetcherServer, listen } from '../../src/fetcher-server.js';
+import { createFetcherServer, listen, registerDispatcherRoutes, unregisterDispatcherRoutes } from '../../src/fetcher-server.js';
 import { createEhFetcher } from './fetcher.js';
 
 const PORT = Number.parseInt(process.env.FETCHER_PORT || '', '10') || 8001;
+const DISPATCHER_REGISTRATION_URL = process.env.DISPATCHER_REGISTRATION_URL || '';
+const DISPATCHER_REGISTRATION_TOKEN = process.env.DISPATCHER_REGISTRATION_TOKEN || '';
+const ADVERTISE_HOST = process.env.FETCHER_ADVERTISE_HOST || '127.0.0.1';
+const ROUTE_ID = '/ehviewer/ranking/:period?';
 
 async function main() {
   const browserFetch = createBrowserFetchClient();
@@ -22,7 +26,28 @@ async function main() {
     name: 'fetcher-eh',
   });
   await listen(server, PORT, '0.0.0.0', 'fetcher_eh');
-  const shutdown = () => {
+  if (DISPATCHER_REGISTRATION_URL && DISPATCHER_REGISTRATION_TOKEN) {
+    await registerDispatcherRoutes({
+      url: `${DISPATCHER_REGISTRATION_URL.replace(/\/$/, '')}/_gateway/dispatcher/routes`,
+      token: DISPATCHER_REGISTRATION_TOKEN,
+      routes: [{
+        routeId: ROUTE_ID,
+        backend: `sidecar://${ADVERTISE_HOST}:${PORT}`,
+        fallback_upstream: true,
+        cacheTtl: 300,
+      }],
+      name: 'fetcher_eh',
+    });
+  }
+  const shutdown = async () => {
+    if (DISPATCHER_REGISTRATION_URL && DISPATCHER_REGISTRATION_TOKEN) {
+      await unregisterDispatcherRoutes({
+        url: `${DISPATCHER_REGISTRATION_URL.replace(/\/$/, '')}/_gateway/dispatcher/routes`,
+        token: DISPATCHER_REGISTRATION_TOKEN,
+        routeIds: [ROUTE_ID],
+        name: 'fetcher_eh',
+      });
+    }
     browserFetch.close();
     server.close(() => process.exit(0));
   };

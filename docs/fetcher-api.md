@@ -98,7 +98,38 @@ sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
 两者共用 `src/fetcher-server.js`（HTTP 脚手架：`/fetch`、`/healthz`、错误映射）与
 `src/browser-fetch.js`（curl_cffi 浏览器指纹 + Mihomo 出口）。
 
-## 6 新增站点指引
+## 6 运行时路由注册（无需重启网关）
+
+网关提供控制端点 `/_gateway/dispatcher/routes`，sidecar 可在启动时（或运行中）动态注册/注销路由，
+路由表立即生效，无需重启网关。端点默认关闭：网关未配置 `DISPATCHER_REGISTRATION_TOKEN` 时返回 404
+（生产默认不开启，零回归）。
+
+| 方法 | 请求体 | 响应 |
+| --- | --- | --- |
+| `GET` | — | `{ routes: [...], total }`（配置文件 + 运行时路由列表） |
+| `POST` | `{ "routes": [{ "routeId", "backend", "fallback_upstream", "cacheTtl" }] }` | `{ registered, rejected, total }` |
+| `DELETE` | `{ "routeIds": ["/iwara/users/:username/:kind?"] }` | `{ removed, total }` |
+
+鉴权：`Authorization: Bearer <DISPATCHER_REGISTRATION_TOKEN>`（常量时间比较）。
+配置文件路由优先级高于运行时路由；运行时路由支持与配置文件相同的模式语法
+（`:name`、`:name?`、`*`）与 `fallback_upstream` 语义。重复注册同一 `routeId` 会产生多条候选，
+按注册顺序取第一条命中（`DELETE` 按 `routeId` 全部移除）。
+
+### 启动时自动注册
+
+两个参考 sidecar（`sidecar/fetcher-iwara`、`sidecar/fetcher-eh`）内置自动注册：设置以下环境变量后，
+启动时自动 POST 注册自己的路由，收到 SIGTERM/SIGINT 时尽力注销：
+
+| 环境变量 | 说明 |
+| --- | --- |
+| `DISPATCHER_REGISTRATION_URL` | 网关基地址，如 `http://gateway:1300`（自动追加 `/_gateway/dispatcher/routes`） |
+| `DISPATCHER_REGISTRATION_TOKEN` | 与网关 `DISPATCHER_REGISTRATION_TOKEN` 一致 |
+| `FETCHER_ADVERTISE_HOST` | 网关可达的 sidecar 主机名（compose 内为服务名，如 `fetcher-iwara`） |
+
+注册失败会自动重试（默认 10 次、间隔 2s），最终失败仅记日志、不阻断 sidecar 启动；
+sidecar 仍可被 `gateway-routes.yaml` 静态路由直接调用。
+
+## 7 新增站点指引
 
 1. 新建 `sidecar/fetcher-<name>/fetcher.js`：实现 `createXxxFetcher({ fetchJson/fetchHtml })` 与 `handleFetch(body)`，返回 `{ rssXml, mediaUrls, cacheHint }`，错误抛 `HttpError(status, message)`。
 2. 新建 `sidecar/fetcher-<name>/server.js`：复用 `createFetcherServer` + `browser-fetch`，端口 `FETCHER_PORT`。

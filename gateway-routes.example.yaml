@@ -10,6 +10,11 @@
 #      - builtin://iwara      使用网关内置适配器
 #   3. fallback_upstream: true 时，sidecar 故障自动降级回上游 RSSHub，不中断服务。
 #
+# 动态注册（无需重启网关）：设置 DISPATCHER_REGISTRATION_TOKEN 后，
+# /_gateway/dispatcher/routes 端点支持 GET（列表）/ POST（注册）/ DELETE（注销），
+# 鉴权 Bearer token；sidecar 启动时也可自动上报（见 docs/fetcher-api.md 第 6 节）。
+# 静态配置路由始终优先于运行时注册路由。
+#
 # 路径模式：:name 匹配单个路径段，:name? 为可选尾段，* 匹配剩余路径。
 
 routes:

@@ -232,3 +232,103 @@ routes:
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('dispatcher control endpoint is disabled without a registration token', async () => {
+  const server = createGatewayServer({ secret: 'secret', cache: false });
+  const { response, body } = await request(server, '/_gateway/dispatcher/routes');
+  assert.equal(response.status, 404);
+  assert.match(body, /not found/);
+});
+
+test('dispatcher control endpoint requires the registration token', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    cache: false,
+    dispatcherRegistrationToken: 'reg-token',
+  });
+  const denied = await request(server, '/_gateway/dispatcher/routes');
+  assert.equal(denied.response.status, 401);
+  const wrong = await request(server, '/_gateway/dispatcher/routes');
+  // use fetch directly to set the header
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  try {
+    const wrongRes = await fetch(`http://127.0.0.1:${port}/_gateway/dispatcher/routes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer wrong' },
+      body: JSON.stringify({ routes: [{ routeId: '/x/:id', backend: 'sidecar://x:1' }] }),
+    });
+    assert.equal(wrongRes.status, 401);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('runtime route registration serves a sidecar without any routes file', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-int-'));
+  const sidecar = await sidecarServer(async () => ({
+    status: 200,
+    rssXml: SIDECAR_FEED,
+    mediaUrls: [],
+    cacheHint: { ttl: 900 },
+  }));
+  try {
+    let upstreamCalls = 0;
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache: false,
+      routesFile: path.join(root, 'absent.yaml'),
+      dispatcherRegistrationToken: 'reg-token',
+      fetchRssHub: async () => {
+        upstreamCalls += 1;
+        return new Response('not found', { status: 404 });
+      },
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    try {
+      const registered = await fetch(`http://127.0.0.1:${port}/_gateway/dispatcher/routes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer reg-token' },
+        body: JSON.stringify({
+          routes: [{ routeId: '/sidecar/:username/:kind?', backend: `sidecar://127.0.0.1:${sidecar.port}`, fallback_upstream: true, cacheTtl: 900 }],
+        }),
+      });
+      assert.equal(registered.status, 200);
+      assert.deepEqual(await registered.json(), { registered: 1, rejected: 0, total: 1 });
+
+      const served = await fetch(`http://127.0.0.1:${port}/sidecar/example/video`);
+      const body = await served.text();
+      assert.equal(served.status, 200);
+      assert.match(body, /<title>Sidecar<\/title>/);
+      assert.equal(sidecar.calls.length, 1);
+      assert.deepEqual(sidecar.calls[0].params, { username: 'example', kind: 'video' });
+
+      const listed = await fetch(`http://127.0.0.1:${port}/_gateway/dispatcher/routes`, {
+        headers: { authorization: 'Bearer reg-token' },
+      });
+      assert.equal(listed.status, 200);
+      const listing = await listed.json();
+      assert.equal(listing.routes.length, 1);
+      assert.equal(listing.routes[0].routeId, '/sidecar/:username/:kind?');
+
+      const unregistered = await fetch(`http://127.0.0.1:${port}/_gateway/dispatcher/routes`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer reg-token' },
+        body: JSON.stringify({ routeIds: ['/sidecar/:username/:kind?'] }),
+      });
+      assert.equal(unregistered.status, 200);
+      assert.deepEqual(await unregistered.json(), { removed: 1, total: 0 });
+
+      const gone = await fetch(`http://127.0.0.1:${port}/sidecar/example/video`);
+      assert.equal(gone.status, 404);
+      assert.equal(upstreamCalls, 1);
+      assert.equal(sidecar.calls.length, 1);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  } finally {
+    await new Promise((resolve) => sidecar.server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});

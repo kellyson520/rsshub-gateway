@@ -79,6 +79,7 @@ export function createRequestHandler(deps) {
     discoverCachedEhGallery,
     discoverEhGallery,
     dispatcher,
+    dispatcherRegistrationToken,
     downloadSessions,
     egressAdapter,
     egressPool,
@@ -136,7 +137,9 @@ export function createRequestHandler(deps) {
   async function handleRequest(req, res, attribution) {
     const downloadCreate = req.method === 'POST'
       && /^\/_gateway\/download\/[^/]+$/.test(String(req.url || '').split('?')[0]);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate) {
+    const dispatcherRoutes = String(req.url || '').split('?')[0] === '/_gateway/dispatcher/routes'
+      && (req.method === 'POST' || req.method === 'DELETE');
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate && !dispatcherRoutes) {
       writeText(res, 405, 'method not allowed\n');
       return;
     }
@@ -268,6 +271,61 @@ export function createRequestHandler(deps) {
           videoCacheMaxFileBytes,
         },
       });
+      return;
+    }
+    if (requestUrl.pathname === '/_gateway/dispatcher/routes') {
+      if (!dispatcherRegistrationToken || !dispatcher) {
+        writeText(res, 404, 'not found\n');
+        return;
+      }
+      const auth = String(req.headers.authorization || '');
+      const expected = `Bearer ${dispatcherRegistrationToken}`;
+      const provided = auth.trim();
+      if (!provided || provided.length !== expected.length
+        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+        writeText(res, 401, 'unauthorized\n');
+        return;
+      }
+      if (req.method === 'GET') {
+        writeJson(res, 200, {
+          routes: [...dispatcher.routes, ...dispatcher.runtimeRoutes].map(({ pattern, ...route }) => route),
+          total: dispatcher.routes.length + dispatcher.runtimeRoutes.length,
+        });
+        return;
+      }
+      if (req.method === 'POST') {
+        let body;
+        try {
+          body = JSON.parse(await readRequestBody(req));
+        } catch {
+          writeJson(res, 400, { error: 'invalid json body' });
+          return;
+        }
+        if (!Array.isArray(body?.routes)) {
+          writeJson(res, 400, { error: 'routes array is required' });
+          return;
+        }
+        const result = dispatcher.registerRoutes(body.routes);
+        writeJson(res, 200, { ...result, total: dispatcher.routes.length + dispatcher.runtimeRoutes.length });
+        return;
+      }
+      if (req.method === 'DELETE') {
+        let body;
+        try {
+          body = JSON.parse(await readRequestBody(req));
+        } catch {
+          writeJson(res, 400, { error: 'invalid json body' });
+          return;
+        }
+        if (!Array.isArray(body?.routeIds)) {
+          writeJson(res, 400, { error: 'routeIds array is required' });
+          return;
+        }
+        const result = dispatcher.unregisterRoutes(body.routeIds);
+        writeJson(res, 200, { ...result, total: dispatcher.routes.length + dispatcher.runtimeRoutes.length });
+        return;
+      }
+      writeText(res, 405, 'method not allowed\n');
       return;
     }
     const dispatched = dispatcher?.match(requestUrl.pathname) || null;
@@ -937,6 +995,15 @@ export function createRequestHandler(deps) {
       return;
     }
     await serveRssHubPassthrough(req, res, requestUrl, attribution);
+  }
+
+  async function readRequestBody(req) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      req.on('error', reject);
+    });
   }
 
   async function serveRssHubPassthrough(req, res, requestUrl, attribution) {

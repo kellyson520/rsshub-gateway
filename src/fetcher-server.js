@@ -50,6 +50,78 @@ export function listen(server, port = 8000, host = '0.0.0.0', name = 'fetcher') 
     });
 }
 
+export async function registerDispatcherRoutes({
+  url,
+  token,
+  routes,
+  name = 'fetcher',
+  retries = 10,
+  retryDelayMs = 2000,
+  fetchImpl = fetch,
+  timeoutMs = 5000,
+} = {}) {
+  if (!url || !token || !Array.isArray(routes) || routes.length === 0) return false;
+  const payload = JSON.stringify({ routes });
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: payload,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`gateway returned ${response.status}`);
+      process.stdout.write(JSON.stringify({
+        event: `${name}_routes_registered`,
+        routes: routes.length,
+        ts: new Date().toISOString(),
+      }) + '\n');
+      return true;
+    } catch (error) {
+      if (attempt >= retries) {
+        process.stderr.write(JSON.stringify({
+          event: `${name}_routes_registration_failed`,
+          error: error.message,
+          ts: new Date().toISOString(),
+        }) + '\n');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  return false;
+}
+
+export async function unregisterDispatcherRoutes({
+  url,
+  token,
+  routeIds,
+  name = 'fetcher',
+  fetchImpl = fetch,
+  timeoutMs = 3000,
+} = {}) {
+  if (!url || !token || !Array.isArray(routeIds) || routeIds.length === 0) return;
+  try {
+    await fetchImpl(url, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ routeIds }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    process.stdout.write(JSON.stringify({
+      event: `${name}_routes_unregistered`,
+      routes: routeIds.length,
+      ts: new Date().toISOString(),
+    }) + '\n');
+  } catch (error) {
+    process.stderr.write(JSON.stringify({
+      event: `${name}_routes_unregister_failed`,
+      error: error.message,
+      ts: new Date().toISOString(),
+    }) + '\n');
+  }
+}
+
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];

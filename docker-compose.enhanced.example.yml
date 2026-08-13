@@ -28,6 +28,8 @@ services:
       GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
       GATEWAY_CACHE_MAX_BYTES: "5368709120"
       GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
+      # 允许 sidecar 启动时通过 /_gateway/dispatcher/routes 动态注册路由（无 token 则端点 404，等效关闭）
+      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro
@@ -45,6 +47,10 @@ services:
       FETCHER_PORT: "8000"
       FETCHD_PROXY: http://127.0.0.1:7890
       SOURCE_CONFIG_FILE: /app/config/sources.json
+      # 启动时向网关动态注册 /iwara/users/:username/:kind?（需与 gateway 的 token 一致）
+      DISPATCHER_REGISTRATION_URL: http://gateway:1300
+      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
+      FETCHER_ADVERTISE_HOST: fetcher-iwara
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro
@@ -59,6 +65,10 @@ services:
     environment:
       FETCHER_PORT: "8001"
       FETCHD_PROXY: http://127.0.0.1:7890
+      # 启动时向网关动态注册 /ehviewer/ranking/:period?（需与 gateway 的 token 一致）
+      DISPATCHER_REGISTRATION_URL: http://gateway:1300
+      DISPATCHER_REGISTRATION_TOKEN: ${DISPATCHER_REGISTRATION_TOKEN:-change-me-reg-token}
+      FETCHER_ADVERTISE_HOST: fetcher-eh
     volumes:
       - ./config/mihomo:/root/.config/mihomo
     networks:

@@ -89,6 +89,7 @@ export function createDispatcher({
   sidecarTimeoutMs = DEFAULT_SIDECAR_TIMEOUT_MS,
 } = {}) {
   const routes = [];
+  const runtimeRoutes = [];
   try {
     const source = readFileImpl(routesFile, 'utf8');
     const parsed = parseYaml(source);
@@ -104,9 +105,33 @@ export function createDispatcher({
     }
   }
 
+  function registerRoutes(entries) {
+    let registered = 0;
+    let rejected = 0;
+    for (const raw of Array.isArray(entries) ? entries : []) {
+      const route = normalizeRoute(raw);
+      if (!route) {
+        rejected += 1;
+        continue;
+      }
+      runtimeRoutes.push(route);
+      registered += 1;
+    }
+    return { registered, rejected };
+  }
+
+  function unregisterRoutes(routeIds) {
+    const wanted = new Set(Array.isArray(routeIds) ? routeIds.map(String) : []);
+    const before = runtimeRoutes.length;
+    for (let index = runtimeRoutes.length - 1; index >= 0; index -= 1) {
+      if (wanted.has(runtimeRoutes[index].routeId)) runtimeRoutes.splice(index, 1);
+    }
+    return { removed: before - runtimeRoutes.length };
+  }
+
   function match(pathname) {
     const segments = String(pathname || '').split('/').filter(Boolean);
-    for (const route of routes) {
+    for (const route of [...routes, ...runtimeRoutes]) {
       const params = matchSegments(route.pattern, segments);
       if (params !== null) return { route, params };
     }
@@ -146,5 +171,5 @@ export function createDispatcher({
     return payload;
   }
 
-  return { routes, match, callSidecar };
+  return { routes, runtimeRoutes, match, callSidecar, registerRoutes, unregisterRoutes };
 }

@@ -199,3 +199,60 @@ test('callSidecar rejects unsupported backend schemes', async () => {
     /unsupported backend/,
   );
 });
+
+test('dispatcher registers runtime routes and matches them without a routes file', async () => {
+  const dispatcher = dispatcherWith('absent.yaml');
+  assert.equal(dispatcher.match('/iwara/users/x'), null);
+  const result = dispatcher.registerRoutes([
+    { routeId: '/iwara/users/:username/:kind?', backend: 'sidecar://fetcher-iwara:8000', fallback_upstream: true, cacheTtl: 900 },
+  ]);
+  assert.deepEqual(result, { registered: 1, rejected: 0 });
+  const match = dispatcher.match('/iwara/users/example/video');
+  assert.ok(match);
+  assert.equal(match.route.backend, 'sidecar://fetcher-iwara:8000');
+  assert.deepEqual(match.params, { username: 'example', kind: 'video' });
+});
+
+test('dispatcher rejects invalid runtime registrations and reports counts', async () => {
+  const dispatcher = dispatcherWith('absent.yaml');
+  const result = dispatcher.registerRoutes([
+    { routeId: '/ok/:id', backend: 'sidecar://ok:1' },
+    { backend: 'sidecar://no-id:1' },
+    { routeId: '/bad-star/*/:x', backend: 'sidecar://bad:1' },
+  ]);
+  assert.deepEqual(result, { registered: 1, rejected: 2 });
+  assert.ok(dispatcher.match('/ok/1'));
+});
+
+test('dispatcher unregisters runtime routes by routeId', async () => {
+  const dispatcher = dispatcherWith('absent.yaml');
+  dispatcher.registerRoutes([
+    { routeId: '/a/:id', backend: 'sidecar://a:1' },
+    { routeId: '/b/:id', backend: 'sidecar://b:1' },
+  ]);
+  assert.ok(dispatcher.match('/a/1'));
+  assert.ok(dispatcher.match('/b/1'));
+  assert.deepEqual(dispatcher.unregisterRoutes(['/a/:id']), { removed: 1 });
+  assert.equal(dispatcher.match('/a/1'), null);
+  assert.ok(dispatcher.match('/b/1'));
+});
+
+test('dispatcher config routes take precedence over runtime registrations', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-'));
+  try {
+    const file = path.join(root, 'routes.yaml');
+    await writeFile(file, `
+routes:
+  - routeId: "/iwara/users/:username/:kind?"
+    backend: "builtin://iwara"
+`);
+    const dispatcher = dispatcherWith(file);
+    dispatcher.registerRoutes([
+      { routeId: '/iwara/users/:username/:kind?', backend: 'sidecar://later:8000' },
+    ]);
+    const match = dispatcher.match('/iwara/users/x');
+    assert.equal(match.route.backend, 'builtin://iwara');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -316,6 +316,9 @@ function routeBucket(pathname) {
 
 export function createGatewayServer(options = {}) {
   const routesFile = options.routesFile || process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
+  const dispatcherRegistrationToken = options.dispatcherRegistrationToken
+    || process.env.DISPATCHER_REGISTRATION_TOKEN
+    || '';
   const {
     logger,
     secret,
@@ -929,6 +932,7 @@ export function createGatewayServer(options = {}) {
   const requestHandler = createRequestHandler({
     cache,
     dispatcher,
+    dispatcherRegistrationToken,
     cacheNamespaceFor,
     client,
     currentEhPrefetchConcurrency,
