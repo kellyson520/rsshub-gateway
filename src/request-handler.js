@@ -390,7 +390,7 @@ export function createRequestHandler(deps) {
             url: `${publicBaseUrl(req)}/_gateway/chunk/${token}`,
           });
         }
-        const session = downloadSessions.create({
+        const session = await downloadSessions.create({
           id: sessionId,
           target: verified.url,
           size,
@@ -402,7 +402,7 @@ export function createRequestHandler(deps) {
         return;
       }
       if (req.method === 'GET') {
-        const session = downloadSessions.get(downloadMatch[1]);
+        const session = await downloadSessions.get(downloadMatch[1]);
         if (!session) {
           writeText(res, 404, 'download session not found\n');
           return;
@@ -447,9 +447,9 @@ export function createRequestHandler(deps) {
           const stream = Readable.fromWeb(remote.body);
           if (chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
             stream.on('end', () => {
-              if (downloadSessions.markChunkDone(chunk.sessionId, chunk.index)) {
-                recordMetric('download_chunk_completed');
-              }
+              void downloadSessions.markChunkDone(chunk.sessionId, chunk.index).then((done) => {
+                if (done) recordMetric('download_chunk_completed');
+              });
             });
           }
           stream.pipe(res);

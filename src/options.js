@@ -271,6 +271,7 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
   const egressProxyBaseUrl = options.egressProxyBaseUrl || env.EGRESS_PROXY_BASE_URL;
   const sessionAffinityRoot = options.sessionAffinityRoot || env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
   const sessionAffinityFile = options.sessionAffinityFile || env.SESSION_AFFINITY_FILE;
+  const downloadSessionFile = options.downloadSessionFile || env.GATEWAY_DOWNLOAD_SESSION_FILE;
   return {
     logger,
     secret,
@@ -297,6 +298,7 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     controllerUrl,
     sessionAffinityRoot,
     sessionAffinityFile,
+    downloadSessionFile,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,

@@ -340,6 +340,7 @@ export function createGatewayServer(options = {}) {
     controllerUrl,
     sessionAffinityRoot,
     sessionAffinityFile,
+    downloadSessionFile,
     ehMediaPrefetchConcurrency,
     ehMediaPrefetchMinConcurrency,
     ehMediaPrefetchMaxConcurrency,
@@ -880,7 +881,9 @@ export function createGatewayServer(options = {}) {
     : { enqueue: () => {} };
 
   const leaseStore = options.leaseStore || createLeaseStore();
-  const downloadSessions = createDownloadSessionStore();
+  const downloadSessions = createDownloadSessionStore({
+    file: downloadSessionFile || path.join(sessionAffinityRoot, 'download-sessions.json'),
+  });
   const leaseBackfillQueue = leaseBackfillEnabled ? createLeaseBackfillQueue({
     mediaTransport,
     fetchExternal,

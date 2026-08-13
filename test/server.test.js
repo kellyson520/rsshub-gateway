@@ -1764,6 +1764,7 @@ test('download sessions track chunk progress for resume', async () => {
   const server = createGatewayServer({
     secret: 'secret',
     cache: createResponseCache({ root }),
+    downloadSessionFile: path.join(root, 'download-sessions.json'),
     fetchExternal: async (url, request = {}) => {
       assert.equal(String(url), target);
       if (request.range) {
@@ -1819,6 +1820,47 @@ test('download sessions track chunk progress for resume', async () => {
     const postOther = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`, { method: 'POST' });
     assert.equal(postOther.status, 405);
     await new Promise((resolve) => server.close(resolve));
+
+    const restarted = createGatewayServer({
+      secret: 'secret',
+      cache: createResponseCache({ root }),
+      downloadSessionFile: path.join(root, 'download-sessions.json'),
+      fetchExternal: async (url, request = {}) => {
+        assert.equal(String(url), target);
+        if (request.range) {
+          const match = String(request.range).match(/^bytes=(\d+)-(\d+)$/);
+          assert.ok(match, `unexpected range ${request.range}`);
+          const start = Number(match[1]);
+          const end = Number(match[2]);
+          return new Response(mediaBytes.subarray(start, end + 1), {
+            status: 206,
+            headers: {
+              'content-type': 'video/mp4',
+              'content-range': `bytes ${start}-${end}/${mediaBytes.length}`,
+              'accept-ranges': 'bytes',
+            },
+          });
+        }
+        return new Response(mediaBytes, {
+          status: 200,
+          headers: { 'content-type': 'video/mp4', 'content-length': String(mediaBytes.length) },
+        });
+      },
+    });
+    try {
+      await new Promise((resolve) => restarted.listen(0, '127.0.0.1', resolve));
+      const restartedPort = restarted.address().port;
+      const resumedResponse = await fetch(`http://127.0.0.1:${restartedPort}/_gateway/download/${session.id}`);
+      assert.equal(resumedResponse.status, 200);
+      const resumed = await resumedResponse.json();
+      assert.equal(resumed.doneChunks, 1);
+      assert.equal(resumed.doneBytes, 262144);
+      assert.equal(resumed.chunks[0].status, 'done');
+      assert.equal(resumed.chunks[1].status, 'pending');
+      await new Promise((resolve) => restarted.close(resolve));
+    } finally {
+      await new Promise((resolve) => restarted.close(resolve));
+    }
   } finally {
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
