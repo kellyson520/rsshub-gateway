@@ -59,6 +59,8 @@ export function createRequestHandler(deps) {
     fetchRssHub,
     htmlBrotliMinBytes,
     htmlBrotliQuality,
+    histogramBucketsMs,
+    histograms,
     initialEhGalleryManifest,
     iwaraToken,
     leaseBackfillQueue,
@@ -77,6 +79,7 @@ export function createRequestHandler(deps) {
     metricCounts,
     poller,
     prefetchEhGallery,
+    recordDuration,
     recordMetric,
     resolveForegroundEhPage,
     resolveIwaraVideo,
@@ -86,7 +89,7 @@ export function createRequestHandler(deps) {
     videoCacheMaxFileBytes,
     warmEhMedia
   } = deps;
-  return async (req, res) => {
+  async function handleRequest(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       writeText(res, 405, 'method not allowed\n');
       return;
@@ -154,6 +157,17 @@ export function createRequestHandler(deps) {
           lines.push(`rsshub_gateway_${metric}_total ${count}`);
         }
       }
+      for (const [metric, entry] of histograms) {
+        if (!/^[a-z0-9_]+$/.test(metric)) continue;
+        lines.push(`# TYPE rsshub_gateway_${metric} histogram`);
+        for (const bucketMs of histogramBucketsMs) {
+          const le = (bucketMs / 1000).toFixed(3);
+          lines.push(`rsshub_gateway_${metric}_bucket{le="${le}"} ${entry.buckets.get(bucketMs) || 0}`);
+        }
+        lines.push(`rsshub_gateway_${metric}_bucket{le="+Inf"} ${entry.count}`);
+        lines.push(`rsshub_gateway_${metric}_sum ${(entry.sumMs / 1000).toFixed(6)}`);
+        lines.push(`rsshub_gateway_${metric}_count ${entry.count}`);
+      }
       if (backfillStats) {
         lines.push('# TYPE rsshub_gateway_lease_backfill_completed counter');
         lines.push(`rsshub_gateway_lease_backfill_completed ${backfillStats.completed}`);
@@ -187,6 +201,14 @@ export function createRequestHandler(deps) {
         leaseBackfill: leaseBackfillQueue ? leaseBackfillQueue.stats() : null,
         circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
         metrics: Object.fromEntries(metricCounts),
+        histograms: Object.fromEntries([...histograms].map(([metric, entry]) => [
+          metric,
+          {
+            count: entry.count,
+            sumMs: entry.sumMs,
+            buckets: Object.fromEntries(entry.buckets),
+          },
+        ])),
         limits: {
           leaseTtlMs,
           leaseMaxBytes,
@@ -729,6 +751,15 @@ export function createRequestHandler(deps) {
         return;
       }
       writeText(res, 502, 'upstream unavailable\n');
+    }
+  }
+
+  return async (req, res) => {
+    const startedAt = Date.now();
+    try {
+      await handleRequest(req, res);
+    } finally {
+      recordDuration('request_duration_seconds', Date.now() - startedAt);
     }
   };
 }

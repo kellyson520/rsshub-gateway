@@ -84,6 +84,7 @@ test('exposes aggregated infrastructure stats at /_gateway/infra', async () => {
   assert.equal(typeof payload.leases.leases, 'number');
   assert.ok('circuits' in payload);
   assert.ok('metrics' in payload);
+  assert.ok('histograms' in payload);
   assert.ok(payload.limits.leaseMaxBytes > 0);
 });
 
@@ -1873,6 +1874,7 @@ test('metrics endpoint exports prometheus text counters and request ids flow thr
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
+  await fetch(`http://127.0.0.1:${port}/healthz`);
   const response = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`, { headers: { 'x-request-id': 'req-abc-123' } });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-request-id'), 'req-abc-123');
@@ -1880,5 +1882,10 @@ test('metrics endpoint exports prometheus text counters and request ids flow thr
   assert.match(body, /# TYPE rsshub_gateway_requests_total counter/);
   assert.match(body, /rsshub_gateway_cache_hits_total \d+/);
   assert.match(body, /rsshub_gateway_egress_lanes \d+/);
+  assert.match(body, /# TYPE rsshub_gateway_request_duration_seconds histogram/);
+  assert.match(body, /rsshub_gateway_request_duration_seconds_bucket\{le="0\.025"\} \d+/);
+  assert.match(body, /rsshub_gateway_request_duration_seconds_bucket\{le="\+Inf"\} \d+/);
+  assert.match(body, /rsshub_gateway_request_duration_seconds_sum \d+\.\d+/);
+  assert.match(body, /rsshub_gateway_request_duration_seconds_count \d+/);
   await new Promise((resolve) => server.close(resolve));
 });

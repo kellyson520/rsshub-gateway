@@ -629,6 +629,20 @@ export function createGatewayServer(options = {}) {
       // Metrics must never affect a gateway response.
     }
   }
+  const histogramBucketsMs = [25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000];
+  const histograms = new Map();
+  function recordDuration(metric, durationMs) {
+    let entry = histograms.get(metric);
+    if (!entry) {
+      entry = { buckets: new Map(), sumMs: 0, count: 0 };
+      histograms.set(metric, entry);
+    }
+    entry.count += 1;
+    entry.sumMs += durationMs;
+    for (const bucketMs of histogramBucketsMs) {
+      if (durationMs <= bucketMs) entry.buckets.set(bucketMs, (entry.buckets.get(bucketMs) || 0) + 1);
+    }
+  }
   const cache = options.cache === false
     ? null
     : options.cache || ((!options.fetchExternal && !options.fetchRssHub) ? createResponseCache() : null);
@@ -1117,6 +1131,8 @@ export function createGatewayServer(options = {}) {
     fetchRssHub,
     htmlBrotliMinBytes,
     htmlBrotliQuality,
+    histogramBucketsMs,
+    histograms,
     initialEhGalleryManifest,
     iwaraToken,
     leaseBackfillQueue,
@@ -1135,6 +1151,7 @@ export function createGatewayServer(options = {}) {
     metricCounts,
     poller,
     prefetchEhGallery,
+    recordDuration,
     recordMetric,
     resolveForegroundEhPage,
     resolveIwaraVideo,
