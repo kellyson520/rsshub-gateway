@@ -365,3 +365,183 @@ test('known video sizes drop the oldest entry past the cap', () => {
   assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/a'), undefined);
   assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/d'), 4);
 });
+
+test('large video range assembles from parallel slice fetches', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-assemble-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 7);
+    const requested = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        requested.push(String(options.range));
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        const slice = body.subarray(start, end + 1);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        inFlight -= 1;
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(slice.length),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceLookaheadBytes: 16 * 1024 * 1024,
+      sliceFillConcurrency: 4,
+    });
+    const served = await transport.serve(
+      'https://www.iwara.tv/video/parallel',
+      { range: 'bytes=0-8388607', priority: 'foreground' },
+      {},
+    );
+    assert.equal(served.response.status, 206);
+    assert.equal(served.response.headers.get('content-range'), 'bytes 0-8388607/20971520');
+    const bytes = Buffer.from(await served.response.arrayBuffer());
+    assert.equal(bytes.length, 8 * 1024 * 1024);
+    assert.equal(bytes.every((value) => value === 7), true);
+    assert.ok(maxInFlight >= 2, `expected parallel slice fetches, maxInFlight=${maxInFlight}`);
+    assert.ok(requested.includes('bytes=0-0'), 'expected a size probe');
+    assert.equal((await cache.peek('https://www.iwara.tv/video/parallel#slice=0', 'media')).hit, true);
+    assert.equal((await cache.peek('https://www.iwara.tv/video/parallel#slice=4194304', 'media')).hit, true);
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/parallel#slice=16777216', 'media')).hit) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const rangesBefore = requested.length;
+    const second = await transport.serve(
+      'https://www.iwara.tv/video/parallel',
+      { range: 'bytes=0-8388607', priority: 'foreground' },
+      {},
+    );
+    assert.equal(second.response.status, 206);
+    assert.equal(Buffer.from(await second.response.arrayBuffer()).length, 8 * 1024 * 1024);
+    assert.equal(requested.length, rangesBefore);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('single-slice range keeps the single-fetch path', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-assemble-small-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 9);
+    const requested = [];
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        requested.push(String(options.range));
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        const slice = body.subarray(start, end + 1);
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(slice.length),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceLookaheadBytes: 16 * 1024 * 1024,
+      sliceFillConcurrency: 4,
+    });
+    const served = await transport.serve(
+      'https://www.iwara.tv/video/small',
+      { range: 'bytes=0-2097151', priority: 'foreground' },
+      {},
+    );
+    assert.equal(served.response.status, 206);
+    assert.equal(Buffer.from(await served.response.arrayBuffer()).length, 2 * 1024 * 1024);
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && !(await cache.peek('https://www.iwara.tv/video/small#slice=0', 'media')).hit) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal((await cache.peek('https://www.iwara.tv/video/small#slice=0', 'media')).hit, true);
+    assert.equal(requested.includes('bytes=0-0'), false, 'small ranges must not probe size');
+    assert.equal(requested.filter((range) => range === 'bytes=0-2097151').length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('assembly falls back to single fetch when the first slice fails', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-media-assemble-fallback-'));
+  try {
+    const cache = createResponseCache({ root });
+    const body = Buffer.alloc(20 * 1024 * 1024, 5);
+    const requested = [];
+    const fetchExternal = async (url, options = {}) => {
+      if (options.range) {
+        requested.push(String(options.range));
+        if (options.range === 'bytes=0-4194303') {
+          return new Response('slice unavailable', { status: 503 });
+        }
+        const match = String(options.range).match(/^bytes=(\d+)-(\d+)$/);
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        const slice = body.subarray(start, end + 1);
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            'content-type': 'video/mp4',
+            'content-length': String(slice.length),
+            'content-range': `bytes ${start}-${end}/${body.length}`,
+          },
+        });
+      }
+      return new Response(body, {
+        headers: { 'content-type': 'video/mp4', 'content-length': String(body.length) },
+      });
+    };
+    const transport = createMediaTransport({
+      cache,
+      fetchExternal,
+      resolveMediaUrl: async () => ({ url: 'https://cdn.example.com/v.mp4' }),
+      isVideoTarget: () => true,
+      sliceSize: 4 * 1024 * 1024,
+      sliceLookaheadBytes: 16 * 1024 * 1024,
+      sliceFillConcurrency: 4,
+    });
+    const served = await transport.serve(
+      'https://www.iwara.tv/video/fallback',
+      { range: 'bytes=0-8388607', priority: 'foreground' },
+      {},
+    );
+    assert.equal(served.response.status, 206);
+    const bytes = Buffer.from(await served.response.arrayBuffer());
+    assert.equal(bytes.length, 8 * 1024 * 1024);
+    assert.equal(bytes.every((value) => value === 5), true);
+    assert.ok(requested.includes('bytes=0-8388607'), 'expected a full-range fallback fetch');
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});

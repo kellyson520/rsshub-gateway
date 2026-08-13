@@ -446,7 +446,7 @@ export function createRequestHandler(deps) {
         if (req.method === 'HEAD') return res.end();
         if (remote.body) {
           const expectedBytes = chunk.end - chunk.start + 1;
-          const result = await pumpResumableRange({
+          await pumpResumableRange({
             response: remote,
             fetchRange: async (range) => {
               const routed = await fetchGatewayMedia(
@@ -460,13 +460,16 @@ export function createRequestHandler(deps) {
             res,
             start: chunk.start,
             end: chunk.end,
+            onComplete: ({ resumed }) => {
+              if (resumed > 0) recordMetric('download_chunk_resumed', { count: resumed });
+              if (chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
+                void downloadSessions.markChunkDone(chunk.sessionId, chunk.index).then((done) => {
+                  if (done) recordMetric('download_chunk_completed');
+                });
+              }
+            },
+            onTruncated: () => recordMetric('download_chunk_truncated'),
           });
-          if (result.resumed > 0) recordMetric('download_chunk_resumed', { count: result.resumed });
-          if (result.written < expectedBytes) recordMetric('download_chunk_truncated');
-          if (result.written >= expectedBytes && chunk.sessionId !== undefined && Number.isInteger(chunk.index)) {
-            const done = await downloadSessions.markChunkDone(chunk.sessionId, chunk.index);
-            if (done) recordMetric('download_chunk_completed');
-          }
         } else {
           res.end();
         }

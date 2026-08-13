@@ -455,11 +455,110 @@ export function createMediaTransport({
     await Promise.all(workers);
   }
 
+  async function assembleSliceRange(target, resolvedUrl, namespace, parsed, size) {
+    if (!cache) return null;
+    const plan = sliceRanges(parsed.start, parsed.end, size, {
+      sliceSize,
+      lookahead: Math.max(1, parsed.end - parsed.start + 1),
+    });
+    if (plan.ranges.length < 2 || plan.ranges.some((part) => part.start >= videoCacheMaxFileBytes)) return null;
+    const parts = [];
+    for (const part of plan.ranges) {
+      const existing = await cache.readRange(sliceKey(target, part.start), 'media', { namespace });
+      const ranged = existing && existing.size === part.end - part.start + 1 ? existing : null;
+      const item = { part, ranged, error: null, ready: null, settle: null };
+      if (!ranged) item.ready = new Promise((resolve) => { item.settle = resolve; });
+      parts.push(item);
+    }
+    let nextMissing = 0;
+    async function worker() {
+      while (nextMissing < parts.length) {
+        const item = parts[nextMissing];
+        nextMissing += 1;
+        if (item.ranged) continue;
+        try {
+          const response = await fetchExternal(resolvedUrl, {
+            range: `bytes=${item.part.start}-${item.part.end}`,
+            circuit: false,
+            priority: 'foreground',
+          });
+          if (!response?.ok) throw new Error(`slice ${item.part.start} fetch failed`);
+          await storeVideoSlice(target, namespace, item.part, response);
+          const stored = await cache.readRange(sliceKey(target, item.part.start), 'media', { namespace });
+          if (!stored || stored.size !== item.part.end - item.part.start + 1) {
+            throw new Error(`slice ${item.part.start} not stored`);
+          }
+          item.ranged = stored;
+        } catch (error) {
+          item.error = error;
+        } finally {
+          item.settle?.();
+        }
+      }
+    }
+    const missingCount = parts.filter((item) => !item.ranged).length;
+    if (missingCount) {
+      for (let index = 0; index < Math.min(Math.max(1, sliceFillConcurrency), missingCount); index += 1) {
+        void worker();
+      }
+    }
+    const firstMissing = parts.find((item) => !item.ranged);
+    if (firstMissing) {
+      await firstMissing.ready;
+      if (firstMissing.error) return null;
+    }
+    async function* bytes() {
+      for (let index = 0; index < parts.length; index += 1) {
+        const item = parts[index];
+        if (!item.ranged) {
+          await item.ready;
+          if (item.error) throw item.error;
+        }
+        const from = index === 0 ? parsed.start - item.part.start : 0;
+        const to = index === parts.length - 1 ? parsed.end - item.part.start : item.part.end - item.part.start;
+        const stream = item.ranged.createStream(from, to);
+        if (!stream) throw new Error('slice stream unavailable');
+        for await (const chunk of stream) yield chunk;
+      }
+    }
+    const headers = {
+      'content-type': parts[0].ranged.entry.headers['content-type'] || 'video/mp4',
+      'content-length': String(parsed.end - parsed.start + 1),
+      'content-range': `bytes ${parsed.start}-${parsed.end}/${size}`,
+      'accept-ranges': 'bytes',
+    };
+    for (const name of ['etag', 'last-modified']) {
+      const value = parts[0].ranged.entry.headers[name];
+      if (value) headers[name] = value;
+    }
+    onMetric('media_range_assembled', { count: parts.length });
+    return new Response(Readable.toWeb(Readable.from(bytes())), { status: 206, headers });
+  }
+
   async function serveIwaraVideo(target, requestOptions, routeMetadata) {
     if (requestOptions.range) {
       const ranged = await readRange({ target, namespace: 'public', range: requestOptions.range });
       if (ranged) return { adapter: { name: 'iwara' }, egressScope: 'public', response: ranged };
-      const knownSize = knownVideoSize(target);
+      const rawRange = String(requestOptions.range || '').match(/^bytes=(\d+)-(\d+)$/);
+      const rawLength = rawRange ? Number(rawRange[2]) - Number(rawRange[1]) + 1 : 0;
+      let knownSize = knownVideoSize(target);
+      if (!(Number.isSafeInteger(knownSize) && knownSize > 0) && rawLength >= sliceSize) {
+        const resolvedForProbe = await resolveMediaUrl(target);
+        if (resolvedForProbe?.url) {
+          const probe = await fetchExternal(resolvedForProbe.url, {
+            range: 'bytes=0-0',
+            circuit: false,
+            priority: 'background',
+          });
+          const probeRange = (probe.headers.get('content-range') || '').match(/\/(\d+)\s*$/);
+          const probedSize = probeRange ? Number(probeRange[1]) : null;
+          await probe.body?.cancel();
+          if (Number.isSafeInteger(probedSize) && probedSize > 0) {
+            knownSize = probedSize;
+            rememberVideoSize(target, probedSize);
+          }
+        }
+      }
       if (Number.isSafeInteger(knownSize) && knownSize > 0) {
         const sliced = await readSliceRange(target, 'public', requestOptions.range, knownSize);
         if (sliced) return { adapter: { name: 'iwara' }, egressScope: 'public', response: sliced };
@@ -467,6 +566,8 @@ export function createMediaTransport({
         if (parsed && !parsed.unsatisfiable) {
           const resolved = await resolveMediaUrl(target);
           if (resolved?.url) {
+            const assembled = await assembleSliceRange(target, resolved.url, 'public', parsed, knownSize);
+            if (assembled) return { adapter: { name: 'iwara' }, egressScope: 'public', response: assembled };
             fillVideoSlices(target, resolved.url, knownSize, 'public', parsed).catch(() => {
               // Background slice fill must never affect the served response.
             });

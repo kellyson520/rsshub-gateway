@@ -74,6 +74,8 @@ export async function pumpResumableRange({
   backoffMs = 100,
   onBytes,
   onResume,
+  onComplete,
+  onTruncated,
 } = {}) {
   const expectedBytes = end - start + 1;
   let current = response;
@@ -109,8 +111,10 @@ export async function pumpResumableRange({
   }
 
   if (written >= expectedBytes && !res.writableEnded) {
+    onComplete?.({ written, resumed });
     res.end?.();
   } else if (!res.destroyed && !res.writableEnded) {
+    onTruncated?.({ written, resumed });
     res.destroy?.();
   }
   return { written, resumed };
