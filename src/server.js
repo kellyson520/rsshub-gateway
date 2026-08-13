@@ -724,15 +724,36 @@ export function createGatewayServer(options = {}) {
     return credentials.token;
   }
 
+  function isRetryableFetchError(error) {
+    if (!error) return false;
+    if (error.status === undefined) return true;
+    return error.status >= 500;
+  }
+
+  async function retryFetchJson(fetchJson, url, options = {}, { attempts = 3, backoffMs = 300 } = {}) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await fetchJson(url, options);
+      } catch (error) {
+        lastError = error;
+        if (!isRetryableFetchError(error) || attempt >= attempts) break;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+      }
+    }
+    throw lastError;
+  }
+
   async function resolveIwaraVideo(target) {
     const videoId = iwaraVideoId(target);
     if (!videoId) return null;
     const cached = iwaraResolutionCache.get(videoId);
     if (cached && cached.expiresAt > Date.now()) return cached;
     const token = await iwaraToken();
-    const detail = await fetchIwaraVideoDetail(fetchJsonViaFetchd, videoId, { token });
+    const retryingFetch = (url, options = {}) => retryFetchJson(fetchJsonViaFetchd, url, options);
+    const detail = await fetchIwaraVideoDetail(retryingFetch, videoId, { token });
     if (!detail?.fileUrl) return null;
-    const stream = await resolveIwaraVideoStream(fetchJsonViaFetchd, detail);
+    const stream = await resolveIwaraVideoStream(retryingFetch, detail);
     if (!stream) return null;
     const resolved = { ...stream, expiresAt: Date.now() + 15 * 60 * 1000 };
     iwaraResolutionCache.set(videoId, resolved);

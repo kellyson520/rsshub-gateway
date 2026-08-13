@@ -493,6 +493,64 @@ test('caches and serves iwara video media with range support', async () => {
   }
 });
 
+test('retries transient failures while resolving the iwara video stream', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-iwara-retry-'));
+  try {
+    const cache = createResponseCache({ root });
+    let fileAttempts = 0;
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache,
+      sourceConfig: { iwara: { token: 'refresh-token' } },
+      fetchdFetch: async (url) => {
+        if (url.includes('/video/abc123')) {
+          return jsonResponse({
+            id: 'abc123',
+            fileUrl: 'https://filesq.iwara.tv/file/file-1?expires=1&hash=x',
+            file: { mime: 'video/mp4' },
+          });
+        }
+        if (url.includes('filesq.iwara.tv/file/file-1')) {
+          fileAttempts += 1;
+          if (fileAttempts === 1) throw new Error('transient TLS reset');
+          return jsonResponse([{ name: '360', src: { view: '//acheron.iwara.tv/view/360' } }]);
+        }
+        return missingResponse();
+      },
+      fetchExternal: async () => new Response('video-bytes', {
+        headers: { 'content-type': 'video/mp4', 'content-length': '11' },
+      }),
+    });
+    const token = createSignedTarget('https://iwara.tv/video/abc123', 'secret');
+    const { response, body } = await request(server, `/_gateway/media/${token}`);
+    assert.equal(response.status, 200);
+    assert.equal(body, 'video-bytes');
+    assert.equal(fileAttempts, 2);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('does not retry a 404 while resolving the iwara video', async () => {
+  let detailAttempts = 0;
+  const server = createGatewayServer({
+    secret: 'secret',
+    sourceConfig: { iwara: { token: 'refresh-token' } },
+    fetchdFetch: async (url) => {
+      if (url.includes('/video/abc123')) {
+        detailAttempts += 1;
+        return missingResponse();
+      }
+      return missingResponse();
+    },
+  });
+  const token = createSignedTarget('https://iwara.tv/video/abc123', 'secret');
+  const { response } = await request(server, `/_gateway/media/${token}`);
+  assert.ok(response.status >= 400);
+  assert.equal(detailAttempts, 1);
+});
+
 test('serves an iwara video reader page for signed item targets', async () => {
   const server = createGatewayServer({
     secret: 'secret',
