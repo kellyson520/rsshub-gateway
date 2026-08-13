@@ -689,7 +689,7 @@ export function createGatewayServer(options = {}) {
   const iwaraAccessToken = { value: null, expiresAt: 0 };
   const iwaraRefreshToken = { value: null };
   const iwaraResolutionCache = new Map();
-  const IWARA_ACCESS_DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
+  const IWARA_ACCESS_DEFAULT_TTL_MS = 60 * 60 * 1000;
   const IWARA_REFRESH_RETRY_MS = 15 * 60 * 1000;
 
   function decodeJwtPayload(value) {

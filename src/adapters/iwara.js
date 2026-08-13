@@ -169,30 +169,46 @@ export async function fetchIwaraVideoDetail(fetchJson, videoId, { token } = {}) 
   });
 }
 
+function jwtExpiryMs(value, { now = Date.now } = {}) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
+    const exp = Number(payload?.exp);
+    if (Number.isFinite(exp)) return Math.max(0, exp * 1000 - now());
+  } catch {
+    // not a JWT; caller falls back to explicit expires or the default TTL
+  }
+  return null;
+}
+
 export async function refreshIwaraAccessToken(fetchJson, refreshToken, { now = Date.now } = {}) {
   if (!refreshToken) throw new Error('iwara refresh token is required');
-  const data = await fetchJson(`${API_BASE}/auth/refresh`, {
+  const data = await fetchJson(`${API_BASE}/user/token`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    headers: {
+      authorization: `Bearer ${refreshToken}`,
+      'content-type': 'application/json',
+    },
     timeout: 15_000,
   });
-  if (!data?.token) throw new Error('iwara refresh response missing access token');
-  let expiresMs = 2 * 60 * 60 * 1000;
-  const expires = Number(data.expires);
-  if (Number.isFinite(expires)) {
-    if (expires >= 1e12) {
-      expiresMs = Math.max(0, expires - now());
-    } else if (expires >= 1e9) {
-      expiresMs = Math.max(0, expires * 1000 - now());
-    } else {
-      expiresMs = Math.max(0, expires * 1000);
+  const token = data?.accessToken || data?.token;
+  if (!token) throw new Error('iwara refresh response missing access token');
+  let expiresMs = jwtExpiryMs(token, { now });
+  if (expiresMs == null) {
+    const expires = Number(data.expires);
+    if (Number.isFinite(expires)) {
+      if (expires >= 1e12) {
+        expiresMs = Math.max(0, expires - now());
+      } else if (expires >= 1e9) {
+        expiresMs = Math.max(0, expires * 1000 - now());
+      } else {
+        expiresMs = Math.max(0, expires * 1000);
+      }
     }
   }
   return {
-    token: String(data.token),
+    token: String(token),
     refreshToken: data.refreshToken ? String(data.refreshToken) : String(refreshToken),
-    expiresMs: expiresMs || 2 * 60 * 60 * 1000,
+    expiresMs: expiresMs || 60 * 60 * 1000,
   };
 }
 

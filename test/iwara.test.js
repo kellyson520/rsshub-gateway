@@ -49,26 +49,38 @@ async function waitFor(predicate, timeout = 1000) {
 test('refreshes an iwara access token from a refresh token', async () => {
   let requested;
   const result = await refreshIwaraAccessToken(async (url, options) => {
-    requested = { url: String(url), method: options.method, body: options.body };
-    return { token: 'access-1', refreshToken: 'refresh-2', expires: 3600 };
+    requested = { url: String(url), method: options.method, headers: options.headers };
+    return { accessToken: 'access-1' };
   }, 'refresh-0');
 
   assert.equal(requested.method, 'POST');
-  assert.ok(String(requested.url).endsWith('/auth/refresh'));
-  assert.deepEqual(JSON.parse(requested.body), { refreshToken: 'refresh-0' });
+  assert.ok(String(requested.url).endsWith('/user/token'));
+  assert.equal(requested.headers.authorization, 'Bearer refresh-0');
   assert.equal(result.token, 'access-1');
-  assert.equal(result.refreshToken, 'refresh-2');
-  assert.equal(result.expiresMs, 3600 * 1000);
+  assert.equal(result.refreshToken, 'refresh-0');
+  assert.equal(result.expiresMs, 60 * 60 * 1000);
 });
 
-test('interprets epoch-second expires values from the refresh endpoint', async () => {
+test('derives the access token lifetime from its JWT exp claim', async () => {
   const now = Date.parse('2026-08-13T00:00:00Z');
+  const accessJwt = makeJwt({ type: 'access_token', exp: Math.floor(now / 1000) + 7200 });
   const result = await refreshIwaraAccessToken(
-    async () => ({ token: 'access-1', expires: Math.floor(now / 1000) + 7200 }),
+    async () => ({ accessToken: accessJwt }),
     'refresh-0',
     { now: () => now },
   );
+  assert.equal(result.token, accessJwt);
   assert.equal(result.expiresMs, 7200 * 1000);
+});
+
+test('falls back to an explicit expires field when the token is not a JWT', async () => {
+  const now = Date.parse('2026-08-13T00:00:00Z');
+  const result = await refreshIwaraAccessToken(
+    async () => ({ accessToken: 'access-1', expires: Math.floor(now / 1000) + 3600 }),
+    'refresh-0',
+    { now: () => now },
+  );
+  assert.equal(result.expiresMs, 3600 * 1000);
 });
 
 test('rejects refresh responses without an access token', async () => {
@@ -207,7 +219,7 @@ test('refreshes an iwara refresh token and uses the access token for API calls',
     sourceConfig: { iwara: { token: refreshJwt } },
     fetchdFetch: async (url, options = {}) => {
       calls.push({ url: String(url), method: options.method, headers: options.headers, body: options.body });
-      if (String(url).includes('/auth/refresh')) return jsonResponse({ token: 'access-1', refreshToken: 'refresh-2', expires: 3600 });
+      if (String(url).includes('/user/token')) return jsonResponse({ accessToken: 'access-1' });
       if (String(url).includes('/profile/kelpie')) return jsonResponse({ user: { id: 'user-1', name: 'kelpie' } });
       if (String(url).includes('/videos?user=user-1')) return jsonResponse({ results: [video] });
       return missingResponse();
@@ -216,10 +228,10 @@ test('refreshes an iwara refresh token and uses the access token for API calls',
   const { response, body } = await request(server, '/iwara/users/kelpie/video');
   assert.equal(response.status, 200);
   assert.match(body, /<title>kelpie&apos;s iwara<\/title>/);
-  const refresh = calls.filter((call) => String(call.url).includes('/auth/refresh'));
+  const refresh = calls.filter((call) => String(call.url).includes('/user/token'));
   assert.equal(refresh.length, 1);
   assert.equal(refresh[0].method, 'POST');
-  assert.deepEqual(JSON.parse(refresh[0].body), { refreshToken: refreshJwt });
+  assert.equal(refresh[0].headers.authorization, `Bearer ${refreshJwt}`);
   const profile = calls.find((call) => String(call.url).includes('/profile/kelpie'));
   assert.equal(profile.headers.authorization, 'Bearer access-1');
   const videos = calls.find((call) => String(call.url).includes('/videos?user=user-1'));
@@ -235,7 +247,7 @@ test('falls back to the configured iwara token when refresh fails', async () => 
     sourceConfig: { iwara: { token: refreshJwt } },
     fetchdFetch: async (url, options = {}) => {
       calls.push({ url: String(url), headers: options.headers });
-      if (String(url).includes('/auth/refresh')) throw new Error('refresh endpoint down');
+      if (String(url).includes('/user/token')) throw new Error('refresh endpoint down');
       if (String(url).includes('/profile/kelpie')) return jsonResponse({ user: { id: 'user-1', name: 'kelpie' } });
       if (String(url).includes('/videos?user=user-1')) return jsonResponse({ results: [video] });
       return missingResponse();
@@ -255,7 +267,7 @@ test('uses the resolved iwara access token for session requests', async () => {
     cache: false,
     sourceConfig: { iwara: { token: refreshJwt } },
     fetchdFetch: async (url) => {
-      if (String(url).includes('/auth/refresh')) return jsonResponse({ token: 'access-1', refreshToken: 'refresh-2', expires: 3600 });
+      if (String(url).includes('/user/token')) return jsonResponse({ accessToken: 'access-1' });
       return missingResponse();
     },
     fetchExternal: async (url, options = {}) => {
