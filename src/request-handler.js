@@ -452,6 +452,7 @@ export function createRequestHandler(deps) {
         }
         const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
         const urls = [];
+        const chunks = [];
         for (let index = 0; index < count; index += 1) {
           const start = index * chunkSize;
           const end = Math.min(size - 1, start + chunkSize - 1);
@@ -462,9 +463,11 @@ export function createRequestHandler(deps) {
             secret,
             metadata: { egressScope: routeMetadata.egressScope, source: routeMetadata.source },
           });
-          urls.push(`${publicBaseUrl(req)}/_gateway/chunk/${token}`);
+          const url = `${publicBaseUrl(req)}/_gateway/chunk/${token}`;
+          urls.push(url);
+          chunks.push({ index, start, end, size: end - start + 1, url });
         }
-        writeJson(res, 200, { size, chunkSize, count, urls });
+        writeJson(res, 200, { size, chunkSize, count, urls, chunks });
         return;
       }
       try {

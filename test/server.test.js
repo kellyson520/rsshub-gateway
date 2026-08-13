@@ -1737,6 +1737,14 @@ test('serves chunk manifests and signed chunk ranges for media', async () => {
     assert.equal(payload.size, 1024 * 1024);
     assert.equal(payload.count, 4);
     assert.equal(payload.urls.length, 4);
+    assert.equal(payload.chunks.length, 4);
+    assert.deepEqual(payload.chunks.map((chunk) => ({ index: chunk.index, start: chunk.start, end: chunk.end, size: chunk.size })), [
+      { index: 0, start: 0, end: 262143, size: 262144 },
+      { index: 1, start: 262144, end: 524287, size: 262144 },
+      { index: 2, start: 524288, end: 786431, size: 262144 },
+      { index: 3, start: 786432, end: 1048575, size: 262144 },
+    ]);
+    assert.equal(payload.chunks[1].url, payload.urls[1]);
     const firstChunk = await request(server, new URL(payload.urls[0]).pathname + new URL(payload.urls[0]).search);
     assert.equal(firstChunk.response.status, 206);
     assert.equal(firstChunk.response.headers.get('content-range'), `bytes 0-262143/${1024 * 1024}`);
