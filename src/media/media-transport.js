@@ -91,18 +91,33 @@ export function createMediaTransport({
   onImageWarmup,
   logger = { info() {}, warn() {}, error() {} },
   onMetric = () => {},
+  knownSizeTtlMs = 24 * 60 * 60_000,
+  knownSizeCap = 10_000,
+  now = () => Date.now(),
 } = {}) {
   const knownVideoSizes = new Map();
-  const KNOWN_SIZE_CAP = 10_000;
+  const KNOWN_SIZE_CAP = knownSizeCap;
   function rememberVideoSize(target, size) {
-    if (knownVideoSizes.has(target)) {
-      knownVideoSizes.set(target, size);
+    const timestamp = now();
+    const existing = knownVideoSizes.get(target);
+    if (existing) {
+      existing.size = size;
+      existing.at = timestamp;
       return;
     }
-    knownVideoSizes.set(target, size);
+    knownVideoSizes.set(target, { size, at: timestamp });
     if (knownVideoSizes.size > KNOWN_SIZE_CAP) {
       knownVideoSizes.delete(knownVideoSizes.keys().next().value);
     }
+  }
+  function knownVideoSize(target) {
+    const entry = knownVideoSizes.get(target);
+    if (!entry) return undefined;
+    if (now() - entry.at > knownSizeTtlMs) {
+      knownVideoSizes.delete(target);
+      return undefined;
+    }
+    return entry.size;
   }
 
   async function readBinaryLimited(response, limit) {
@@ -444,7 +459,7 @@ export function createMediaTransport({
     if (requestOptions.range) {
       const ranged = await readRange({ target, namespace: 'public', range: requestOptions.range });
       if (ranged) return { adapter: { name: 'iwara' }, egressScope: 'public', response: ranged };
-      const knownSize = knownVideoSizes.get(target);
+      const knownSize = knownVideoSize(target);
       if (Number.isSafeInteger(knownSize) && knownSize > 0) {
         const sliced = await readSliceRange(target, 'public', requestOptions.range, knownSize);
         if (sliced) return { adapter: { name: 'iwara' }, egressScope: 'public', response: sliced };
@@ -613,6 +628,7 @@ export function createMediaTransport({
     fillVideoSlices,
     sliceKey,
     rememberVideoSize,
+    knownVideoSize,
   };
 }
 

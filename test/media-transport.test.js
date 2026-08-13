@@ -336,3 +336,32 @@ test('fillVideoSlices stops early when shouldStop returns true', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('known video sizes expire after their TTL and serve stale-free', async () => {
+  let now = 1_000_000;
+  const transport = createMediaTransport({
+    fetchExternal: async () => response('x'),
+    knownSizeTtlMs: 60_000,
+    now: () => now,
+  });
+  transport.rememberVideoSize('https://www.iwara.tv/video/a', 12345);
+  assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/a'), 12345);
+  now += 61_000;
+  assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/a'), undefined);
+});
+
+test('known video sizes drop the oldest entry past the cap', () => {
+  let now = 1_000_000;
+  const transport = createMediaTransport({
+    fetchExternal: async () => response('x'),
+    knownSizeTtlMs: 60_000,
+    now: () => now,
+    knownSizeCap: 3,
+  });
+  transport.rememberVideoSize('https://www.iwara.tv/video/a', 1);
+  transport.rememberVideoSize('https://www.iwara.tv/video/b', 2);
+  transport.rememberVideoSize('https://www.iwara.tv/video/c', 3);
+  transport.rememberVideoSize('https://www.iwara.tv/video/d', 4);
+  assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/a'), undefined);
+  assert.equal(transport.knownVideoSize('https://www.iwara.tv/video/d'), 4);
+});
