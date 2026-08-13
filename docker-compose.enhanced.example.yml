@@ -33,7 +33,7 @@ services:
       GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
       GATEWAY_CACHE_MAX_BYTES: "5368709120"
       GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
-      # 疑难站点增强：在容器内以独立进程启用 sidecar（默认关闭）
+      # 疑难站点增强：sidecar 默认开启（容器内独立进程）；纯透明模式设为 false
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
     volumes:

@@ -8,9 +8,9 @@
 #   2. 按需注册自定义路由，backend 使用 sidecar://host:port（Fetcher-API，POST /fetch）；
 #   3. fallback_upstream: true 时，sidecar 故障自动降级回上游 RSSHub，不中断服务。
 #
-# 疑难站点增强模式（单容器）：在同一个网关容器内以独立进程运行 sidecar，
-#   docker compose 环境变量 GATEWAY_SIDECAR_IWARA=true / GATEWAY_SIDECAR_EH=true
-#   此时 backend 指向容器内地址 127.0.0.1:8000 / 127.0.0.1:8001。
+# 疑难站点增强模式（单容器）：sidecar 默认开启，在同一个网关容器内以独立进程运行；
+#   显式关闭用 GATEWAY_SIDECAR_IWARA=false / GATEWAY_SIDECAR_EH=false（纯透明增强模式）。
+#   backend 指向容器内地址 127.0.0.1:8000 / 127.0.0.1:8001。
 # 多容器模式同样可用：backend 指向 compose 服务名（如 fetcher-iwara:8000）。
 #
 # 动态注册（无需重启网关）：设置 DISPATCHER_REGISTRATION_TOKEN 后，

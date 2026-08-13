@@ -14,9 +14,10 @@ trap cleanup EXIT INT TERM
 sleep 2
 kill -0 "$mihomo_pid"
 
-# 疑难站点增强模式（单容器）：Sidecar-Fetcher 作为独立进程在容器内按需启动，
+# 疑难站点增强模式（单容器）：Sidecar-Fetcher 作为独立进程在容器内默认开启，
 # 与网关基座进程隔离（符合宪章：站点抓取业务不得进入基座进程），
 # 故障由 Dispatcher 按 fallback_upstream 自动降级回上游 RSSHub。
+# 关闭方式：GATEWAY_SIDECAR_IWARA=false / GATEWAY_SIDECAR_EH=false（纯透明增强模式）。
 start_sidecar() {
   name=$1
   echo "starting sidecar $name"
@@ -32,10 +33,10 @@ case "${1:-}" in
     exec node sidecar/fetcher-eh/server.js
     ;;
   *)
-    if [ "${GATEWAY_SIDECAR_IWARA:-false}" = "true" ]; then
+    if [ "${GATEWAY_SIDECAR_IWARA:-true}" = "true" ]; then
       start_sidecar fetcher-iwara
     fi
-    if [ "${GATEWAY_SIDECAR_EH:-false}" = "true" ]; then
+    if [ "${GATEWAY_SIDECAR_EH:-true}" = "true" ]; then
       start_sidecar fetcher-eh
     fi
     exec node src/server.js

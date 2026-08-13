@@ -43,7 +43,7 @@ services:
       GATEWAY_LEASE_PROXY_PORT: "1301"
       # Dispatcher 路由注册表（缺省=纯透明增强网关）
       GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
-      # 疑难站点增强模式（单容器）：sidecar 以独立进程在容器内运行，默认关闭
+      # 疑难站点增强模式（单容器）：sidecar 默认开启，独立进程；关闭设 false
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
     ports:

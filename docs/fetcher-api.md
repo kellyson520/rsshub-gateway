@@ -90,9 +90,9 @@ sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
 注册 `/iwara/users/:username/:kind?` 后由 fetcher-iwara sidecar 服务。
 
 部署形态（均满足进程隔离）：
-- **单容器疑难站点增强模式（推荐）**：网关容器内通过 `GATEWAY_SIDECAR_IWARA=true` /
-  `GATEWAY_SIDECAR_EH=true` 以独立进程拉起 sidecar，路由 backend 写 `sidecar://127.0.0.1:8000` /
-  `sidecar://127.0.0.1:8001`（见 `docker-compose.enhanced.example.yml`）。
+- **单容器疑难站点增强模式（推荐）**：sidecar 默认开启（`GATEWAY_SIDECAR_IWARA` /
+  `GATEWAY_SIDECAR_EH`，默认 `true`，设 `false` 关闭），网关容器内以独立进程运行，路由 backend 写
+  `sidecar://127.0.0.1:8000` / `sidecar://127.0.0.1:8001`（见 `docker-compose.enhanced.example.yml`）。
 - 多容器模式：sidecar 独立容器，backend 写 compose 服务名。
 
 ## 5 参考实现
