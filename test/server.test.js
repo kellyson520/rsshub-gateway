@@ -1170,6 +1170,34 @@ test('readyz passes when egress lane groups are complete', async () => {
   assert.deepEqual(payload.egress, { ready: true, lanes: 1, sessionLanes: 1, missingGroups: [] });
 });
 
+test('readyz fails when lane groups exist but no lane is populated yet', async () => {
+  const server = createGatewayServer({
+    client: {
+      fetchRssHub: async () => new Response('ok', { status: 200 }),
+      openCircuits: () => [],
+    },
+    egressAdapter: {
+      refresh: async () => [],
+      refreshPublicLanes: async () => [],
+      refreshSessionLanes: async () => [],
+      verifyGroups: async () => ({ ready: true, missing: [] }),
+      lanes: () => [],
+      sessionLanes: () => [],
+      markSessionLaneUnhealthy: async () => true,
+      stats: () => ({}),
+    },
+  });
+  const { response, body } = await request(server, '/readyz');
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(JSON.parse(body), {
+    ready: false,
+    rsshub: 'ok',
+    egress: { ready: false, lanes: 0, sessionLanes: 0, missingGroups: [] },
+    openCircuits: [],
+  });
+});
+
 test('returns 503 readiness when RSSHub is unavailable', async () => {
   const server = createGatewayServer({
     client: {
@@ -1882,6 +1910,8 @@ test('metrics endpoint exports prometheus text counters and request ids flow thr
   assert.match(body, /# TYPE rsshub_gateway_requests_total counter/);
   assert.match(body, /rsshub_gateway_cache_hits_total \d+/);
   assert.match(body, /rsshub_gateway_egress_lanes \d+/);
+  assert.match(body, /rsshub_gateway_egress_session_lanes \d+/);
+  assert.match(body, /rsshub_gateway_egress_degraded [01]/);
   assert.match(body, /# TYPE rsshub_gateway_request_duration_seconds histogram/);
   assert.match(body, /rsshub_gateway_request_duration_seconds_bucket\{le="0\.025"\} \d+/);
   assert.match(body, /rsshub_gateway_request_duration_seconds_bucket\{le="\+Inf"\} \d+/);

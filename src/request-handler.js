@@ -110,15 +110,16 @@ export function createRequestHandler(deps) {
         const body = await readLimited(rsshub, 16 * 1024);
         const rsshubReady = rsshub.ok && body.trim() === 'ok';
         const egress = egressAdapter?.verifyGroups ? await egressAdapter.verifyGroups() : null;
-        const egressReady = egress ? egress.ready : true;
+        const egressLanes = egress ? egressAdapter.lanes().length : 0;
+        const egressReady = egress ? egress.ready && egressLanes > 0 : true;
         const ready = rsshubReady && egressReady;
         const payload = {
           ready,
           rsshub: rsshubReady ? 'ok' : 'unavailable',
           ...(egress ? {
             egress: {
-              ready: egress.ready,
-              lanes: egressAdapter.lanes().length,
+              ready: egressReady,
+              lanes: egressLanes,
               sessionLanes: egressAdapter.sessionLanes().length,
               missingGroups: egress.missing,
             },
@@ -150,6 +151,10 @@ export function createRequestHandler(deps) {
         `rsshub_gateway_egress_lanes ${egressStats.lanes?.length || 0}`,
         '# TYPE rsshub_gateway_egress_active gauge',
         `rsshub_gateway_egress_active ${egressStats.active || 0}`,
+        '# TYPE rsshub_gateway_egress_session_lanes gauge',
+        `rsshub_gateway_egress_session_lanes ${egressAdapter?.sessionLanes?.().length || 0}`,
+        '# TYPE rsshub_gateway_egress_degraded gauge',
+        `rsshub_gateway_egress_degraded ${egressAdapter?.stats?.()?.degraded ? 1 : 0}`,
       ];
       for (const [metric, count] of metricCounts) {
         if (/^[a-z0-9_]+$/.test(metric)) {
