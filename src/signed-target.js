@@ -138,7 +138,9 @@ function routeMetadata(metadata = {}) {
 
 export function isAllowedTarget(value) {
   const target = value instanceof URL ? value : new URL(value);
-  if (target.protocol !== 'https:' || target.username || target.password) {
+  // 白名单内的站点允许 http（个别源站仅提供 http，如 playno1.com）；
+  // 白名单本身即是 SSRF 闸门，非白名单主机无论协议一律拒绝。
+  if ((target.protocol !== 'https:' && target.protocol !== 'http:') || target.username || target.password) {
     return false;
   }
   if (net.isIP(target.hostname)) {

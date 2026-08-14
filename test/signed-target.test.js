@@ -15,6 +15,9 @@ test('rejects altered and expired targets', () => {
 
 test('rejects unsupported and private targets', () => {
   assert.throws(() => createSignedTarget('http://example.com', 'secret'));
+  // 白名单主机允许 http（playno1 等仅提供 http 的源站）
+  const httpToken = createSignedTarget('http://www.playno1.com/av/123', 'secret', 3600, 1000);
+  assert.equal(verifySignedTarget(httpToken, 'secret', 1001).url, 'http://www.playno1.com/av/123');
   assert.throws(() => createSignedTarget('https://127.0.0.1/private', 'secret'));
   assert.throws(() => createSignedTarget('https://example.com/private', 'secret'));
 });
