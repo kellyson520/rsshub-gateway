@@ -33,6 +33,17 @@ const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'ggjav.tv',
   'airav.wiki',
   'airav.io',
+  'netflav.com',
+  '1024cdn.sx',
+  '1025cdn.sx',
+  '1026cdn.sx',
+  '2024cdn.sx',
+  '91porn.com',
+  'cdn77.org',
+  'playno1.com',
+  'blogspot.com',
+  'bitfan.id',
+  '141jav.com',
 ]);
 
 const DEFAULT_PUBLIC_REQUEST_HOSTS = Object.freeze([
