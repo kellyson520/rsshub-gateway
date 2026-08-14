@@ -11,6 +11,7 @@ const ROUTE_IDS = [
   '/ggjav/video/:id',
   '/ggjav/model/:name/:page?',
   '/ggjav/genre/:tag/:page?',
+  '/ggjav/search/:keyword/:page?',
   '/ggjav/home/:page?',
   '/ggjav/:kind/:page?',
 ];

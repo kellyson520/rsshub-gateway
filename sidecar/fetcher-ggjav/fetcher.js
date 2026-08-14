@@ -24,6 +24,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   '/ggjav/video/:id',
   '/ggjav/model/:name/:page?',
   '/ggjav/genre/:tag/:page?',
+  '/ggjav/search/:keyword/:page?',
   '/ggjav/:kind/:page?',
 ]);
 
@@ -57,6 +58,12 @@ export function ggjavTarget(routeId, params = {}) {
     const tag = String(params.tag || '').trim();
     if (!tag) throw new HttpError(400, 'genre tag is required');
     return { url: `${SITE_BASE}/main/ctg?ctgs=${encodeURIComponent(tag)}&type=all${pageQuery}`, title: `GGJAV 分類 ${tag}` };
+  }
+  if (routeId === '/ggjav/search/:keyword/:page?') {
+    const keyword = String(params.keyword || '').trim();
+    if (!keyword) throw new HttpError(400, 'search keyword is required');
+    const pageQuery2 = page > 1 ? `&page=${page}` : '';
+    return { url: `${SITE_BASE}/main/search?string=${encodeURIComponent(keyword)}&type=all${pageQuery2}`, title: `GGJAV 搜尋 ${keyword}` };
   }
   if (routeId === '/ggjav/:kind/:page?') {
     const kind = String(params.kind || '').trim().toLowerCase();

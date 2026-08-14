@@ -51,6 +51,10 @@ routes:
     backend: "sidecar://127.0.0.1:8002"
     fallback_upstream: true
     cacheTtl: 900
+  - routeId: "/ggjav/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
   - routeId: "/ggjav/:kind/:page?"
     backend: "sidecar://127.0.0.1:8002"
     fallback_upstream: true

@@ -56,6 +56,9 @@ test('maps route ids to ggjav targets with pagination', () => {
   assert.equal(ggjavTarget('/ggjav/video/:id', { id: '7272' }).url, 'https://ggjav.com/main/video?id=7272');
   assert.equal(ggjavTarget('/ggjav/model/:name/:page?', { name: '三上悠亞' }).url, 'https://ggjav.com/main/model?name=%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9E');
   assert.equal(ggjavTarget('/ggjav/genre/:tag/:page?', { tag: '人妻' }).url, 'https://ggjav.com/main/ctg?ctgs=%E4%BA%BA%E5%A6%BB&type=all');
+  assert.equal(ggjavTarget('/ggjav/search/:keyword/:page?', { keyword: '三上悠亞' }).url, 'https://ggjav.com/main/search?string=%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9E&type=all');
+  assert.equal(ggjavTarget('/ggjav/search/:keyword/:page?', { keyword: 'fc2', page: '3' }).url, 'https://ggjav.com/main/search?string=fc2&type=all&page=3');
+  assert.throws(() => ggjavTarget('/ggjav/search/:keyword/:page?', { keyword: '' }), (e) => e instanceof HttpError && e.status === 400);
   assert.throws(() => ggjavTarget('/ggjav/unknown/:page?', { kind: 'unknown' }), (e) => e instanceof HttpError && e.status === 400);
   assert.throws(() => ggjavTarget('/ggjav/video/:id', { id: 'abc' }), (e) => e instanceof HttpError && e.status === 400);
 });
@@ -74,6 +77,15 @@ test('fetcher returns rssXml, mediaUrls and cacheHint for a list route', async (
   assert.equal(result.mediaUrls.length, 2);
   assert.equal(result.cacheHint.ttl, 900);
   assert.equal(fetched.length, 1);
+});
+
+test('fetcher serves a search feed with the list pipeline', async () => {
+  const fetcher = createGgjavFetcher({ fetchHtml: async () => htmlResponse(LIST_HTML) });
+  const result = await fetcher.handleFetch({ routeId: '/ggjav/search/:keyword/:page?', params: { keyword: '三上悠亞' } });
+  assert.ok(result.rssXml.includes('<rss version="2.0"'));
+  assert.ok(result.rssXml.includes('HAR-007 肏媽高潮'));
+  assert.equal(result.mediaUrls.length, 2);
+  assert.equal(result.cacheHint.ttl, 900);
 });
 
 test('fetcher serves a single video detail with a long cache ttl', async () => {
