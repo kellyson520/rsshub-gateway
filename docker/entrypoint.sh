@@ -26,6 +26,9 @@ start_sidecar() {
 }
 
 case "${1:-}" in
+  browser-render)
+    exec node browser-render/server.js
+    ;;
   fetcher-iwara)
     exec node sidecar/fetcher-iwara/server.js
     ;;
@@ -44,6 +47,14 @@ case "${1:-}" in
     fi
     if [ "${GATEWAY_SIDECAR_AIRAV:-true}" = "true" ]; then
       start_sidecar fetcher-airav
+    fi
+    if [ "${GATEWAY_BROWSER_RENDER:-true}" = "true" ]; then
+      echo "starting browser-render"
+      node browser-render/server.js &
+      sidecar_pids="$sidecar_pids $!"
+    fi
+    if [ "${GATEWAY_SIDECAR_MISSAV:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-missav
     fi
     exec node src/server.js
     ;;

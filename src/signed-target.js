@@ -39,6 +39,8 @@ const ALLOWED_HOSTS = [
   'xv-cdn.com',
   'missav.com',
   'missav.ai',
+  'missav.ws',
+  'fourhoi.com',
   'javdb.com',
   'jdbstatic.com',
   'javbus.com',

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
-const DEFAULT_SIDECAR_TIMEOUT_MS = 20_000;
+// 浏览器渲染类 sidecar（fetcher-missav）需要更长时间；curl_cffi 类 sidecar 远快于此。
+const DEFAULT_SIDECAR_TIMEOUT_MS = 60_000;
 
 function compilePattern(routeId) {
   const segments = String(routeId).split('/').filter(Boolean);

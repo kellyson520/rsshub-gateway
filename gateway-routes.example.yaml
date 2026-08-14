@@ -66,6 +66,12 @@ routes:
     fallback_upstream: true
     cacheTtl: 900
 
+  # 示例：fetcher-missav sidecar 服务 MissAV 最近更新 feed（客户端渲染，依赖浏览器渲染服务）
+  - routeId: "/missav/new"
+    backend: "sidecar://127.0.0.1:8005"
+    fallback_upstream: true
+    cacheTtl: 900
+
   # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
   # - routeId: "/custom/:id"
   #   backend: "sidecar://fetcher-custom:8000"

@@ -21,6 +21,8 @@ const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'xv-cdn.com',
   'missav.com',
   'missav.ai',
+  'missav.ws',
+  'fourhoi.com',
   'javdb.com',
   'jdbstatic.com',
   'javbus.com',

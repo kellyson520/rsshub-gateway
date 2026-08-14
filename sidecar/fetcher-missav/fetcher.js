@@ -1,0 +1,98 @@
+import { HttpError } from '../../src/fetcher-server.js';
+
+export { HttpError };
+import * as cheerio from 'cheerio';
+
+const SITE_BASE = 'https://missav.ws';
+const DEFAULT_CACHE_TTL = 900;
+
+const SUPPORTED_ROUTE_IDS = new Set(['/missav/new']);
+
+export function missavTarget(routeId) {
+  if (routeId === '/missav/new') {
+    return { url: `${SITE_BASE}/new`, title: 'MissAV 最近更新' };
+  }
+  throw new HttpError(400, `unsupported routeId: ${routeId}`);
+}
+
+export function parseVideoList(html) {
+  const $ = cheerio.load(String(html || ''));
+  const items = [];
+  const seen = new Set();
+  $('.thumbnail.group').each((_, container) => {
+    const anchor = $(container).find('a[href^="https://missav.ws/"]').first();
+    const href = anchor.attr('href') || '';
+    if (!href || seen.has(href)) return;
+    const image = $(container).find('img').first();
+    const poster = image.attr('data-src') || image.attr('src') || '';
+    const title = image.attr('alt') || $(container).find('.truncate a').first().text().trim() || '';
+    const videoSource = $(container).find('video').attr('data-src') || '';
+    seen.add(href);
+    items.push({
+      title: String(title).trim(),
+      url: href,
+      cover: /^https?:\/\//.test(poster) ? poster : '',
+      video: /^https?:\/\//.test(videoSource) ? videoSource : '',
+    });
+  });
+  return items;
+}
+
+function escapeXml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;',
+  }[character]));
+}
+
+export function renderMissavFeed({ title, items = [], selfUrl = '' }) {
+  const entries = items.map((item) => {
+    const descriptionParts = [];
+    if (item.cover) descriptionParts.push(`<img src="${escapeXml(item.cover)}">`);
+    if (item.video) descriptionParts.push(`<video controls preload="metadata" poster="${escapeXml(item.cover || '')}"><source src="${escapeXml(item.video)}"></video>`);
+    const description = descriptionParts.join('') || item.title;
+    return `<item>
+      <title>${escapeXml(item.title)}</title>
+      <link>${escapeXml(item.url)}</link>
+      <guid isPermaLink="true">${escapeXml(item.url)}</guid>
+      ${item.cover ? `<enclosure url="${escapeXml(item.cover)}" type="image/jpeg" length="0"/>` : ''}
+      <description><![CDATA[${description.replaceAll(']]>', ']]]]><![CDATA[>')}]]></description>
+    </item>`;
+  }).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>
+    <title>${escapeXml(title)}</title>
+    <link>${SITE_BASE}/</link>
+    ${selfUrl ? `<atom:link href="${escapeXml(selfUrl)}" rel="self" type="application/rss+xml"/>` : ''}
+    <description>MissAV 免費高清AV</description>
+    ${entries}
+  </channel></rss>`;
+}
+
+export function createMissavFetcher({ fetchHtml } = {}) {
+  async function handleFetch(body) {
+    const routeId = String(body?.routeId || '');
+    if (!SUPPORTED_ROUTE_IDS.has(routeId)) {
+      throw new HttpError(400, `unsupported routeId: ${routeId}`);
+    }
+    const target = missavTarget(routeId);
+    let remote;
+    try {
+      remote = await fetchHtml(target.url);
+    } catch (error) {
+      throw new HttpError(502, `missav upstream failed: ${error.message}`);
+    }
+    if (!remote?.ok) throw new HttpError(502, `missav returned ${remote?.status || 'unknown'}`);
+    const html = await remote.text();
+    const items = parseVideoList(html);
+    if (!items.length) throw new HttpError(404, 'no videos found');
+    const rssXml = renderMissavFeed({ title: target.title, items, selfUrl: target.url });
+    const mediaUrls = items.map((item) => item.cover).filter(Boolean);
+    const requestedTtl = Number.isInteger(body?.cacheTtl) && body.cacheTtl > 0 ? body.cacheTtl : undefined;
+    return { rssXml, mediaUrls, cacheHint: { ttl: requestedTtl || DEFAULT_CACHE_TTL } };
+  }
+
+  return { handleFetch };
+}

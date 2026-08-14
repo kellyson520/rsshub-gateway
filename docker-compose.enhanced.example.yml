@@ -40,6 +40,8 @@ services:
       GATEWAY_SIDECAR_EH: "true"
       GATEWAY_SIDECAR_GGJAV: "true"
       GATEWAY_SIDECAR_AIRAV: "true"
+      GATEWAY_BROWSER_RENDER: "true"
+      GATEWAY_SIDECAR_MISSAV: "true"
     volumes:
       - ./config/mihomo:/root/.config/mihomo
       - ./config/sources.json:/app/config/sources.json:ro

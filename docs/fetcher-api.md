@@ -103,6 +103,7 @@ sidecar 应返回语义化 HTTP 状态码 + `{ "error": "human readable" }`：
 | `sidecar/fetcher-eh` | `/ehviewer/ranking/:period?` | e-hentai.org | 排名 feed；`period` ∈ day/month/year/all |
 | `sidecar/fetcher-ggjav` | `/ggjav/home/:page?`、`/ggjav/:kind/:page?`（censored/uncensored/amateur/cartoon/chinese/europe）、`/ggjav/video/:id`、`/ggjav/model/:name/:page?`、`/ggjav/genre/:tag/:page?` | ggjav.com | JAV 影片 feed（最新/分类/单集/女優/标签）；CDN 封面走网关媒体代理 |
 | `sidecar/fetcher-airav` | `/airav/home` | airav.wiki | 最新發行 feed；封面走 airav.io 媒体代理（列表/详情页待源站恢复后扩展） |
+| `sidecar/fetcher-missav` | `/missav/new` | missav.ws | 最近更新 feed；客户端渲染站点，依赖浏览器渲染服务（`browser-render`，puppeteer-core + 系统 Chromium，`GATEWAY_BROWSER_RENDER_URL`） |
 
 三者共用 `src/fetcher-server.js`（HTTP 脚手架：`/fetch`、`/healthz`、错误映射）与
 `src/browser-fetch.js`（curl_cffi 浏览器指纹 + Mihomo 出口）。
