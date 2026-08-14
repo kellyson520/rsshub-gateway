@@ -1,6 +1,7 @@
 import { fetchdJson } from '../fetchd.js';
 import { createUpstreamClient } from '../upstream.js';
 import { createBrowserFetchClient } from '../browser-fetch.js';
+import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
 
 function safeHost(url) {
@@ -8,6 +9,23 @@ function safeHost(url) {
     return new URL(String(url)).hostname.toLowerCase();
   } catch {
     return 'unknown';
+  }
+}
+
+// 站点 WAF 只放行浏览器 TLS 指纹（javbus/javdb 页面无 Referer/UA 也 403，
+// 封面路径例外）。对这些主机，fetchExternal 走 browser-fetch（curl_cffi）
+// 指纹传输；worker 不可用时回退普通 undici 客户端。
+const BROWSER_FETCH_HOSTS = Object.freeze(
+  String(process.env.GATEWAY_BROWSER_FETCH_HOSTS || 'javbus.com,javdb.com,airav.wiki,airav.io')
+    .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean),
+);
+
+function browserFetchHost(url) {
+  try {
+    const hostname = new URL(String(url)).hostname.toLowerCase();
+    return BROWSER_FETCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  } catch {
+    return false;
   }
 }
 
@@ -50,6 +68,31 @@ export function createRequestService({
   function fetchExternalInstrumented(url, request) {
     const startedAt = Date.now();
     const host = safeHost(url);
+    if (browserFetchHost(url)) {
+      // 浏览器指纹路径：仍强制目标白名单（signed-target allowlist），
+      // 避免绕过 isAllowedTarget 的 SSRF 防护。
+      let allowed = false;
+      try {
+        allowed = isAllowedTarget(url);
+      } catch {
+        allowed = false;
+      }
+      if (!allowed) return Promise.reject(new Error('external target is not allowed'));
+      // 浏览器路径跟随重定向（javbus 页面 302 到规范 URL）；源站间的跳转
+      // 由目标站点控制，仅对这些白名单主机启用。
+      const browserRequest = { ...(request || {}), redirect: 'follow' };
+      return browser.fetch(url, browserRequest).then((response) => {
+        logger.debug('request_external_browser', { host, status: response?.status, durationMs: Date.now() - startedAt });
+        return response;
+      }).catch((error) => {
+        // worker 不可用/失败时回退普通客户端，保证可用性优先。
+        logger.warn('request_external_browser_fallback', { host, error: error.message });
+        return resolvedFetchExternal(url, request).then((response) => {
+          logger.debug('request_external', { host, status: response?.status, durationMs: Date.now() - startedAt });
+          return response;
+        });
+      });
+    }
     return resolvedFetchExternal(url, request).then((response) => {
       logger.debug('request_external', { host, status: response?.status, durationMs: Date.now() - startedAt });
       return response;

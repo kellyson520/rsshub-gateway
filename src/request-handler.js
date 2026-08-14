@@ -852,8 +852,12 @@ export function createRequestHandler(deps) {
           }
           res.writeHead(remote.status, headers);
           if (req.method === 'HEAD') return res.end();
-          if (remote.body) Readable.fromWeb(remote.body).pipe(res);
-          else res.end();
+          if (remote.body) {
+            const bodyStream = Buffer.isBuffer(remote.body) ? Readable.from(remote.body) : Readable.fromWeb(remote.body);
+            bodyStream.pipe(res);
+          } else {
+            res.end();
+          }
           return;
         }
         let body = await readLimited(remote);

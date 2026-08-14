@@ -246,6 +246,8 @@ rules:
   - DOMAIN-SUFFIX,mgstage.com,PUBLIC
   - DOMAIN-SUFFIX,jdbstatic.com,PUBLIC
   - DOMAIN-SUFFIX,jpgcdn.com,PUBLIC
+  - DOMAIN-SUFFIX,airav.wiki,PUBLIC
+  - DOMAIN-SUFFIX,airav.io,PUBLIC
   - DOMAIN-SUFFIX,jable.tv,PUBLIC
   - DOMAIN-SUFFIX,dmm.co.jp,PUBLIC
   - DOMAIN-SUFFIX,e-hentai.org,PUBLIC

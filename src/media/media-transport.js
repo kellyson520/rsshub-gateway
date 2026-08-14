@@ -128,6 +128,10 @@ export function createMediaTransport({
   }
 
   async function readBinaryLimited(response, limit) {
+    if (Buffer.isBuffer(response.body)) {
+      if (response.body.length > limit) throw new Error('upstream media response too large');
+      return response.body;
+    }
     const chunks = [];
     let size = 0;
     for await (const chunk of response.body ?? []) {

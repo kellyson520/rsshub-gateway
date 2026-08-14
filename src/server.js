@@ -65,7 +65,7 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
     if (!cacheable) {
       return { passthrough: remote, cacheable: false };
     }
-    if (foreground) {
+    if (foreground && typeof remote.clone === 'function') {
       const cacheCopy = remote.clone();
       return {
         passthrough: remote,
@@ -78,6 +78,17 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
           body: await readBinaryLimited(cacheCopy, maxBytes),
           cacheable: true,
         }),
+      };
+    }
+    if (foreground && remote.body && typeof remote.body[Symbol.asyncIterator] !== 'function'
+      && typeof remote.body[Symbol.iterator] === 'function') {
+      // browser-fetch 响应体是 Buffer（非流）：直接读入缓存，响应由缓存回放，
+      // 与后台路径一致，避免 clone() 缺失导致封面代理失败。
+      return {
+        status: remote.status,
+        headers: responseHeaders(remote),
+        body: await readBinaryLimited(remote, maxBytes),
+        cacheable: true,
       };
     }
     return {

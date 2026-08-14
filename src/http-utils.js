@@ -60,6 +60,11 @@ export function writeGatewayError(res, error) {
 }
 
 export async function readLimited(response, limit = 4 * 1024 * 1024) {
+  // browser-fetch 响应体是 Buffer（同步可迭代）：直接返回，避免按字节迭代。
+  if (Buffer.isBuffer(response.body)) {
+    if (response.body.length > limit) throw new Error('upstream response too large');
+    return response.body.toString('utf8');
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of response.body ?? []) {
@@ -71,6 +76,10 @@ export async function readLimited(response, limit = 4 * 1024 * 1024) {
 }
 
 export async function readBinaryLimited(response, limit) {
+  if (Buffer.isBuffer(response.body)) {
+    if (response.body.length > limit) throw new Error('upstream media response too large');
+    return response.body;
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of response.body ?? []) {
