@@ -47,6 +47,7 @@ services:
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
       GATEWAY_SIDECAR_GGJAV: "true"
+      GATEWAY_SIDECAR_AIRAV: "true"
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301

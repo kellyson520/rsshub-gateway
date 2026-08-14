@@ -31,6 +31,8 @@ const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'dmm.co.jp',
   'ggjav.com',
   'ggjav.tv',
+  'airav.wiki',
+  'airav.io',
 ]);
 
 const DEFAULT_PUBLIC_REQUEST_HOSTS = Object.freeze([

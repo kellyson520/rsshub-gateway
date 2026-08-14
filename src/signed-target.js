@@ -49,6 +49,8 @@ const ALLOWED_HOSTS = [
   'dmm.co.jp',
   'ggjav.com',
   'ggjav.tv',
+  'airav.wiki',
+  'airav.io',
   'imgur.com',
   'i.imgur.com',
   'cdn.discordapp.com',

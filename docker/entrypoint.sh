@@ -42,6 +42,9 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_GGJAV:-true}" = "true" ]; then
       start_sidecar fetcher-ggjav
     fi
+    if [ "${GATEWAY_SIDECAR_AIRAV:-true}" = "true" ]; then
+      start_sidecar fetcher-airav
+    fi
     exec node src/server.js
     ;;
 esac
