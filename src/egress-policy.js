@@ -41,6 +41,7 @@ const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   '91porn.com',
   'cdn77.org',
   'playno1.com',
+  'onlyfans.com',
   'blogspot.com',
   'bitfan.id',
   '141jav.com',

@@ -59,6 +59,7 @@ const ALLOWED_HOSTS = [
   '91porn.com',
   'cdn77.org',
   'playno1.com',
+  'onlyfans.com',
   'blogspot.com',
   'bitfan.id',
   '141jav.com',
