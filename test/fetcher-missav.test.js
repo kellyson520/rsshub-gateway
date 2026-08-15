@@ -32,7 +32,8 @@ test('parses missav grid group cards', () => {
 });
 
 test('maps the new route target', () => {
-  assert.equal(missavTarget('/missav/new').url, 'https://missav.ws/new');
+  assert.equal(missavTarget('/missav/new/:page?', {}).url, 'https://missav.ws/new');
+  assert.equal(missavTarget('/missav/new/:page?', { page: '3' }).url, 'https://missav.ws/new?page=3');
   assert.equal(missavTarget('/missav/search/:keyword', { keyword: '三上悠亞' }).url, 'https://missav.ws/search/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9E');
   assert.throws(() => missavTarget('/missav/search/:keyword', { keyword: '' }), (e) => e instanceof HttpError && e.status === 400);
   assert.throws(() => missavTarget('/missav/other'), (e) => e instanceof HttpError && e.status === 400);
@@ -40,7 +41,7 @@ test('maps the new route target', () => {
 
 test('fetcher returns rssXml with covers and video sources', async () => {
   const fetcher = createMissavFetcher({ fetchHtml: async () => htmlResponse(LIST_HTML) });
-  const result = await fetcher.handleFetch({ routeId: '/missav/new', cacheTtl: 900 });
+  const result = await fetcher.handleFetch({ routeId: '/missav/new/:page?', cacheTtl: 900 });
   assert.ok(result.rssXml.includes('<rss version="2.0"'));
   assert.ok(result.rssXml.includes('「日常」：一位單身OL的日常生活'));
   assert.ok(result.rssXml.includes('https://missav.ws/hrsm-156'));
@@ -61,12 +62,12 @@ test('fetcher serves a missav search feed', async () => {
 test('fetcher maps upstream failures to 502 and empty renders to 404', async () => {
   const failing = createMissavFetcher({ fetchHtml: async () => { throw new Error('upstream exploded'); } });
   await assert.rejects(
-    () => failing.handleFetch({ routeId: '/missav/new' }),
+    () => failing.handleFetch({ routeId: '/missav/new/:page?' }),
     (error) => error instanceof HttpError && error.status === 502,
   );
   const empty = createMissavFetcher({ fetchHtml: async () => htmlResponse('<html><body></body></html>') });
   await assert.rejects(
-    () => empty.handleFetch({ routeId: '/missav/new' }),
+    () => empty.handleFetch({ routeId: '/missav/new/:page?' }),
     (error) => error instanceof HttpError && error.status === 404,
   );
 });

@@ -6,11 +6,18 @@ import * as cheerio from 'cheerio';
 const SITE_BASE = 'https://missav.ws';
 const DEFAULT_CACHE_TTL = 900;
 
-const SUPPORTED_ROUTE_IDS = new Set(['/missav/new', '/missav/search/:keyword']);
+const SUPPORTED_ROUTE_IDS = new Set(['/missav/new/:page?', '/missav/search/:keyword']);
+
+function positivePage(value) {
+  const page = Number.parseInt(String(value || ''), 10);
+  if (!Number.isInteger(page) || page < 1) return 1;
+  return Math.min(page, 500);
+}
 
 export function missavTarget(routeId, params = {}) {
-  if (routeId === '/missav/new') {
-    return { url: `${SITE_BASE}/new`, title: 'MissAV 最近更新' };
+  if (routeId === '/missav/new/:page?') {
+    const page = positivePage(params.page);
+    return { url: `${SITE_BASE}/new${page > 1 ? `?page=${page}` : ''}`, title: 'MissAV 最近更新' };
   }
   if (routeId === '/missav/search/:keyword') {
     const keyword = String(params.keyword || '').trim();

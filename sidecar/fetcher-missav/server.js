@@ -6,7 +6,7 @@ const PORT = Number.parseInt(process.env.FETCHER_PORT || '', '10') || 8005;
 const DISPATCHER_REGISTRATION_URL = process.env.DISPATCHER_REGISTRATION_URL || '';
 const DISPATCHER_REGISTRATION_TOKEN = process.env.DISPATCHER_REGISTRATION_TOKEN || '';
 const ADVERTISE_HOST = process.env.FETCHER_ADVERTISE_HOST || '127.0.0.1';
-const ROUTE_ID = '/missav/new';
+const ROUTE_IDS = ['/missav/new/:page?', '/missav/search/:keyword'];
 
 async function main() {
   // missav 为客户端渲染站点：优先自建浏览器渲染，
@@ -41,12 +41,12 @@ async function main() {
     await registerDispatcherRoutes({
       url: `${DISPATCHER_REGISTRATION_URL.replace(/\/$/, '')}/_gateway/dispatcher/routes`,
       token: DISPATCHER_REGISTRATION_TOKEN,
-      routes: [{
-        routeId: ROUTE_ID,
+      routes: ROUTE_IDS.map((routeId) => ({
+        routeId,
         backend: `sidecar://${ADVERTISE_HOST}:${PORT}`,
         fallback_upstream: true,
         cacheTtl: 900,
-      }],
+      })),
       name: 'fetcher_missav',
     });
   }
@@ -55,7 +55,7 @@ async function main() {
       await unregisterDispatcherRoutes({
         url: `${DISPATCHER_REGISTRATION_URL.replace(/\/$/, '')}/_gateway/dispatcher/routes`,
         token: DISPATCHER_REGISTRATION_TOKEN,
-        routeIds: [ROUTE_ID],
+        routeIds: ROUTE_IDS,
         name: 'fetcher_missav',
       });
     }
