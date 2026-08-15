@@ -72,6 +72,24 @@ routes:
     fallback_upstream: true
     cacheTtl: 900
 
+  # 示例：fetcher-jable sidecar 服务 Jable 影片 feed（CF 托管挑战，依赖浏览器渲染服务）
+  - routeId: "/jable/video/:code"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/new-release/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/videos/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+
   # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
   # - routeId: "/custom/:id"
   #   backend: "sidecar://fetcher-custom:8000"

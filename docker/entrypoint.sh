@@ -56,6 +56,9 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_MISSAV:-true}" = "true" ]; then
       GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-missav
     fi
+    if [ "${GATEWAY_SIDECAR_JABLE:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-jable
+    fi
     exec node src/server.js
     ;;
 esac

@@ -52,6 +52,7 @@ services:
       GATEWAY_SIDECAR_AIRAV: "true"
       GATEWAY_BROWSER_RENDER: "true"
       GATEWAY_SIDECAR_MISSAV: "true"
+      GATEWAY_SIDECAR_JABLE: "true"
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301
