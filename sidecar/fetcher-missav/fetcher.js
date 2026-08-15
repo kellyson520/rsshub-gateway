@@ -6,11 +6,16 @@ import * as cheerio from 'cheerio';
 const SITE_BASE = 'https://missav.ws';
 const DEFAULT_CACHE_TTL = 900;
 
-const SUPPORTED_ROUTE_IDS = new Set(['/missav/new']);
+const SUPPORTED_ROUTE_IDS = new Set(['/missav/new', '/missav/search/:keyword']);
 
-export function missavTarget(routeId) {
+export function missavTarget(routeId, params = {}) {
   if (routeId === '/missav/new') {
     return { url: `${SITE_BASE}/new`, title: 'MissAV 最近更新' };
+  }
+  if (routeId === '/missav/search/:keyword') {
+    const keyword = String(params.keyword || '').trim();
+    if (!keyword) throw new HttpError(400, 'search keyword is required');
+    return { url: `${SITE_BASE}/search/${encodeURIComponent(keyword)}`, title: `MissAV 搜尋 ${keyword}` };
   }
   throw new HttpError(400, `unsupported routeId: ${routeId}`);
 }
@@ -74,10 +79,11 @@ export function renderMissavFeed({ title, items = [], selfUrl = '' }) {
 export function createMissavFetcher({ fetchHtml } = {}) {
   async function handleFetch(body) {
     const routeId = String(body?.routeId || '');
+    const params = body?.params || {};
     if (!SUPPORTED_ROUTE_IDS.has(routeId)) {
       throw new HttpError(400, `unsupported routeId: ${routeId}`);
     }
-    const target = missavTarget(routeId);
+    const target = missavTarget(routeId, params);
     let remote;
     try {
       remote = await fetchHtml(target.url);

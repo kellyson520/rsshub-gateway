@@ -33,7 +33,9 @@ test('parses missav grid group cards', () => {
 
 test('maps the new route target', () => {
   assert.equal(missavTarget('/missav/new').url, 'https://missav.ws/new');
-  assert.throws(() => missavTarget('/missav/search/:kw'), (e) => e instanceof HttpError && e.status === 400);
+  assert.equal(missavTarget('/missav/search/:keyword', { keyword: '三上悠亞' }).url, 'https://missav.ws/search/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9E');
+  assert.throws(() => missavTarget('/missav/search/:keyword', { keyword: '' }), (e) => e instanceof HttpError && e.status === 400);
+  assert.throws(() => missavTarget('/missav/other'), (e) => e instanceof HttpError && e.status === 400);
 });
 
 test('fetcher returns rssXml with covers and video sources', async () => {
@@ -46,6 +48,14 @@ test('fetcher returns rssXml with covers and video sources', async () => {
   assert.ok(result.rssXml.includes('fourhoi.com/hrsm-156/preview.mp4'));
   assert.equal(result.mediaUrls.length, 2);
   assert.equal(result.cacheHint.ttl, 900);
+});
+
+test('fetcher serves a missav search feed', async () => {
+  const fetched = [];
+  const fetcher = createMissavFetcher({ fetchHtml: async (url) => { fetched.push(String(url)); return htmlResponse(LIST_HTML); } });
+  const result = await fetcher.handleFetch({ routeId: '/missav/search/:keyword', params: { keyword: '三上悠亞' } });
+  assert.ok(result.rssXml.includes('「日常」：一位單身OL的日常生活'));
+  assert.deepEqual(fetched, ['https://missav.ws/search/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9E']);
 });
 
 test('fetcher maps upstream failures to 502 and empty renders to 404', async () => {
