@@ -9,6 +9,7 @@ const CHROMIUM_PATH = process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser';
 const RENDER_PROXY = process.env.RENDER_PROXY || 'http://127.0.0.1:7890';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_PAGES = 2;
+const ACQUIRE_WAIT_MS = 45_000;
 
 let browser = null;
 let browserReady = null;
@@ -43,8 +44,12 @@ async function ensureBrowser() {
 }
 
 async function acquirePage() {
+  // 槽位等待必须有上界：某个渲染卡死时不能让后续请求无限排队。
+  const deadline = Date.now() + ACQUIRE_WAIT_MS;
   while (activePages >= MAX_PAGES) {
-    await new Promise((resolve) => waiters.push(resolve));
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error('render slots busy');
+    await new Promise((resolve) => setTimeout(resolve, Math.min(200, remaining)));
   }
   activePages += 1;
   try {
@@ -52,40 +57,55 @@ async function acquirePage() {
     return await instance.newPage();
   } catch (error) {
     activePages -= 1;
-    waiters.shift()?.();
     throw error;
   }
 }
 
 function releasePage() {
   activePages -= 1;
-  waiters.shift()?.();
+}
+
+async function doRender(page, url, budget) {
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+  // networkidle 会被站点长连接（统计/广告）拖死：DOM 就绪后靠选择器轮询等待
+  // 前端框架完成列表渲染，轮询有上界，不会无限挂起。
+  const response = await page.goto(url, {
+    waitUntil: 'domcontentloaded',
+    timeout: budget,
+  });
+  await page.waitForSelector('.grid .group, .oneVideo, .video-card, [data-video]', {
+    timeout: Math.min(10_000, Math.max(1_000, budget - 5_000)),
+  }).catch(() => {});
+  // 等待前端框架完成列表渲染后给一点缓冲（不滚动页面：滚动/按键会触发
+  // 站点播放器或导航，反而拖慢或卡住渲染）。
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  const html = await page.content();
+  return {
+    html,
+    finalUrl: page.url(),
+    status: response ? response.status() : 200,
+  };
 }
 
 async function render(url, timeoutMs) {
+  const budget = Math.max(5_000, Number(timeoutMs) || DEFAULT_TIMEOUT_MS);
   const page = await acquirePage();
   try {
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
-    const budget = Math.max(5_000, Number(timeoutMs) || DEFAULT_TIMEOUT_MS);
-    // networkidle 会被站点长连接（统计/广告）拖死：DOM 就绪后靠选择器轮询等待
-    // 前端框架完成列表渲染，轮询有上界，不会无限挂起。
-    const response = await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: budget,
-    });
-    // 等待前端框架（Alpine/Vue）经 XHR 完成首批列表渲染；超时用现有 DOM。
-    await page.waitForSelector('.grid .group, .oneVideo, .video-card, [data-video]', {
-      timeout: Math.min(10_000, Math.max(1_000, budget - 5_000)),
-    }).catch(() => {});
-    const html = await page.content();
-    return {
-      html,
-      finalUrl: page.url(),
-      status: response ? response.status() : 200,
-    };
+    // 硬性截止：整个渲染（goto + 等待 + 滚动 + 序列化）不得超出预算过多，
+    // 任何卡死都会在截止后释放槽位并返回 502，而不是永久占用。
+    return await Promise.race([
+      doRender(page, url, budget),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('render deadline exceeded')), budget + 15_000);
+      }),
+    ]);
   } finally {
-    await page.close().catch(() => {});
+    // 先释放槽位（避免 close 卡死时永久占用），再限时关闭页面。
     releasePage();
+    await Promise.race([
+      page.close().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 5_000)),
+    ]);
   }
 }
 

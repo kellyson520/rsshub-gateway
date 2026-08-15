@@ -130,17 +130,27 @@ export function createJableFetcher({ fetchHtml } = {}) {
       if (error instanceof HttpError) throw error;
       throw new HttpError(400, `invalid route params: ${error.message}`);
     }
-    let remote;
-    try {
-      remote = await fetchHtml(target.url);
-    } catch (error) {
-      throw new HttpError(502, `jable upstream failed: ${error.message}`);
+    let html = '';
+    let attempts = 0;
+    let isDetail = routeId === '/jable/video/:code';
+    while (attempts < 2) {
+      let remote;
+      try {
+        remote = await fetchHtml(target.url);
+      } catch (error) {
+        throw new HttpError(502, `jable upstream failed: ${error.message}`);
+      }
+      if (!remote?.ok) throw new HttpError(502, `jable returned ${remote?.status || 'unknown'}`);
+      html = await remote.text();
+      attempts += 1;
+      const looksChallenged = html.includes('Just a moment');
+      const hasContent = isDetail ? Boolean(parseVideoDetail(html)) : parseVideoList(html).length > 0;
+      // CF 偶发托管挑战：共享 cookie 罐下二次渲染常能直接通过。
+      if (hasContent || attempts >= 2 || !looksChallenged) break;
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
     }
-    if (!remote?.ok) throw new HttpError(502, `jable returned ${remote?.status || 'unknown'}`);
-    const html = await remote.text();
     let rssXml;
     let mediaUrls = [];
-    const isDetail = routeId === '/jable/video/:code';
     if (isDetail) {
       const detail = parseVideoDetail(html);
       if (!detail?.title) throw new HttpError(404, 'video not found');

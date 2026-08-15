@@ -91,15 +91,24 @@ export function createMissavFetcher({ fetchHtml } = {}) {
       throw new HttpError(400, `unsupported routeId: ${routeId}`);
     }
     const target = missavTarget(routeId, params);
-    let remote;
-    try {
-      remote = await fetchHtml(target.url);
-    } catch (error) {
-      throw new HttpError(502, `missav upstream failed: ${error.message}`);
+    let html = '';
+    let items = [];
+    let attempts = 0;
+    while (attempts < 2) {
+      let remote;
+      try {
+        remote = await fetchHtml(target.url);
+      } catch (error) {
+        throw new HttpError(502, `missav upstream failed: ${error.message}`);
+      }
+      if (!remote?.ok) throw new HttpError(502, `missav returned ${remote?.status || 'unknown'}`);
+      html = await remote.text();
+      items = parseVideoList(html);
+      attempts += 1;
+      // CF 偶发托管挑战：同一浏览器上下文（共享 cookie 罐）二次渲染常能直接通过。
+      if (items.length || attempts >= 2 || !html.includes('Just a moment')) break;
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
     }
-    if (!remote?.ok) throw new HttpError(502, `missav returned ${remote?.status || 'unknown'}`);
-    const html = await remote.text();
-    const items = parseVideoList(html);
     if (!items.length) throw new HttpError(404, 'no videos found');
     const rssXml = renderMissavFeed({ title: target.title, items, selfUrl: target.url });
     const mediaUrls = items.map((item) => item.cover).filter(Boolean);
