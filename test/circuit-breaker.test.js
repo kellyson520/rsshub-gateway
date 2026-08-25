@@ -52,3 +52,25 @@ test('lists only circuits that are currently open', () => {
   now += 30_000;
   assert.deepEqual(breaker.openKeys(), []);
 });
+
+test('stats summarizes circuit breaker state distribution and open keys', () => {
+  let now = 1000;
+  const breaker = new CircuitBreaker({ failureThreshold: 2, cooldownMs: 10_000, now: () => now });
+
+  breaker.recordFailure('host-a.com');
+  breaker.recordFailure('host-a.com'); // Open
+
+  breaker.recordFailure('host-b.com'); // Closed (1 failure)
+
+  let summary = breaker.stats();
+  assert.equal(summary.open, 1);
+  assert.deepEqual(summary.openKeys, ['host-a.com']);
+  assert.equal(summary.byState.open, 1);
+  assert.equal(summary.byState.closed, 1);
+
+  // Transition to half-open after cooldown
+  now += 10_000;
+  summary = breaker.stats();
+  assert.equal(summary.byState['half-open'], 1);
+  assert.equal(summary.open, 0);
+});
