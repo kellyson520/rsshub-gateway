@@ -115,6 +115,9 @@ test('routes major adult platforms to the adult-media adapter with proper defaul
     assert.ok(hdrs['User-Agent']);
     assert.ok(hdrs['Accept-Language']);
     assert.ok(adapter.unavailableMessage().includes('原始来源'));
+    assert.equal(adapter.isAuthenticationChallenge({ status: 403 }), true);
+    assert.equal(adapter.isAuthenticationChallenge({ status: 200, body: '<html>cf-challenge</html>' }), true);
+    assert.equal(adapter.isAuthenticationChallenge({ status: 200, body: '<html>normal</html>' }), false);
   }
 });
 
