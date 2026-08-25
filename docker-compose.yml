@@ -57,6 +57,7 @@ services:
       GATEWAY_SIDECAR_JAVDB: "true"
       GATEWAY_SIDECAR_COOMER: "true"
       GATEWAY_SIDECAR_WNACG: "true"
+      GATEWAY_SIDECAR_FANBOX: "true"
       GATEWAY_SIDECAR_KEMONO: "true"
     ports:
       - 127.0.0.1:1300:1300

@@ -173,3 +173,9 @@ routes:
     backend: "sidecar://127.0.0.1:8011"
     fallback_upstream: true
     cacheTtl: 900
+
+  # fetcher-fanbox sidecar 服务 Fanbox 创作者 feed
+  - routeId: "/fanbox/:creator"
+    backend: "sidecar://127.0.0.1:8012"
+    fallback_upstream: true
+    cacheTtl: 3600
