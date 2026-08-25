@@ -42,6 +42,9 @@ test('parseByteRange handles suffix, open-ended and unsatisfiable ranges', () =>
   assert.deepEqual(parseByteRange('bytes=-0', 10), { unsatisfiable: true });
   assert.equal(parseByteRange('bytes=-', 10), null);
   assert.equal(parseByteRange('items=0-1', 10), null);
+  assert.equal(parseByteRange('', 10), null);
+  assert.equal(parseByteRange(null, 10), null);
+  assert.equal(parseByteRange(undefined, 10), null);
 });
 
 test('imageVariantCacheUrl formats deterministic variant cache urls', () => {
