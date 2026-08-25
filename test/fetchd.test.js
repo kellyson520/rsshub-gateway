@@ -95,3 +95,22 @@ test('fetchdJson: throws GatewayUpstreamError when response is not ok', async ()
     (err) => err instanceof GatewayUpstreamError && err.status === 404,
   );
 });
+
+test('createFetchdClient: handles empty body payload and defaults buffer to empty', async () => {
+  const mockFetch = async () => ({
+    ok: true,
+    status: 204,
+    json: async () => ({
+      status: 204,
+      headers: {},
+      body: '',
+    }),
+  });
+
+  const client = createFetchdClient({ baseUrl: 'http://127.0.0.1:7899', fetchImpl: mockFetch });
+  const res = await client('https://example.com/empty');
+  assert.equal(res.status, 204);
+  assert.equal(res.ok, true);
+  assert.equal(await res.text(), '');
+  assert.equal(res.body.length, 0);
+});
