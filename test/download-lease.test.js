@@ -102,3 +102,12 @@ test('revokeExpired cleans up revoked and expired leases accurately', () => {
   assert.equal(expiredUsernames.includes(l3.username), false);
   assert.equal(store.stats().leases, 1);
 });
+
+test('verify handles null, undefined and password length mismatch safely', () => {
+  const store = createLeaseStore();
+  const lease = store.createLease({ targetUrl: 'https://filesq.iwara.tv/1.mp4' });
+  assert.equal(store.verify(null, 'pass'), null);
+  assert.equal(store.verify(lease.username, null), null);
+  assert.equal(store.verify(lease.username, undefined), null);
+  assert.equal(store.verify(lease.username, 'short'), null);
+});
