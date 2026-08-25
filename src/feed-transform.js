@@ -152,11 +152,50 @@ function rewriteEntry($, entry, options) {
   });
 }
 
-export function transformFeed(xml, options) {
+function matchesFilters($, entry, filters = {}) {
+  if (!filters || typeof filters !== 'object') return false;
+
+  // 1. Keyword blacklist on title and description
+  if (Array.isArray(filters.keywordBlacklist) && filters.keywordBlacklist.length > 0) {
+    const title = $(entry).children('title').first().text().toLowerCase();
+    const desc = $(entry).children('description,content,content\\:encoded').first().text().toLowerCase();
+    for (const rawKw of filters.keywordBlacklist) {
+      const kw = String(rawKw).trim().toLowerCase();
+      if (kw && (title.includes(kw) || desc.includes(kw))) {
+        return true; // Match filter -> should be dropped
+      }
+    }
+  }
+
+  // 2. Author blacklist
+  if (Array.isArray(filters.authorBlacklist) && filters.authorBlacklist.length > 0) {
+    const author = $(entry).children('author,dc\\:creator').first().text().trim().toLowerCase();
+    for (const rawAuthor of filters.authorBlacklist) {
+      const blAuthor = String(rawAuthor).trim().toLowerCase();
+      if (blAuthor && author === blAuthor) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function transformFeed(xml, options = {}) {
   if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
     return '';
   }
   const $ = cheerio.load(xml, { xmlMode: true, decodeEntities: true });
+  
+  // Apply filtering rules if specified in options.filters
+  if (options.filters) {
+    $('item,entry').each((_, entry) => {
+      if (matchesFilters($, entry, options.filters)) {
+        $(entry).remove();
+      }
+    });
+  }
+
   $('item,entry').each((_, entry) => rewriteEntry($, entry, options));
   $('channel > image > url, feed > logo').each((_, element) => {
     const value = $(element).text().trim();

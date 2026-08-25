@@ -153,3 +153,39 @@ test('decodeTextEntities and CDATA handling preserves safe XML brackets and hand
   const output = transformFeed(feed, options);
   assert.match(output, /Special <Characters> & 'Quotes'/);
 });
+
+test('transformFeed applies keyword and author filtering rules properly', () => {
+  const feed = `<?xml version="1.0"?><rss version="2.0"><channel>
+    <item>
+      <title>Normal Useful Post</title>
+      <author>neo</author>
+      <link>https://v2ex.com/t/1</link>
+      <description>Great discussion on node.js</description>
+    </item>
+    <item>
+      <title>Spam Advertisement Casino</title>
+      <author>spammer</author>
+      <link>https://v2ex.com/t/2</link>
+      <description>Click here to win prizes</description>
+    </item>
+    <item>
+      <title>Another Post</title>
+      <author>blocked_user</author>
+      <link>https://v2ex.com/t/3</link>
+      <description>Random noise</description>
+    </item>
+  </channel></rss>`;
+
+  const filtered = transformFeed(feed, {
+    ...options,
+    filters: {
+      keywordBlacklist: ['casino', 'advertisement'],
+      authorBlacklist: ['blocked_user'],
+    },
+  });
+
+  assert.match(filtered, /Normal Useful Post/);
+  assert.doesNotMatch(filtered, /Spam Advertisement Casino/);
+  assert.doesNotMatch(filtered, /Another Post/);
+  assert.doesNotMatch(filtered, /blocked_user/);
+});
