@@ -155,3 +155,9 @@ test('browser fetch client falls back to the HTTP sidecar when the worker is unu
   client.close();
   await new Promise((resolve) => server.close(resolve));
 });
+
+test('browser fetch client handles close when no child process was ever spawned', () => {
+  const client = createBrowserFetchClient({ canSpawn: () => false });
+  assert.equal(client.health().transport, 'none');
+  assert.doesNotThrow(() => client.close());
+});
