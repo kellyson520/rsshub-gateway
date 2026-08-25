@@ -71,3 +71,34 @@ test('signed chunks verify and reject tampering', () => {
   const tampered = `${payload}.${signature.slice(0, 10)}${signature[10] === 'x' ? 'y' : 'x'}${signature.slice(11)}`;
   assert.throws(() => verifySignedChunk(tampered, secret));
 });
+
+test('verifySignedChunk rejects non-allowlisted target URLs', () => {
+  const secret = 'test-secret';
+  const token = createSignedChunk({
+    url: 'http://127.0.0.1:8080/private',
+    start: 0,
+    end: 100,
+    secret,
+  });
+  assert.throws(
+    () => verifySignedChunk(token, secret),
+    /chunk target is not allowed/,
+  );
+});
+
+test('revokeExpired cleans up revoked and expired leases accurately', () => {
+  let time = 1000;
+  const store = createLeaseStore({ now: () => time });
+  const l1 = store.createLease({ targetUrl: 'https://filesq.iwara.tv/1.mp4', ttlMs: 100 });
+  const l2 = store.createLease({ targetUrl: 'https://filesq.iwara.tv/2.mp4', ttlMs: 1000 });
+  const l3 = store.createLease({ targetUrl: 'https://filesq.iwara.tv/3.mp4', ttlMs: 1000 });
+
+  store.revoke(l2.username);
+  time += 200; // l1 expired, l2 revoked, l3 still valid
+
+  const expiredUsernames = store.revokeExpired();
+  assert.equal(expiredUsernames.includes(l1.username), true);
+  assert.equal(expiredUsernames.includes(l2.username), true);
+  assert.equal(expiredUsernames.includes(l3.username), false);
+  assert.equal(store.stats().leases, 1);
+});
