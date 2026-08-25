@@ -216,3 +216,33 @@ test('lease proxy rejects non-CONNECT standard HTTP requests with 405', async ()
   assert.match(responseText, /lease proxy supports CONNECT only/);
   proxy.close();
 });
+
+test('parseProxyAuth and parseAuthority handle invalid inputs gracefully', async () => {
+  const store = createLeaseStore();
+  const lease = store.createLease({
+    targetUrl: 'https://cdn.iwara.tv/v.mp4',
+    allowHosts: ['cdn.iwara.tv'],
+  });
+  const proxy = createLeaseProxy({
+    leaseStore: store,
+    port: 0,
+    host: '127.0.0.1',
+  });
+  const proxyPort = await proxy.listen();
+
+  // Test malformed CONNECT authority with valid auth
+  const responseText = await new Promise((resolve) => {
+    const req = net.connect(proxyPort, '127.0.0.1', () => {
+      req.write(`CONNECT bad-authority HTTP/1.1\r\nHost: bad-authority\r\nProxy-Authorization: Basic ${Buffer.from(`${lease.username}:${lease.password}`).toString('base64')}\r\n\r\n`);
+    });
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk.toString('utf8');
+    });
+    req.on('end', () => resolve(data));
+  });
+
+  assert.match(responseText, /^HTTP\/1\.1 403/);
+  assert.match(responseText, /host not allowed by lease/);
+  proxy.close();
+});
