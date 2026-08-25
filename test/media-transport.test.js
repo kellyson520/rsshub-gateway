@@ -911,3 +911,8 @@ test('prefetch and foreground assembly share slice fetches without duplicate ups
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('imageVariantCacheUrl handles targets with pre-existing hashes safely', () => {
+  const url = imageVariantCacheUrl('https://example.com/photo.jpg#original-hash', 1080);
+  assert.equal(url, 'https://example.com/photo.jpg#rsshub-gateway-v1-w1080');
+});
