@@ -90,3 +90,18 @@ test('persists sessions and restores progress in a new store', async () => {
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('handles invalid json or corrupted file during load gracefully', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dlsessions-corrupt-'));
+  try {
+    const file = path.join(root, 'corrupted-sessions.json');
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(file, 'not-valid-json-content', 'utf8');
+
+    const store = createDownloadSessionStore({ file });
+    const stats = await store.stats();
+    assert.equal(stats.sessions, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
