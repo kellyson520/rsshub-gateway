@@ -48,3 +48,21 @@ test('reports aggregate gallery timings and byte counts without source URLs', as
   assert.doesNotMatch(JSON.stringify(result), /token|127\.0\.0\.1|_gateway\/media/);
 });
 
+test('handles benchmark gallery with empty or media without content-length', async () => {
+  const result = await benchmarkGallery({
+    gatewayUrl: 'http://localhost:1300/_gateway/item/empty-token',
+    fetchImpl: async (url, request = {}) => {
+      const target = new URL(url);
+      if (target.pathname.includes('/_gateway/item/')) {
+        return new Response('<p>No media here</p>', { headers: { 'content-type': 'text/html' } });
+      }
+      return new Response('', { status: 404 });
+    },
+  });
+
+  assert.equal(result.originalBytes, 0);
+  assert.equal(result.variantBytes, 0);
+  assert.equal(result.variantSavedPercent, 0);
+  assert.deepEqual(result.statusCounts, {});
+});
+
