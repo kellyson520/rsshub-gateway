@@ -38,7 +38,8 @@ services:
       EGRESS_PROBE_URL: https://e-hentai.org/
       EGRESS_PROBE_TIMEOUT_MS: "5000"
       EGRESS_PROBE_CACHE_MS: "300000"
-      EGRESS_PUBLIC_HOSTS: "linux.do,kemono.su,fanbox.cc,skeb.jp,uraaka-joshi.com,sehuatang.net,jable.tv,missav.ws,missav.ai,missav.com,javbus.com,javdb.com,airav.wiki,airav.io,ggjav.com,ggjav.tv,wnacg.com,chikubi.jp"
+      EGRESS_PUBLIC_HOSTS: "linux.do,kemono.su,fanbox.cc,skeb.jp,uraaka-joshi.com,sehuatang.net,jable.tv,missav.ws,missav.ai,missav.com,missav.live,javbus.com,javdb.com,airav.wiki,airav.io,ggjav.com,ggjav.tv,wnacg.com,chikubi.jp"
+      GATEWAY_BROWSER_FETCH_HOSTS: "javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,sehuatang.net,linux.do"
       RSSHUB_URL: http://rsshub:1200
       SOURCE_CONFIG_FILE: /app/config/sources.json
       GATEWAY_LEASE_PROXY_PORT: "1301"

@@ -3,7 +3,7 @@ import { HttpError } from '../../src/fetcher-server.js';
 export { HttpError };
 import * as cheerio from 'cheerio';
 
-const SITE_BASE = 'https://missav.ws';
+const SITE_BASE = 'https://missav.live';
 const DEFAULT_CACHE_TTL = 900;
 
 const SUPPORTED_ROUTE_IDS = new Set(['/missav/new/:page?', '/missav/search/:keyword']);
@@ -32,7 +32,7 @@ export function parseVideoList(html) {
   const items = [];
   const seen = new Set();
   $('.thumbnail.group').each((_, container) => {
-    const anchor = $(container).find('a[href^="https://missav.ws/"]').first();
+    const anchor = $(container).find('a[href*="missav."]').first();
     const href = anchor.attr('href') || '';
     if (!href || seen.has(href)) return;
     const image = $(container).find('img').first();

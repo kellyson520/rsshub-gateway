@@ -6,6 +6,7 @@ const ADULT_DOMAINS = [
   'missav.ws',
   'missav.ai',
   'missav.com',
+  'missav.live',
   'javbus.com',
   'javbus.one',
   'javdb.com',
