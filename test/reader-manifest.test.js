@@ -72,3 +72,16 @@ test('createInitialReaderManifest handles empty and invalid inputs gracefully', 
   assert.equal(clamped.pages.length, 1);
   assert.equal(clamped.totalPages, 1);
 });
+
+test('mergeResolvedPage returns unchanged manifest when pageNumber or detailTarget does not match', () => {
+  const manifest = createInitialReaderManifest({
+    imageUrls: ['https://e-hentai.org/s/one/gallery-1'],
+    maxPages: 10,
+  });
+  const unmerged = mergeResolvedPage(manifest, {
+    pageNumber: 99,
+    detailTarget: 'https://e-hentai.org/s/unknown/gallery-99',
+    mediaTarget: 'https://cdn.example.com/99.jpg',
+  });
+  assert.deepEqual(unmerged, manifest);
+});
