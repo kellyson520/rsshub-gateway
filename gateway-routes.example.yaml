@@ -179,3 +179,9 @@ routes:
     backend: "sidecar://127.0.0.1:8012"
     fallback_upstream: true
     cacheTtl: 3600
+
+  # fetcher-skeb sidecar 服务 Skeb 作品 feed
+  - routeId: "/skeb/:category"
+    backend: "sidecar://127.0.0.1:8013"
+    fallback_upstream: true
+    cacheTtl: 3600
