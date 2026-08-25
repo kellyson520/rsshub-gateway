@@ -59,3 +59,11 @@ test('enforces signed-target allowlist on browserFetch hosts', async () => {
 
   service.browserFetch.close();
 });
+
+test('safeHost handles malformed or non-url input gracefully', async () => {
+  const service = createRequestService({
+    fetchExternal: async () => new Response('ok'),
+  });
+  const res = await service.fetchExternal('not-a-url');
+  assert.equal(res.status, 200);
+});
