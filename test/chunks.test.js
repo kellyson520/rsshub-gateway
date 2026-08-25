@@ -41,4 +41,11 @@ test('adaptive size stays within bounds', () => {
   assert.equal(adaptiveChunkSize(300 * 1024 * 1024), 4 * 1024 * 1024);
   assert.equal(adaptiveChunkSize(10 * 1024 ** 3), 16 * 1024 * 1024);
   assert.equal(adaptiveChunkSize(0), 256 * 1024);
+  assert.equal(adaptiveChunkSize(-100), 256 * 1024);
+});
+
+test('handles invalid and negative totalBytes in chunkSizeFor', () => {
+  assert.deepEqual(chunkSizeFor(0, 4), { count: 1, size: 256 * 1024 });
+  assert.deepEqual(chunkSizeFor(-1024, 2), { count: 1, size: 256 * 1024 });
+  assert.deepEqual(chunkSizeFor(null, 2), { count: 1, size: 256 * 1024 });
 });
