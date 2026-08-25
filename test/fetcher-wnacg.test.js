@@ -64,6 +64,7 @@ test('parseList: extracts album items and aids', () => {
   assert.equal(items.length, 2);
   assert.equal(items[0].title, '[同人志] 魔法少女特别篇');
   assert.equal(items[0].aid, '12345');
+  assert.equal(items[0].cover, 'https://img.wnacg.com/12345.jpg');
   assert.equal(items[0].pubDate, '2024-06-01');
 });
 
@@ -75,6 +76,8 @@ test('renderFeed: produces valid RSS feed', () => {
     items,
   });
   assert.ok(xml.includes('<rss version="2.0"'));
+  assert.ok(xml.includes('xmlns:media="http://search.yahoo.com/mrss/"'));
+  assert.ok(xml.includes('enclosure url="https://img.wnacg.com/12345.jpg"'));
   assert.ok(xml.includes('WNACG 最新'));
   assert.ok(xml.includes('[同人志] 魔法少女特别篇'));
 });

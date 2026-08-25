@@ -55,9 +55,13 @@ export function parseList(html) {
     const title = anchor.attr('title') || '';
     const dateStr = item.find('.info_col').text().trim();
     const dateMatch = dateStr.match(/\d{4}-\d{2}-\d{2}/);
+    const imgEl = item.find('img');
+    const rawImg = imgEl.attr('data-src') || imgEl.attr('src') || '';
+    const cover = rawImg.startsWith('//') ? `https:${rawImg}` : (rawImg.startsWith('http') ? rawImg : (rawImg ? `${SITE_BASE}${rawImg}` : ''));
     items.push({
       title,
       url: `${SITE_BASE}${href}`,
+      cover,
       pubDate: dateMatch ? dateMatch[0] : '',
       aid: href.match(/-aid-(\d+)\.html/)?.[1],
     });
@@ -99,20 +103,31 @@ function escapeXml(value) {
 
 export function renderFeed({ title, siteUrl, items = [] }) {
   const entries = items.map((item) => {
-    const desc = `<p>${escapeXml(item.title)}</p>` + 
-      (item.images ? item.images.map(img => `<img src="${escapeXml(img)}">`).join('') : '');
+    const mainImg = item.cover || (item.images && item.images[0]) || '';
+    const coverTag = mainImg ? `<enclosure url="${escapeXml(mainImg)}" type="image/jpeg" length="0" /><media:content url="${escapeXml(mainImg)}" medium="image" />` : '';
+    const imgList = item.images && item.images.length
+      ? item.images.map((img) => `<p><img src="${escapeXml(img)}" alt="${escapeXml(item.title)}" /></p>`).join('')
+      : (mainImg ? `<p><img src="${escapeXml(mainImg)}" alt="${escapeXml(item.title)}" /></p>` : '');
+    const desc = `<p>${escapeXml(item.title)}</p>${imgList}`;
+
     return `<item>
       <title>${escapeXml(item.title)}</title>
       <link>${escapeXml(item.url)}</link>
       <description><![CDATA[${desc}]]></description>
+      ${coverTag}
+      ${item.pubDate ? `<pubDate>${escapeXml(item.pubDate)}</pubDate>` : ''}
     </item>`;
   }).join('\n');
 
-  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(siteUrl)}</link>
+    <description>WNACG manga feed</description>
     ${entries}
-  </channel></rss>`;
+  </channel>
+</rss>`;
 }
 
 export function createWnacgFetcher({ fetchHtml } = {}) {
