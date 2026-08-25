@@ -112,12 +112,12 @@ test('kemonoTarget: respects custom limit', () => {
 test('renderKemonoFeed: produces valid RSS', () => {
   const xml = renderKemonoFeed({
     title: 'Test Feed',
-    siteUrl: 'https://kemono.su/patreon/user/123',
+    siteUrl: 'https://kemono.cr/patreon/user/123',
     items: [{
       title: 'Test Post',
-      url: 'https://kemono.su/patreon/user/123/post/abc',
+      url: 'https://kemono.cr/patreon/user/123/post/abc',
       guid: 'kemono:patreon:123:post:abc',
-      cover: 'https://img.kemono.su/thumbnail/data/abc.jpg',
+      cover: 'https://img.kemono.cr/thumbnail/data/abc.jpg',
       pubDate: '2024-01-01',
       description: '<p>Hello</p>',
     }],
@@ -139,7 +139,7 @@ test('fetcher: patreon user route returns rssXml', async () => {
   });
   assert.ok(result.rssXml.includes('<rss version="2.0"'));
   assert.ok(result.rssXml.includes('May 2024 Rewards'));
-  assert.ok(result.rssXml.includes('kemono.su'));
+  assert.ok(result.rssXml.includes('kemono.cr'));
   assert.ok(result.mediaUrls.length >= 1);
   assert.ok(result.cacheHint.ttl > 0);
 });
@@ -216,5 +216,5 @@ test('fetcher: includes image thumbnails in mediaUrls', async () => {
     params: { source: 'patreon', id: 'usr001' },
   });
   // 两帖子各有图片
-  assert.ok(result.mediaUrls.every(u => u.startsWith('https://img.kemono.su/thumbnail/data')));
+  assert.ok(result.mediaUrls.every(u => u.startsWith('https://img.kemono.cr/thumbnail/data')));
 });

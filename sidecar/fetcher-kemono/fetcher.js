@@ -2,9 +2,9 @@ import { HttpError } from '../../src/fetcher-server.js';
 
 export { HttpError };
 
-const SITE_BASE = 'https://kemono.su';
+const SITE_BASE = 'https://kemono.cr';
 const API_BASE = `${SITE_BASE}/api/v1`;
-const IMG_BASE = 'https://img.kemono.su';
+const IMG_BASE = 'https://img.kemono.cr';
 const DEFAULT_CACHE_TTL = 900;
 
 // 支持的 source 平台

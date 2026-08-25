@@ -2,7 +2,7 @@ import { HttpError } from '../../src/fetcher-server.js';
 
 export { HttpError };
 
-const SITE_BASE = 'https://coomer.su';
+const SITE_BASE = 'https://coomer.st';
 const API_BASE = `${SITE_BASE}/api/v1`;
 const DEFAULT_CACHE_TTL = 900;
 
