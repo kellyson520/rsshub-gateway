@@ -74,3 +74,20 @@ test('stats summarizes circuit breaker state distribution and open keys', () => 
   assert.equal(summary.byState['half-open'], 1);
   assert.equal(summary.open, 0);
 });
+
+test('circuit breaker re-opens immediately when half-open probe fails', () => {
+  let now = 1000;
+  const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 10_000, now: () => now });
+
+  breaker.recordFailure('flaky.com');
+  assert.equal(breaker.state('flaky.com'), 'open');
+
+  now += 10_000;
+  assert.equal(breaker.state('flaky.com'), 'half-open');
+  assert.equal(breaker.canRequest('flaky.com'), true);
+
+  // Probe fails
+  breaker.recordFailure('flaky.com');
+  assert.equal(breaker.state('flaky.com'), 'open');
+  assert.equal(breaker.canRequest('flaky.com'), false);
+});
