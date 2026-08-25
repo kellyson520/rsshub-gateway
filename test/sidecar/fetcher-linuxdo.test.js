@@ -160,3 +160,9 @@ test('createLinuxdoFetcher maps upstream errors properly', async () => {
     (err) => err.status === 502 || err.message.includes('502'),
   );
 });
+
+test('resolveCategory defaults unknown numeric or slug to generic label', () => {
+  const resolved = resolveCategory('unknown-section');
+  assert.equal(resolved.slug, 'unknown-section');
+  assert.equal(resolved.name, 'unknown-section');
+});
