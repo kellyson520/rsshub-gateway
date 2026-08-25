@@ -34,12 +34,12 @@ test('parses airav oneVideo cards', () => {
   assert.equal(items[0].hid, 'QC-BT-4679518');
   assert.equal(items[0].title, 'DLDSS-527 電撃專屬今井美優');
   assert.equal(items[0].cover, 'https://airav.io/storage/cover/big/QC-BT-4679518.jpg?1786649402');
-  assert.equal(items[0].url, 'https://airav.wiki/video?hid=QC-BT-4679518');
+  assert.equal(items[0].url, 'https://airav.io/video?hid=QC-BT-4679518');
   assert.equal(items[0].views, '312');
 });
 
 test('maps the home route target', () => {
-  assert.equal(airavTarget('/airav/home').url, 'https://airav.wiki/');
+  assert.equal(airavTarget('/airav/home').url, 'https://airav.io/');
   assert.throws(() => airavTarget('/airav/video/:hid'), (e) => e instanceof HttpError && e.status === 400);
 });
 
@@ -51,12 +51,12 @@ test('fetcher returns rssXml, mediaUrls and cacheHint', async () => {
   const result = await fetcher.handleFetch({ routeId: '/airav/home', cacheTtl: 900 });
   assert.ok(result.rssXml.includes('<rss version="2.0"'));
   assert.ok(result.rssXml.includes('DLDSS-527 電撃專屬今井美優'));
-  assert.ok(result.rssXml.includes('https://airav.wiki/video?hid=QC-BT-4679518'));
+  assert.ok(result.rssXml.includes('https://airav.io/video?hid=QC-BT-4679518'));
   assert.ok(result.rssXml.includes('https://airav.io/storage/cover/big/QC-BT-4679518.jpg'));
   assert.ok(result.rssXml.includes('312'));
   assert.equal(result.mediaUrls.length, 2);
   assert.equal(result.cacheHint.ttl, 900);
-  assert.deepEqual(fetched, ['https://airav.wiki/']);
+  assert.deepEqual(fetched, ['https://airav.io/']);
 });
 
 test('fetcher maps upstream failures to 502 and empty pages to 404', async () => {

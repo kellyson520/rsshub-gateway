@@ -3,7 +3,7 @@ import { HttpError } from '../../src/fetcher-server.js';
 export { HttpError };
 import * as cheerio from 'cheerio';
 
-const SITE_BASE = 'https://airav.wiki';
+const SITE_BASE = 'https://airav.io';
 const DEFAULT_CACHE_TTL = 900;
 
 const SUPPORTED_ROUTE_IDS = new Set(['/airav/home']);
