@@ -66,3 +66,10 @@ test('handles benchmark gallery with empty or media without content-length', asy
   assert.deepEqual(result.statusCounts, {});
 });
 
+test('benchmarkGallery rejects URLs with credentials embedded in authority', async () => {
+  await assert.rejects(
+    benchmarkGallery({ gatewayUrl: 'http://user:pass@127.0.0.1:1300/_gateway/item/token' }),
+    (error) => error.code === 'BENCHMARK_LOCAL_GATEWAY_REQUIRED',
+  );
+});
+
