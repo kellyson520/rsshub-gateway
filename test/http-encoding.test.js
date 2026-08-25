@@ -70,3 +70,14 @@ test('leaves incompressible media content types uncompressed', () => {
   assert.equal(result.headers['content-encoding'], undefined);
 });
 
+test('handles q=0 quality parameter by ignoring rejected encoding', () => {
+  const result = encodeHtmlResponse({
+    body: largeBody,
+    acceptEncoding: 'br;q=0, gzip',
+    contentType: 'text/html; charset=utf-8',
+  });
+
+  assert.equal(result.headers['content-encoding'], 'gzip');
+  assert.deepEqual(gunzipSync(result.body), largeBody);
+});
+
