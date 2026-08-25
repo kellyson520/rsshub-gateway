@@ -198,3 +198,20 @@ test('backfills from a full cache within the eviction budget and skips larger vi
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('enqueue handles null, non-object or non-video leases gracefully', async () => {
+  const store = createLeaseStore();
+  const transport = makeFakeTransport();
+  const queue = createLeaseBackfillQueue({
+    mediaTransport: transport.fake,
+    leaseStore: store,
+    isVideoTarget: () => false,
+  });
+
+  await queue.enqueue(null);
+  await queue.enqueue('invalid');
+  await queue.enqueue({ targetUrl: 'https://example.com/not-video' });
+
+  assert.equal(queue.stats().completed, 0);
+  assert.equal(queue.stats().skipped, 3);
+});
