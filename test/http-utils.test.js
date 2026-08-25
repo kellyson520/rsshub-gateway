@@ -14,7 +14,9 @@ import {
   readLimited,
   readBinaryLimited,
   requestedImageVariantWidth,
+  writeBuffer,
   writeJson,
+  writeText,
 } from '../src/http-utils.js';
 
 test('boundedInteger clamps and falls back', () => {
@@ -87,4 +89,43 @@ test('writeJson writes status and json body', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true });
   server.close();
+});
+
+test('writeText and writeBuffer write correct headers and bodies', async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/text') writeText(res, 200, 'hello text');
+    else if (req.url === '/buffer') writeBuffer(res, 200, Buffer.from('hello buffer'), 'application/octet-stream');
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const port = server.address().port;
+
+  const resText = await fetch(`http://127.0.0.1:${port}/text`);
+  assert.equal(resText.status, 200);
+  assert.equal(await resText.text(), 'hello text');
+
+  const resBuf = await fetch(`http://127.0.0.1:${port}/buffer`);
+  assert.equal(resBuf.status, 200);
+  assert.equal(resBuf.headers.get('content-type'), 'application/octet-stream');
+  assert.equal(await resBuf.text(), 'hello buffer');
+  server.close();
+});
+
+test('createConcurrencyLimiter throttles concurrent tasks', async () => {
+  const { createConcurrencyLimiter } = await import('../src/http-utils.js');
+  const limit = createConcurrencyLimiter(2);
+  let active = 0;
+  let maxActive = 0;
+
+  const tasks = Array.from({ length: 6 }, (_, i) => limit(async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((r) => setTimeout(r, 10));
+    active -= 1;
+    return i;
+  }));
+
+  const results = await Promise.all(tasks);
+  assert.deepEqual(results, [0, 1, 2, 3, 4, 5]);
+  assert.equal(maxActive, 2);
 });
