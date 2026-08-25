@@ -5,8 +5,9 @@ import * as telegram from './telegram.js';
 import * as ehviewer from './ehviewer.js';
 import * as pixiv from './pixiv.js';
 import * as linuxdo from './linuxdo.js';
+import * as adultMedia from './adult-media.js';
 
-const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo];
+const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
 
 const defaultAdapter = {
   name: 'unknown',
