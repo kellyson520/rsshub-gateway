@@ -209,3 +209,13 @@ test('renderLinuxdoReaderPage generates elegant dark/light theme reading view wi
   assert.ok(html.includes('_gateway/media/'));
   assert.doesNotMatch(html, /<script/);
 });
+
+test('linuxdoTopicId and isLinuxdoTopicTarget handle edge case inputs safely', async () => {
+  const { isLinuxdoTopicTarget, linuxdoTopicId } = await import('../../src/adapters/linuxdo.js');
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/t/topic/123'), true);
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/t/456'), true);
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/c/news/34'), false);
+  assert.equal(isLinuxdoTopicTarget('invalid'), false);
+  assert.equal(linuxdoTopicId('https://linux.do/t/topic/999'), '999');
+  assert.equal(linuxdoTopicId('not-a-topic'), '');
+});
