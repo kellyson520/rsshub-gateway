@@ -541,3 +541,33 @@ test('filters out subscription traffic metadata nodes from candidates', async ()
   assert.equal(lanes[0].proxyName, 'real-node-1');
   assert.equal(lanes[1].proxyName, 'real-node-2');
 });
+
+test('filters English subscription metadata nodes as well', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    listenerBaseUrl: 'http://127.0.0.1',
+    laneCount: 2,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') return response({});
+      return response({
+        proxies: {
+          PUBLIC: {
+            type: 'LoadBalance',
+            all: [
+              'Remaining Traffic: 50GB',
+              'Subscription Expires: 2027-01-01',
+              'node-us-01',
+            ],
+          },
+          'Remaining Traffic: 50GB': { type: 'Shadowsocks', alive: true },
+          'Subscription Expires: 2027-01-01': { type: 'Shadowsocks', alive: true },
+          'node-us-01': { type: 'Shadowsocks', alive: true },
+        },
+      });
+    },
+  });
+
+  const lanes = await adapter.refresh();
+  assert.equal(lanes.length, 1);
+  assert.equal(lanes[0].proxyName, 'node-us-01');
+});
