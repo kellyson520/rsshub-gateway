@@ -162,3 +162,39 @@ test('reports progress through onBytes and onResume', async () => {
   assert.equal(progress.at(-1), 600);
   assert.deepEqual(resumes, [[200, 1]]);
 });
+
+test('handles immediate client disconnect when res is destroyed before pump', async () => {
+  const { res } = totalBytes();
+  res.destroyed = true;
+
+  const result = await pumpResumableRange({
+    response: streamResponse(Buffer.from('hello-world')),
+    fetchRange: async () => streamResponse(Buffer.from('hello-world')),
+    res,
+    start: 0,
+    end: 10,
+  });
+
+  assert.equal(result.written, 0);
+  assert.equal(result.resumed, 0);
+});
+
+test('calls onComplete when range is fully transferred', async () => {
+  const { res } = totalBytes();
+  const body = Buffer.alloc(100, 9);
+  let completedInfo = null;
+
+  const result = await pumpResumableRange({
+    response: streamResponse(body),
+    fetchRange: async () => streamResponse(body),
+    res,
+    start: 0,
+    end: 99,
+    onComplete: (info) => {
+      completedInfo = info;
+    },
+  });
+
+  assert.equal(result.written, 100);
+  assert.deepEqual(completedInfo, { written: 100, resumed: 0 });
+});
