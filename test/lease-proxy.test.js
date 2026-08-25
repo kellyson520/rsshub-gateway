@@ -191,3 +191,28 @@ test('lease proxy enforces the byte cap', async () => {
   proxy.close();
   upstream.server.close();
 });
+
+test('lease proxy rejects non-CONNECT standard HTTP requests with 405', async () => {
+  const store = createLeaseStore();
+  const proxy = createLeaseProxy({
+    leaseStore: store,
+    port: 0,
+    host: '127.0.0.1',
+  });
+  const proxyPort = await proxy.listen();
+
+  const responseText = await new Promise((resolve) => {
+    const req = net.connect(proxyPort, '127.0.0.1', () => {
+      req.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n');
+    });
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk.toString('utf8');
+    });
+    req.on('end', () => resolve(data));
+  });
+
+  assert.match(responseText, /^HTTP\/1\.1 405/);
+  assert.match(responseText, /lease proxy supports CONNECT only/);
+  proxy.close();
+});
