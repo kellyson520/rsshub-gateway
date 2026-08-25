@@ -36,3 +36,16 @@ test('stats exposes per lane and host counts', () => {
   assert.equal(stats[0].count, 2);
   assert.equal(stats[0].trippedAt, null);
 });
+
+test('re-trips periodically when failures persist and normalizes host casing', () => {
+  const tracker = createSiteFailureTracker({ threshold: 3, windowMs: 60_000 });
+  // Host casing test
+  assert.equal(tracker.record('lane-01', 'IWARA.TV', 403), false);
+  assert.equal(tracker.record('lane-01', 'iwara.tv', 403), false);
+  assert.equal(tracker.record('lane-01', 'Iwara.Tv', 403), true); // 3rd -> trips
+
+  // 4th, 5th -> false, 6th -> re-trips
+  assert.equal(tracker.record('lane-01', 'iwara.tv', 403), false);
+  assert.equal(tracker.record('lane-01', 'iwara.tv', 403), false);
+  assert.equal(tracker.record('lane-01', 'iwara.tv', 403), true); // 6th -> re-trips
+});
