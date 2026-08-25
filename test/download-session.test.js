@@ -121,3 +121,33 @@ test('markChunkDone handles invalid or non-existent chunkIndex gracefully', asyn
   assert.equal(await store.markChunkDone('s1', 'abc'), false);
   assert.equal(await store.markChunkDone('s1', null), false);
 });
+
+test('revoke deletes sessions by id or targetUrl idempotently', async () => {
+  const store = createDownloadSessionStore();
+  await store.create({
+    id: 's1',
+    target: 'https://example.com/target-a.mp4',
+    size: 1000,
+    chunkSize: 500,
+    chunks: chunks(2, 500),
+  });
+  await store.create({
+    id: 's2',
+    target: 'https://example.com/target-b.mp4',
+    size: 1000,
+    chunkSize: 500,
+    chunks: chunks(2, 500),
+  });
+
+  // Revoke by id
+  assert.deepEqual(await store.revoke('s1'), { revoked: 1 });
+  assert.equal(await store.get('s1'), undefined);
+
+  // Revoke by targetUrl
+  assert.deepEqual(await store.revoke('https://example.com/target-b.mp4'), { revoked: 1 });
+  assert.equal(await store.get('s2'), undefined);
+
+  // Idempotency
+  assert.deepEqual(await store.revoke('non-existent'), { revoked: 0 });
+  assert.deepEqual(await store.revoke(''), { revoked: 0 });
+});

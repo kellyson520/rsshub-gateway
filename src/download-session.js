@@ -150,6 +150,28 @@ export function createDownloadSessionStore({
     return sessions.get(String(id || ''));
   }
 
+  async function revoke(idOrTarget) {
+    await ready;
+    purgeExpired();
+    const query = String(idOrTarget || '').trim();
+    if (!query) return { revoked: 0 };
+    let count = 0;
+    if (sessions.has(query)) {
+      sessions.delete(query);
+      count += 1;
+    }
+    for (const [id, session] of sessions) {
+      if (session.target === query) {
+        sessions.delete(id);
+        count += 1;
+      }
+    }
+    if (count > 0) {
+      await persist();
+    }
+    return { revoked: count };
+  }
+
   async function markChunkDone(id, index) {
     if (!Number.isInteger(index) || index < 0) return false;
     await ready;
@@ -179,6 +201,7 @@ export function createDownloadSessionStore({
   return {
     create,
     get,
+    revoke,
     markChunkDone,
     stats,
     flush: () => persistChain,
