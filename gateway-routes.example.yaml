@@ -197,3 +197,9 @@ routes:
     backend: "sidecar://127.0.0.1:8015"
     fallback_upstream: true
     cacheTtl: 3600
+
+  # fetcher-chikubi sidecar 服务 chikubi.jp feed
+  - routeId: "/chikubi/home"
+    backend: "sidecar://127.0.0.1:8016"
+    fallback_upstream: true
+    cacheTtl: 3600
