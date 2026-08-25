@@ -23,7 +23,12 @@ const defaultAdapter = {
 };
 
 export function adapterForUrl(url) {
-  const hostname = new URL(url).hostname.toLowerCase();
+  let hostname = '';
+  try {
+    hostname = new URL(String(url)).hostname.toLowerCase();
+  } catch {
+    return { ...defaultAdapter };
+  }
   return { ...defaultAdapter, ...adapters.find((adapter) => adapter.matches(hostname)) };
 }
 

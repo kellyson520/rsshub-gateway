@@ -116,3 +116,10 @@ test('routes major adult platforms to the adult-media adapter with proper defaul
     assert.ok(adapter.unavailableMessage().includes('原始来源'));
   }
 });
+
+test('adapterForUrl handles malformed URLs, null, or empty string gracefully', () => {
+  assert.equal(adapterForUrl('not a url').name, 'unknown');
+  assert.equal(adapterForUrl('').name, 'unknown');
+  assert.equal(adapterForUrl(null).name, 'unknown');
+  assert.equal(adapterForUrl(undefined).name, 'unknown');
+});
