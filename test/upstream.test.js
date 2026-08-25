@@ -436,3 +436,17 @@ test('attaches correct Referer for hotlinking-protected adult CDNs', async () =>
   assert.equal(recordedHeaders[1].referer, 'https://javdb.com/');
   assert.equal(recordedHeaders[2].referer, 'https://missav.ai/');
 });
+
+test('refererFor returns undefined for malformed URL or unconfigured hosts', async () => {
+  const recordedHeaders = [];
+  const client = createUpstreamClient({
+    fetchImpl: async (_url, options) => {
+      recordedHeaders.push(options.headers);
+      return new Response('ok', { status: 200 });
+    },
+    sleep: async () => {},
+  });
+
+  await client.fetchExternal('https://e-hentai.org/g/1/2/');
+  assert.equal(recordedHeaders[0].referer, undefined);
+});
