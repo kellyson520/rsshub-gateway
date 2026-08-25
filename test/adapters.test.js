@@ -25,6 +25,7 @@ test('uses the Telegram embed endpoint for public post details', () => {
 
   assert.equal(adapter.readerTarget('https://t.me/baipiaotg/67336'), 'https://t.me/baipiaotg/67336?embed=1');
   assert.equal(adapter.readerTarget('https://t.me/s/baipiaotg'), 'https://t.me/s/baipiaotg');
+  assert.equal(adapter.readerTarget('invalid-url'), 'invalid-url');
 });
 
 test('keeps canonical reader URLs and source-specific fallback messages', () => {

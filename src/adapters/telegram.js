@@ -10,12 +10,16 @@ export function headers(_config = {}, _options = {}) {
 }
 
 export function readerTarget(value) {
-  const url = new URL(value);
-  const parts = url.pathname.split('/').filter(Boolean);
-  if (url.hostname === 't.me' && parts.length === 2 && /^\d+$/.test(parts[1])) {
-    url.searchParams.set('embed', '1');
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (url.hostname === 't.me' && parts.length === 2 && /^\d+$/.test(parts[1])) {
+      url.searchParams.set('embed', '1');
+    }
+    return url.toString();
+  } catch {
+    return String(value || '');
   }
-  return url.toString();
 }
 
 export function unavailableMessage() {
