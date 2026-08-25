@@ -83,4 +83,4 @@ export function createLogger({
   };
 }
 
-export { REDACT_VALUE };
+export { REDACT_VALUE, redactValue, redactFields };
