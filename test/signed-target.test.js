@@ -149,9 +149,21 @@ test('allows major adult source hosts and their media CDNs', () => {
     'https://xvideos.com/video1',
     'https://x1.xv-cdn.com/videos/1.mp4',
     'https://missav.com/watch/1',
+    'https://missav.live/watch/1',
     'https://javdb.com/v/1',
     'https://javbus.com/1',
     'https://www.jpgcdn.com/1.jpg',
+    'https://kemono.cr/patreon/user/1',
+    'https://img.kemono.cr/data/1.jpg',
+    'https://coomer.st/onlyfans/user/1',
+    'https://airav.io/video/1',
+    'https://ggjav.tv/main',
+    'https://www.sehuatang.net/thread-1-1-1.html',
+    'https://skeb.jp/@creator/works/1',
+    'https://fanbox.cc/@artist/posts/1',
+    'https://chikubi.jp/post-1.html',
+    'https://www.wnacg.com/albums.html',
+    'https://www.uraaka-joshi.com/',
   ];
   for (const target of allowed) {
     assert.equal(isAllowedTarget(target), true, target);
