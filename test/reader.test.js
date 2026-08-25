@@ -228,3 +228,26 @@ test('carries session scope into generated reader media URLs without exposing it
   assert.equal(data.source, 'x');
   assert.doesNotMatch(output, /credentialFingerprint|abcdef123456/);
 });
+
+test('renders and sanitizes adult media reader pages cleanly', () => {
+  const output = renderReaderPage({
+    url: 'https://www.javbus.com/ABC-123',
+    html: `<html><head><title>ABC-123 JavBus</title></head><body>
+      <h1>ABC-123 女优主演</h1>
+      <script>alert("malicious XSS");</script>
+      <div class="movie">
+        <img src="https://www.javbus.com/pics/cover/abc_b.jpg" alt="Cover">
+        <p>Release: 2026-08-01</p>
+        <a href="https://www.javbus.com/genre/hd">HD Category</a>
+      </div>
+    </body></html>`,
+    baseUrl: 'https://gateway.example.test',
+    secret: 'secret',
+  });
+
+  assert.match(output, /ABC-123/);
+  assert.doesNotMatch(output, /<script/);
+  assert.doesNotMatch(output, /alert\(/);
+  assert.match(output, /_gateway\/media\//);
+  assert.match(output, /_gateway\/item\//);
+});
