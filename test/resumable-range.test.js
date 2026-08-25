@@ -211,3 +211,18 @@ test('pumpResumableRange returns zero written when start exceeds end', async () 
   assert.equal(result.written, 0);
   assert.equal(result.resumed, 0);
 });
+
+test('pumpResumableRange handles null or invalid response gracefully', async () => {
+  const { res } = totalBytes();
+  let truncatedCalls = 0;
+  const result = await pumpResumableRange({
+    response: null,
+    fetchRange: async () => null,
+    res,
+    start: 0,
+    end: 100,
+    onTruncated: () => { truncatedCalls += 1; },
+  });
+  assert.equal(result.written, 0);
+  assert.equal(truncatedCalls, 1);
+});
