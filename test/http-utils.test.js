@@ -129,3 +129,10 @@ test('createConcurrencyLimiter throttles concurrent tasks', async () => {
   assert.deepEqual(results, [0, 1, 2, 3, 4, 5]);
   assert.equal(maxActive, 2);
 });
+
+test('readSecret and readSources handle default and fallback states', async () => {
+  const { readSecret, readSources } = await import('../src/http-utils.js');
+  assert.equal(typeof readSecret(), 'string');
+  assert.ok(readSecret().length > 0);
+  assert.equal(typeof readSources(), 'object');
+});
