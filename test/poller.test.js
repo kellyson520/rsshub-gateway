@@ -82,3 +82,15 @@ test('stats reports accurate consecutive failures and duration', async () => {
   assert.equal(stats.tasks[0].consecutiveFailures, 1);
   assert.equal(stats.tasks[0].lastDurationMs, 50);
 });
+
+test('poller stop is idempotent and clears active timers cleanly', () => {
+  const poller = createPoller({ intervalMs: 100 });
+  poller.register('noop', () => {});
+  poller.start();
+  assert.equal(poller.stats().running, true);
+  poller.stop();
+  assert.equal(poller.stats().running, false);
+  // Second call must be harmless
+  poller.stop();
+  assert.equal(poller.stats().running, false);
+});
