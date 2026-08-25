@@ -102,3 +102,8 @@ test('resolveGatewayOptions parses feed prefetch settings', () => {
   assert.equal(clamped.feedPrefetchConcurrency, 8);
   assert.equal(clamped.feedPrefetchMaxRetries, 5);
 });
+
+test('resolveGatewayOptions initializes imageVariantLimiter properly', () => {
+  const options = resolveGatewayOptions({ secret: 'secret' }, {});
+  assert.equal(typeof options.imageVariantLimiter, 'function');
+});
