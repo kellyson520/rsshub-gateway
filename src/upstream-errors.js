@@ -11,5 +11,5 @@ export class GatewayUpstreamError extends Error {
 }
 
 export function isRetryableStatus(status) {
-  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+  return Number.isInteger(status) && (status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599));
 }

@@ -43,4 +43,7 @@ test('isRetryableStatus: correctly identifies retryable and non-retryable HTTP s
   assert.equal(isRetryableStatus(401), false);
   assert.equal(isRetryableStatus(403), false);
   assert.equal(isRetryableStatus(404), false);
+  assert.equal(isRetryableStatus(null), false);
+  assert.equal(isRetryableStatus(undefined), false);
+  assert.equal(isRetryableStatus('500'), false);
 });
