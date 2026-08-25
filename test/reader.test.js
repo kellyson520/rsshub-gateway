@@ -265,3 +265,13 @@ test('renderUnavailablePage generates clear error diagnostics page', () => {
   assert.match(output, /class="reader"/);
   assert.match(output, /原始来源/);
 });
+
+test('renderReaderPage safely handles malformed or empty html body', () => {
+  const output = renderReaderPage({
+    url: 'https://example.com/item/1',
+    html: '',
+    baseUrl: 'https://gateway.example.test',
+    secret: 'secret',
+  });
+  assert.match(output, /class="reader"/);
+});
