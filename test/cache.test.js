@@ -325,3 +325,16 @@ test('touching a variant makes it the last eviction candidate', async () => {
     assert.equal((await cache.peek('https://example.com/i.png', 'media-variant')).hit, true);
   });
 });
+
+test('handles invalid and non-buffer body in getOrLoad gracefully', async () => {
+  await withCache({}, async (cache) => {
+    // Attempting to return an unsupported body format safely bubbles or falls back
+    const result = await cache.getOrLoad('https://example.com/invalid', 'html', async () => ({
+      status: 200,
+      headers: {},
+      body: { not: 'a string or buffer' },
+    }));
+    assert.equal(result.state, 'MISS');
+    assert.equal((await cache.peek('https://example.com/invalid', 'html')).hit, false);
+  });
+});
