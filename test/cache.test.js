@@ -338,3 +338,12 @@ test('handles invalid and non-buffer body in getOrLoad gracefully', async () => 
     assert.equal((await cache.peek('https://example.com/invalid', 'html')).hit, false);
   });
 });
+
+test('cache peek and readRange handle non-existent keys safely', async () => {
+  await withCache({}, async (cache) => {
+    const peekResult = await cache.peek('https://example.com/non-existent', 'media');
+    assert.equal(peekResult.hit, false);
+    const rangeResult = await cache.readRange('https://example.com/non-existent', 'media');
+    assert.equal(rangeResult, null);
+  });
+});
