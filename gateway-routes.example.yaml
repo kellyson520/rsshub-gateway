@@ -185,3 +185,9 @@ routes:
     backend: "sidecar://127.0.0.1:8013"
     fallback_upstream: true
     cacheTtl: 3600
+
+  # fetcher-uraaka sidecar 服务 裏垢女子まとめ feed
+  - routeId: "/uraaka/home"
+    backend: "sidecar://127.0.0.1:8014"
+    fallback_upstream: true
+    cacheTtl: 3600
