@@ -94,3 +94,16 @@ test('createLogger: survives throwing sink without crashing caller', () => {
     logger.error('failed_event', { err: 'oops' });
   });
 });
+
+test('createLogger: handles null or undefined fields without throwing', () => {
+  const lines = [];
+  const logger = createLogger({
+    sink: (line) => lines.push(JSON.parse(line)),
+  });
+
+  logger.info('empty_fields', null);
+  logger.info('undefined_fields', undefined);
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0].event, 'empty_fields');
+  assert.equal(lines[1].event, 'undefined_fields');
+});
