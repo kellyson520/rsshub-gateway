@@ -153,6 +153,9 @@ function rewriteEntry($, entry, options) {
 }
 
 export function transformFeed(xml, options) {
+  if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
+    return '';
+  }
   const $ = cheerio.load(xml, { xmlMode: true, decodeEntities: true });
   $('item,entry').each((_, entry) => rewriteEntry($, entry, options));
   $('channel > image > url, feed > logo').each((_, element) => {

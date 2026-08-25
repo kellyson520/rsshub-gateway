@@ -141,3 +141,9 @@ test('rewrites Atom enclosure links and preserves disallowed attachment hosts', 
   const unchanged = transformFeed(external, options);
   assert.match(unchanged, /enclosure url="https:\/\/example\.com\/outside\.mp4"/);
 });
+
+test('handles malformed, empty or non-xml feed gracefully', () => {
+  assert.equal(transformFeed('', options), '');
+  assert.equal(transformFeed('plain text string', options), 'plain text string');
+  assert.equal(transformFeed(null, options), '');
+});
