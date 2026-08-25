@@ -137,7 +137,12 @@ export function createSehuatangFetcher({ fetchHtml } = {}) {
     };
     if (cookie) headers['Cookie'] = cookie;
 
-    const remote = await fetchHtml(target.url, { headers });
+    let remote;
+    try {
+      remote = await fetchHtml(target.url, { headers });
+    } catch (error) {
+      throw new HttpError(error.status || 502, `sehuatang upstream failed: ${error.message}`);
+    }
     if (!remote?.ok) throw new HttpError(502, 'sehuatang upstream failed');
     
     const html = await remote.text();
