@@ -508,3 +508,36 @@ test('excludes lanes that fail the required public probe', async () => {
 
   assert.equal(lanes.length, 0);
 });
+
+test('filters out subscription traffic metadata nodes from candidates', async () => {
+  const adapter = createMihomoEgressAdapter({
+    controllerUrl: 'http://127.0.0.1:9090',
+    listenerBaseUrl: 'http://127.0.0.1',
+    laneCount: 2,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') return response({});
+      return response({
+        proxies: {
+          PUBLIC: {
+            type: 'LoadBalance',
+            all: [
+              '剩余流量：100GB',
+              '套餐到期：2026-12-31',
+              'real-node-1',
+              'real-node-2',
+            ],
+          },
+          '剩余流量：100GB': { type: 'Shadowsocks', alive: true },
+          '套餐到期：2026-12-31': { type: 'Shadowsocks', alive: true },
+          'real-node-1': { type: 'Shadowsocks', alive: true },
+          'real-node-2': { type: 'Shadowsocks', alive: true },
+        },
+      });
+    },
+  });
+
+  const lanes = await adapter.refresh();
+  assert.equal(lanes.length, 2);
+  assert.equal(lanes[0].proxyName, 'real-node-1');
+  assert.equal(lanes[1].proxyName, 'real-node-2');
+});
