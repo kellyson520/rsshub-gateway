@@ -97,3 +97,24 @@ test('createBrowserRenderClient: health check returns ok on 200 and false on fai
   assert.equal(brokenHealth.ok, false);
   assert.equal(brokenHealth.renderUrl, 'http://127.0.0.1:8004');
 });
+
+test('createBrowserRenderClient: enforces minimum 5000ms timeout budget', async () => {
+  let passedTimeout = 0;
+  const mockFetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    passedTimeout = body.timeoutMs;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ html: '<div>min budget</div>' }),
+    };
+  };
+
+  const client = createBrowserRenderClient({
+    renderUrl: 'http://127.0.0.1:8004',
+    fetchImpl: mockFetch,
+  });
+
+  await client.fetchRenderedHtml('https://example.com/page', { timeoutMs: 1000 });
+  assert.equal(passedTimeout, 5000);
+});
