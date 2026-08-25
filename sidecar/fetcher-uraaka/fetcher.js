@@ -73,8 +73,13 @@ export function createUraakaFetcher({ fetchHtml } = {}) {
     const routeId = String(body?.routeId || '');
     const target = uraakaTarget(routeId);
     
-    const remote = await fetchHtml(target.url);
-    if (!remote?.ok) throw new HttpError(502, 'upstream failed');
+    let remote;
+    try {
+      remote = await fetchHtml(target.url);
+    } catch (error) {
+      throw new HttpError(error.status || 502, `uraaka upstream failed: ${error.message}`);
+    }
+    if (!remote?.ok) throw new HttpError(502, 'uraaka upstream failed');
     
     const items = parseList(await remote.text());
     if (!items.length) throw new HttpError(404, 'no items found');

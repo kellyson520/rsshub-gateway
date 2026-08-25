@@ -121,8 +121,13 @@ export function createWnacgFetcher({ fetchHtml } = {}) {
     const params = body?.params || {};
 
     const target = wnacgTarget(routeId, params);
-    const remote = await fetchHtml(target.url);
-    if (!remote?.ok) throw new HttpError(502, 'upstream failed');
+    let remote;
+    try {
+      remote = await fetchHtml(target.url);
+    } catch (error) {
+      throw new HttpError(error.status || 502, `wnacg upstream failed: ${error.message}`);
+    }
+    if (!remote?.ok) throw new HttpError(502, 'wnacg upstream failed');
     
     const items = parseList(await remote.text());
     
