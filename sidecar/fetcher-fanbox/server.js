@@ -1,3 +1,5 @@
+import { createBrowserFetchClient } from '../../src/browser-fetch.js';
+import { fetchdJson } from '../../src/fetchd.js';
 import { createFetcherServer, listen, registerDispatcherRoutes, unregisterDispatcherRoutes } from '../../src/fetcher-server.js';
 import { createFanboxFetcher } from './fetcher.js';
 
@@ -9,19 +11,22 @@ const ADVERTISE_HOST = process.env.FETCHER_ADVERTISE_HOST || '127.0.0.1';
 const ROUTE_IDS = ['/fanbox/:creator'];
 
 async function main() {
+  const browserFetch = createBrowserFetchClient();
   const fetcher = createFanboxFetcher({
-    fetchJson: async (url, opts) => {
-      const response = await fetch(url, { ...opts, signal: AbortSignal.timeout(25_000) });
-      return {
-        ok: response.ok,
-        status: response.status,
-        json: async () => response.json(),
-      };
-    },
+    fetchJson: (url, options = {}) => fetchdJson(browserFetch.fetch, url, {
+      ...options,
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'https://www.fanbox.cc',
+        'Referer': 'https://www.fanbox.cc/',
+        ...(options.headers || {}),
+      },
+      timeout: 25_000,
+    }),
   });
   const server = createFetcherServer({
     fetcher,
-    health: () => ({ transport: 'fetch' }),
+    health: () => ({ transport: browserFetch.health().transport }),
     name: 'fetcher-fanbox',
   });
   await listen(server, PORT, '0.0.0.0', 'fetcher_fanbox');
@@ -40,7 +45,10 @@ async function main() {
     });
   }
   
-  const shutdown = () => { server.close(); };
+  const shutdown = async () => {
+    browserFetch.close();
+    server.close();
+  };
   process.on('SIGTERM', shutdown);
 }
 
