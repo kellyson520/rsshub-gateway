@@ -44,3 +44,29 @@ test('does not encode HTML below the configured threshold', () => {
   assert.equal(result.headers['content-encoding'], undefined);
 });
 
+test('handles HEAD requests without generating compressed body bytes', () => {
+  const result = encodeHtmlResponse({
+    body: largeBody,
+    acceptEncoding: 'br',
+    contentType: 'text/html; charset=utf-8',
+    method: 'HEAD',
+  });
+
+  assert.deepEqual(result.body, largeBody);
+  assert.equal(result.headers['content-encoding'], undefined);
+  assert.equal(result.headers['content-length'], String(largeBody.length));
+  assert.equal(result.headers.vary, 'Accept-Encoding');
+});
+
+test('leaves incompressible media content types uncompressed', () => {
+  const binary = Buffer.alloc(8192, 1);
+  const result = encodeHtmlResponse({
+    body: binary,
+    acceptEncoding: 'gzip, br',
+    contentType: 'image/jpeg',
+  });
+
+  assert.deepEqual(result.body, binary);
+  assert.equal(result.headers['content-encoding'], undefined);
+});
+
