@@ -251,3 +251,17 @@ test('renders and sanitizes adult media reader pages cleanly', () => {
   assert.match(output, /_gateway\/media\//);
   assert.match(output, /_gateway\/item\//);
 });
+
+test('renderUnavailablePage generates clear error diagnostics page', () => {
+  const output = renderUnavailablePage({
+    url: 'https://e-hentai.org/g/123/abc/',
+    message: 'Upstream connection timed out',
+    baseUrl: 'https://gateway.example.test',
+    secret: 'secret',
+  });
+
+  assert.match(output, /Upstream connection timed out/);
+  assert.match(output, /https:\/\/gateway\.example\.test\/_gateway\/item\//);
+  assert.match(output, /class="reader"/);
+  assert.match(output, /原始来源/);
+});
