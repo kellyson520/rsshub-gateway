@@ -102,9 +102,32 @@ Backends are always `sidecar://host:port` — a standalone Fetcher process speak
 
 Routes can also be registered at runtime without restarting the gateway: when `DISPATCHER_REGISTRATION_TOKEN` is set, the control endpoint `/_gateway/dispatcher/routes` accepts `GET` (list), `POST` (register `{ routes: [...] }`) and `DELETE` (unregister `{ routeIds: [...] }`) with `Authorization: Bearer <token>`. The reference sidecars (`fetcher-iwara`, `fetcher-eh`) auto-register their routes at startup when `DISPATCHER_REGISTRATION_URL`, `DISPATCHER_REGISTRATION_TOKEN` and `FETCHER_ADVERTISE_HOST` are set, and unregister on graceful shutdown. Without the token the endpoint returns 404, so production stays unchanged by default.
 
-`sidecar/fetcher-iwara/server.js` and `sidecar/fetcher-eh/server.js` are the reference Sidecar-Fetchers: standalone HTTP processes implementing the Fetcher-API for `/iwara/users/:username/:kind?` (user video/image feeds) and `/ehviewer/ranking/:period?` (E-Hentai ranking feeds). They share the `src/fetcher-server.js` HTTP scaffold (`POST /fetch`, `GET /healthz`, error mapping), the source adapters for feed rendering, and the browser-fingerprint transport (`src/browser-fetch.js`, curl_cffi through Mihomo `FETCHD_PROXY`), so Cloudflare-protected sources work without the gateway embedding scraping logic. Both are **enabled by default** in the container entrypoint (single-container enhanced mode) and can be turned off with `GATEWAY_SIDECAR_IWARA=false` / `GATEWAY_SIDECAR_EH=false` for a pure transparent deployment. The protocol contract is specified in `docs/fetcher-api.md`, and `gateway-routes.example.yaml` is a fully annotated registry.
+### Supported Sidecar Fetchers & Platform Matrix
 
-Deployment comes in two flavors (see `docker-compose.standard.example.yml` and `docker-compose.enhanced.example.yml`): the standard companion mode runs only RSSHub + the gateway (pure transparent enhancement). The enhanced mode keeps a **single gateway container**: the entrypoint starts the `fetcher-iwara` / `fetcher-eh` sidecar **processes** inside the same container by default (process isolation satisfies the charter; site logic never enters the gateway base process; set `GATEWAY_SIDECAR_IWARA=false` / `GATEWAY_SIDECAR_EH=false` to opt out), and `gateway-routes.yaml` registers `sidecar://127.0.0.1:8000` / `sidecar://127.0.0.1:8001` with `fallback_upstream: true`, so registered routes are served by the sidecars with automatic fallback to upstream RSSHub. Sidecars can equivalently run in separate containers (`command: ["fetcher-iwara"]` with `backend: "sidecar://fetcher-iwara:8000"`).
+The gateway includes standalone microservice Fetchers for demanding sources, communicating via the standard Fetcher-API (`POST /fetch`, `GET /healthz`):
+
+| Sidecar Service | Port | Supported Route Patterns | Upstream Target / Features |
+| --- | :---: | --- | --- |
+| `fetcher-iwara` | `8000` | `/iwara/users/:username/:kind?` | Iwara.tv 3D videos/images, token refresh |
+| `fetcher-eh` | `8001` | `/ehviewer/ranking/:period?` | E-Hentai daily/monthly ranking feeds |
+| `fetcher-ggjav` | `8002` | `/ggjav/home`, `/ggjav/search/:keyword` | GGJAV adult streaming catalog |
+| `fetcher-airav` | `8003` | `/airav/home`, `/airav/new-release` | AirAV video streaming feeds (`airav.io`) |
+| `browser-render`| `8004` | `/render`, `/healthz` | Headless Chromium rendering engine |
+| `fetcher-missav`| `8005` | `/missav/new`, `/missav/search/:keyword` | MissAV video streaming (`missav.live`) |
+| `fetcher-jable` | `8006` | `/jable/new-release`, `/jable/video/:code` | Jable multi-lane hybrid fetcher |
+| `fetcher-javbus`| `8007` | `/javbus/home`, `/javbus/series/:id` | JavBus uncensored/censored releases |
+| `fetcher-javdb` | `8008` | `/javdb/home`, `/javdb/rankings/:time?` | JavDB movie database & rankings |
+| `fetcher-kemono`| `8009` | `/kemono/posts`, `/kemono/:source?/:id?`| Kemono creator posts & attachments (`kemono.cr`)|
+| `fetcher-coomer`| `8010` | `/coomer/posts`, `/coomer/:source?/:id?`| Coomer creator media & attachments (`coomer.st`)|
+| `fetcher-wnacg` | `8011` | `/wnacg/home/:cid?/:tag?` | WNACG doujinshi and manga albums |
+| `fetcher-fanbox`| `8012` | `/fanbox/:creator` | pixivFANBOX creator sponsor feeds |
+| `fetcher-skeb`  | `8013` | `/skeb/:category` | Skeb illustration & voice commissions |
+| `fetcher-uraaka`| `8014` | `/uraaka/home` | Uraaka Japanese idol community |
+| `fetcher-sehuatang`| `8015` | `/sehuatang/:subforumid?` | 98tang / 色花堂 with 2-stage `_safe` challenge bypass |
+| `fetcher-chikubi`| `8016` | `/chikubi/home` | Chikubi photo articles and gravure |
+| `fetcher-linuxdo`| `8017` | `/linuxdo/latest`, `/linuxdo/top/:period?`| Linux.do technical forum & topics |
+
+All sidecars share automatic fallback to upstream RSSHub (`fallback_upstream: true`), HMAC-SHA256 URL signing, and TLS fingerprint simulation.
 
 ## Async feed prefetch / precache queue
 
