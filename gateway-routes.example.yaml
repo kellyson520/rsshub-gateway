@@ -191,3 +191,9 @@ routes:
     backend: "sidecar://127.0.0.1:8014"
     fallback_upstream: true
     cacheTtl: 3600
+
+  # fetcher-sehuatang sidecar 服务 色花堂 feed
+  - routeId: "/sehuatang/:subforumid?"
+    backend: "sidecar://127.0.0.1:8015"
+    fallback_upstream: true
+    cacheTtl: 3600
