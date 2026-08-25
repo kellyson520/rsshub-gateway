@@ -122,4 +122,5 @@ test('adapterForUrl handles malformed URLs, null, or empty string gracefully', (
   assert.equal(adapterForUrl('').name, 'unknown');
   assert.equal(adapterForUrl(null).name, 'unknown');
   assert.equal(adapterForUrl(undefined).name, 'unknown');
+  assert.equal(adapterForUrl('https://unsupported.site.example/').name, 'unknown');
 });
