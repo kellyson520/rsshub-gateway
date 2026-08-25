@@ -29,6 +29,7 @@ export function createFeedPrefetchQueue({
   const configured = [...new Set(paths.map(String).filter(Boolean))];
   const pending = new Map();
   const pathStats = new Map();
+  const pausedPaths = new Set();
   const idleWaiters = [];
   let inFlight = 0;
   let completed = 0;
@@ -48,17 +49,50 @@ export function createFeedPrefetchQueue({
   }
 
   function record(path, patch) {
-    const entry = pathStats.get(path) || { queued: 0, completed: 0, failed: 0, attempts: 0, lastStatus: null, lastAttemptAt: 0, lastDurationMs: null };
-    pathStats.set(path, { ...entry, ...patch });
+    const entry = pathStats.get(path) || {
+      queued: 0,
+      completed: 0,
+      failed: 0,
+      attempts: 0,
+      consecutiveFailures: 0,
+      backoffMultiplier: 1,
+      lastStatus: null,
+      lastAttemptAt: 0,
+      lastDurationMs: null,
+      paused: false,
+    };
+    pathStats.set(path, { ...entry, ...patch, paused: pausedPaths.has(path) });
     return pathStats.get(path);
+  }
+
+  function togglePause(path, paused) {
+    const key = String(path || '').trim();
+    if (!key) return false;
+    const shouldPause = paused === undefined ? !pausedPaths.has(key) : Boolean(paused);
+    if (shouldPause) {
+      pausedPaths.add(key);
+      pending.delete(key);
+    } else {
+      pausedPaths.delete(key);
+    }
+    record(key, { paused: shouldPause });
+    return shouldPause;
+  }
+
+  function effectiveInterval(key) {
+    const entry = pathStats.get(key);
+    const multiplier = entry?.backoffMultiplier || 1;
+    return Math.min(interval * multiplier, 4 * 60 * 60_000); // capped at 4 hours
   }
 
   function enqueue(path, { force = false } = {}) {
     const key = String(path || '').trim();
     if (!key) return { queued: 0, skipped: 1 };
+    if (pausedPaths.has(key)) return { queued: 0, skipped: 1, reason: 'paused' };
     if (pending.has(key)) return { queued: 0, skipped: 1, reason: 'already-pending' };
     const entry = pathStats.get(key);
-    if (!force && entry?.lastAttemptAt && now() - entry.lastAttemptAt < interval) {
+    const pathInterval = effectiveInterval(key);
+    if (!force && entry?.lastAttemptAt && now() - entry.lastAttemptAt < pathInterval) {
       return { queued: 0, skipped: 1, reason: 'within-interval' };
     }
     pending.set(key, { path: key, attempts: 0, retryAt: 0 });
@@ -109,6 +143,8 @@ export function createFeedPrefetchQueue({
       pending.delete(key);
       record(key, {
         completed: (pathStats.get(key)?.completed || 0) + 1,
+        consecutiveFailures: 0,
+        backoffMultiplier: 1,
         lastStatus: result.status,
         lastDurationMs: durationMs,
         lastAttemptAt: startedAt,
@@ -119,12 +155,23 @@ export function createFeedPrefetchQueue({
     }
     if (item.attempts > retries) {
       failed += 1;
+      const currentFailures = (pathStats.get(key)?.consecutiveFailures || 0) + 1;
+      const nextMultiplier = Math.min(16, Math.pow(2, currentFailures));
       record(key, {
         failed: (pathStats.get(key)?.failed || 0) + 1,
+        consecutiveFailures: currentFailures,
+        backoffMultiplier: nextMultiplier,
         lastStatus: result.status || 0,
         lastDurationMs: durationMs,
       });
-      logger.warn('feed_prefetch_failed', { path: key, status: result.status, error: result.error, attempts: item.attempts });
+      logger.warn('feed_prefetch_failed', {
+        path: key,
+        status: result.status,
+        error: result.error,
+        attempts: item.attempts,
+        consecutiveFailures: currentFailures,
+        backoffMultiplier: nextMultiplier,
+      });
       notifyIdle();
       return;
     }
@@ -186,5 +233,5 @@ export function createFeedPrefetchQueue({
     };
   }
 
-  return { enqueue, runCycle, idle, start, stop, stats };
+  return { enqueue, togglePause, runCycle, idle, start, stop, stats };
 }

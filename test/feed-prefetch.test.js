@@ -194,3 +194,34 @@ test('enqueue handles empty, null or undefined path inputs cleanly', () => {
   assert.deepEqual(queue.enqueue(null), { queued: 0, skipped: 1 });
   assert.deepEqual(queue.enqueue(undefined), { queued: 0, skipped: 1 });
 });
+
+test('feed prefetch applies exponential backoff on repeated 429/5xx and supports togglePause', async () => {
+  let attempts = 0;
+  const queue = createFeedPrefetchQueue({
+    paths: ['/feed/rate-limited'],
+    concurrency: 1,
+    intervalMs: 1000,
+    maxRetries: 1,
+    retryBackoffMs: 5,
+    fetchFeed: async () => {
+      attempts += 1;
+      return { ok: false, status: 429 };
+    },
+  });
+  queue.start();
+  queue.runCycle();
+  await waitFor(() => queue.stats().failed === 1);
+  const pathStat = queue.stats().paths['/feed/rate-limited'];
+  assert.equal(pathStat.consecutiveFailures, 1);
+  assert.equal(pathStat.backoffMultiplier, 2);
+
+  // Pausing path
+  assert.equal(queue.togglePause('/feed/rate-limited', true), true);
+  assert.equal(queue.stats().paths['/feed/rate-limited'].paused, true);
+  assert.deepEqual(queue.enqueue('/feed/rate-limited'), { queued: 0, skipped: 1, reason: 'paused' });
+
+  // Resuming path
+  assert.equal(queue.togglePause('/feed/rate-limited', false), false);
+  assert.equal(queue.stats().paths['/feed/rate-limited'].paused, false);
+  queue.stop();
+});
