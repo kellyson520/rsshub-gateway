@@ -288,3 +288,13 @@ routes:
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('compilePattern throws on misplaced star or handles special characters safely', () => {
+  const dispatcher = dispatcherWith('absent.yaml');
+  // Attempting to register invalid route where star is not at the end
+  const res = dispatcher.registerRoutes([
+    { routeId: '/a/*/b', backend: 'sidecar://invalid' },
+  ]);
+  assert.equal(res.registered, 0);
+  assert.equal(res.rejected, 1);
+});
