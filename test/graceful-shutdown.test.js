@@ -116,3 +116,18 @@ test('handles server.close throwing an error gracefully during shutdown', async 
   assert.deepEqual(exits, [0]);
   shutdown.dispose();
 });
+
+test('handles null or undefined elements in servers array without throwing', async () => {
+  const exits = [];
+  const shutdown = installGracefulShutdown({
+    servers: [null, undefined, fakeServer()],
+    timeoutMs: 200,
+    exitImpl: (code) => exits.push(code),
+    logger: null,
+  });
+
+  assert.equal(shutdown.shutdown('SIGTERM'), true);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.deepEqual(exits, [0]);
+  shutdown.dispose();
+});
