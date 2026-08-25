@@ -49,3 +49,12 @@ test('re-trips periodically when failures persist and normalizes host casing', (
   assert.equal(tracker.record('lane-01', 'iwara.tv', 403), false);
   assert.equal(tracker.record('lane-01', 'iwara.tv', 403), true); // 6th -> re-trips
 });
+
+test('handles non-string laneId or host values gracefully without crashing', () => {
+  const tracker = createSiteFailureTracker({ threshold: 2, windowMs: 60_000 });
+  assert.equal(tracker.record(null, undefined, 500), false);
+  assert.equal(tracker.record(null, undefined, 500), true);
+  assert.equal(tracker.blocked(null, undefined), true);
+  tracker.reset(null, undefined);
+  assert.equal(tracker.blocked(null, undefined), false);
+});
