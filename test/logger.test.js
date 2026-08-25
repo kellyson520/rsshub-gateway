@@ -81,3 +81,16 @@ test('createLogger: child logger inherits and merges context fields', () => {
   assert.equal(lines[0].component, 'media-streamer');
   assert.equal(lines[0].bytes, 65536);
 });
+
+test('createLogger: survives throwing sink without crashing caller', () => {
+  const logger = createLogger({
+    sink: () => {
+      throw new Error('disk full or stdout broken pipe');
+    },
+  });
+
+  assert.doesNotThrow(() => {
+    logger.info('test_event', { key: 'val' });
+    logger.error('failed_event', { err: 'oops' });
+  });
+});
