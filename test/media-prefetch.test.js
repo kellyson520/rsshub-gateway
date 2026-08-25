@@ -204,3 +204,46 @@ test('expires abandoned persisted targets after the queue TTL', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('ignores disallowed and invalid URLs gracefully in enqueue', async () => {
+  const { root, queueFile } = await tempQueueFile();
+  try {
+    let executed = 0;
+    const queue = createMediaPrefetchQueue({
+      queueFile,
+      persist: false,
+      fetchMedia: async () => {
+        executed += 1;
+        return { status: 200, cacheState: 'MISS' };
+      },
+    });
+
+    queue.enqueue(['not-a-valid-url', 'http://127.0.0.1/private.jpg', 'https://disallowed.example.invalid/demo.jpg']);
+    await queue.idle();
+    assert.equal(executed, 0);
+    assert.equal(queue.stats().queued, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('survives exceptions thrown inside onEvent callbacks', async () => {
+  const { root, queueFile } = await tempQueueFile();
+  try {
+    const queue = createMediaPrefetchQueue({
+      queueFile,
+      persist: false,
+      onEvent: () => {
+        throw new Error('diagnostic listener exploded');
+      },
+      fetchMedia: async () => ({ status: 200, cacheState: 'MISS' }),
+      sleep: async () => {},
+    });
+
+    queue.enqueue(['https://node.hath.network/h/safe.webp']);
+    await queue.idle();
+    assert.equal(queue.stats().completed, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
