@@ -417,3 +417,22 @@ test('keeps throttling responses on public retry lanes', async () => {
   assert.equal(dispatchers.length, 2);
   assert.equal(dispatchers.every((dispatcher) => dispatcher.name.startsWith('public-lane-')), true);
 });
+
+test('attaches correct Referer for hotlinking-protected adult CDNs', async () => {
+  const recordedHeaders = [];
+  const client = createUpstreamClient({
+    fetchImpl: async (_url, options) => {
+      recordedHeaders.push(options.headers);
+      return new Response('image-data', { status: 200 });
+    },
+    sleep: async () => {},
+  });
+
+  await client.fetchExternal('https://www.javbus.com/pics/cover/abc.jpg');
+  await client.fetchExternal('https://jdbstatic.com/covers/ab/abc.jpg');
+  await client.fetchExternal('https://missav.ai/media/preview.jpg');
+
+  assert.equal(recordedHeaders[0].referer, 'https://www.javbus.com/');
+  assert.equal(recordedHeaders[1].referer, 'https://javdb.com/');
+  assert.equal(recordedHeaders[2].referer, 'https://missav.ai/');
+});
