@@ -105,3 +105,19 @@ test('handles invalid json or corrupted file during load gracefully', async () =
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
+
+test('markChunkDone handles invalid or non-existent chunkIndex gracefully', async () => {
+  const store = createDownloadSessionStore();
+  await store.create({
+    id: 's1',
+    target: 'https://example.com/v.mp4',
+    size: 1000,
+    chunkSize: 500,
+    chunks: chunks(2, 500),
+  });
+
+  assert.equal(await store.markChunkDone('s1', 99), false);
+  assert.equal(await store.markChunkDone('s1', -1), false);
+  assert.equal(await store.markChunkDone('s1', 'abc'), false);
+  assert.equal(await store.markChunkDone('s1', null), false);
+});

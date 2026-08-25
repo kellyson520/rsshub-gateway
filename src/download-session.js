@@ -151,10 +151,11 @@ export function createDownloadSessionStore({
   }
 
   async function markChunkDone(id, index) {
+    if (!Number.isInteger(index) || index < 0) return false;
     await ready;
     const session = await get(id);
     if (!session) return false;
-    const chunk = session.chunks.find((entry) => entry.index === Number(index));
+    const chunk = session.chunks.find((entry) => entry.index === index);
     if (!chunk || chunk.status === 'done') return false;
     chunk.status = 'done';
     chunk.updatedAt = now();
