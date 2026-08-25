@@ -161,3 +161,9 @@ routes:
     backend: "sidecar://127.0.0.1:8009"
     fallback_upstream: true
     cacheTtl: 900
+
+  # fetcher-coomer sidecar 服务 Coomer 创作者 feed
+  - routeId: "/coomer/:source?/:id?"
+    backend: "sidecar://127.0.0.1:8010"
+    fallback_upstream: true
+    cacheTtl: 900
