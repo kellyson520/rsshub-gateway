@@ -38,7 +38,15 @@ test('parseByteRange handles suffix, open-ended and unsatisfiable ranges', () =>
   assert.deepEqual(parseByteRange('bytes=-5', 10), { start: 5, end: 9 });
   assert.deepEqual(parseByteRange('bytes=-50', 10), { start: 0, end: 9 });
   assert.deepEqual(parseByteRange('bytes=20-30', 10), { unsatisfiable: true });
+  assert.deepEqual(parseByteRange('bytes=5-2', 10), { unsatisfiable: true });
+  assert.deepEqual(parseByteRange('bytes=-0', 10), { unsatisfiable: true });
+  assert.equal(parseByteRange('bytes=-', 10), null);
   assert.equal(parseByteRange('items=0-1', 10), null);
+});
+
+test('imageVariantCacheUrl formats deterministic variant cache urls', () => {
+  const url = imageVariantCacheUrl('https://example.com/image.jpg', 1920);
+  assert.equal(url, 'https://example.com/image.jpg#rsshub-gateway-v1-w1920');
 });
 
 test('sliceRanges plans aligned slices with a bounded lookahead', () => {
