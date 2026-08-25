@@ -113,3 +113,9 @@ test('merges env host overrides into public lists and includes pixiv defaults', 
     delete process.env.EGRESS_PUBLIC_REQUEST_HOSTS;
   }
 });
+
+test('parseHostList handles invalid JSON fallback seamlessly', () => {
+  assert.deepEqual(parseHostList('{ bad json }'), ['{ bad json }']);
+  assert.deepEqual(parseHostList(null), []);
+  assert.deepEqual(parseHostList(undefined), []);
+});
