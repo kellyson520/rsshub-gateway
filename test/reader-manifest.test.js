@@ -54,4 +54,21 @@ test('returns the completed value before the foreground budget and marks timeout
 
   const slow = await withForegroundDeadline(new Promise(() => {}), 1);
   assert.deepEqual(slow, { value: undefined, timedOut: true });
+
+  const rejected = await withForegroundDeadline(Promise.reject(new Error('upstream rejected')), 20);
+  assert.deepEqual(rejected, { value: undefined, timedOut: false });
+});
+
+test('createInitialReaderManifest handles empty and invalid inputs gracefully', () => {
+  const empty = createInitialReaderManifest();
+  assert.deepEqual(empty.pages, []);
+  assert.equal(empty.totalPages, 0);
+  assert.equal(empty.complete, false);
+
+  const clamped = createInitialReaderManifest({
+    imageUrls: ['https://a.com/1', 'https://a.com/2'],
+    maxPages: 1,
+  });
+  assert.equal(clamped.pages.length, 1);
+  assert.equal(clamped.totalPages, 1);
 });
