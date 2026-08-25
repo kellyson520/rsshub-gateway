@@ -52,3 +52,33 @@ test('runs immediately when requested', async () => {
   poller.stop();
   assert.ok(runs >= 1);
 });
+
+test('idempotently registers duplicate task names', () => {
+  const poller = createPoller({ intervalMs: 10_000 });
+  const task1 = poller.register('unique-task', () => {});
+  const task2 = poller.register('unique-task', () => {});
+  assert.equal(task1, task2);
+});
+
+test('stats reports accurate consecutive failures and duration', async () => {
+  let time = 1000;
+  const poller = createPoller({
+    now: () => time,
+  });
+
+  const task = poller.register('stats-task', async () => {
+    time += 50;
+    throw new Error('fail');
+  }, { interval: 10 });
+
+  poller.start();
+  time += 100; // Advance time past interval
+  await poller.tick();
+  poller.stop();
+
+  const stats = poller.stats();
+  assert.equal(stats.running, false);
+  assert.equal(stats.tasks[0].failures, 1);
+  assert.equal(stats.tasks[0].consecutiveFailures, 1);
+  assert.equal(stats.tasks[0].lastDurationMs, 50);
+});
