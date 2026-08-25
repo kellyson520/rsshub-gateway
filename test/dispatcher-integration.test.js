@@ -361,3 +361,37 @@ test('runtime route registration serves a sidecar without any routes file', asyn
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('dispatcher handles HTTP 301 redirection at gateway boundary', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-redirect-int-'));
+  try {
+    const routesFile = path.join(root, 'routes.yaml');
+    await writeFile(routesFile, `
+routes:
+  - routeId: "/old-feed/:author/:category?"
+    backend: "redirect"
+    redirectTo: "/new-feed/:author/:category?"
+`);
+    const server = createGatewayServer({
+      secret: 'secret',
+      cache: false,
+      routesFile,
+      fetchRssHub: async () => new Response('upstream', { status: 404 }),
+    });
+
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/old-feed/neo/tech?limit=10`, {
+        redirect: 'manual',
+      });
+      assert.equal(res.status, 301);
+      assert.equal(res.headers.get('location'), '/new-feed/neo/tech?limit=10');
+      assert.match(res.headers.get('cache-control'), /public, max-age=86400/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
