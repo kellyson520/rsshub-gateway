@@ -215,3 +215,11 @@ test('enqueue handles null, non-object or non-video leases gracefully', async ()
   assert.equal(queue.stats().completed, 0);
   assert.equal(queue.stats().skipped, 3);
 });
+
+test('cancel is idempotent for non-existent targets', () => {
+  const queue = createLeaseBackfillQueue();
+  assert.doesNotThrow(() => {
+    queue.cancel('https://example.com/not-running');
+    queue.cancel(null);
+  });
+});
