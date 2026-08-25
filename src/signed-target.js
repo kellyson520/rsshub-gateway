@@ -117,6 +117,11 @@ const ALLOWED_HOSTS = [
   'linux.do',
   'ldstatic.com',
   'linuxdo.org',
+  'chikubi.jp',
+  'wnacg.com',
+  'wnacg.org',
+  'sehuatang.net',
+  'uraaka-joshi.com',
 ];
 
 function encode(value) {
