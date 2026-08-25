@@ -247,3 +247,17 @@ test('survives exceptions thrown inside onEvent callbacks', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('enqueue handles empty, null or undefined input gracefully', async () => {
+  const { root, queueFile } = await tempQueueFile();
+  try {
+    const queue = createMediaPrefetchQueue({ queueFile, persist: false });
+    queue.enqueue([]);
+    queue.enqueue(null);
+    queue.enqueue(undefined);
+    queue.enqueue('');
+    assert.equal(queue.stats().queued, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -276,8 +276,9 @@ export function createMediaPrefetchQueue(options = {}) {
   const ready = initialize();
 
   function enqueue(targets) {
-    if (!initialized) earlyTargets.push(...(targets || []));
-    else addTargets(targets);
+    const list = Array.isArray(targets) ? targets : (targets ? [targets] : []);
+    if (!initialized) earlyTargets.push(...list);
+    else addTargets(list);
   }
 
   async function idle() {
