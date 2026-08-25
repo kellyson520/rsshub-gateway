@@ -198,3 +198,16 @@ test('calls onComplete when range is fully transferred', async () => {
   assert.equal(result.written, 100);
   assert.deepEqual(completedInfo, { written: 100, resumed: 0 });
 });
+
+test('pumpResumableRange returns zero written when start exceeds end', async () => {
+  const { res } = totalBytes();
+  const result = await pumpResumableRange({
+    response: streamResponse(Buffer.from('test')),
+    fetchRange: async () => streamResponse(Buffer.from('test')),
+    res,
+    start: 10,
+    end: 5,
+  });
+  assert.equal(result.written, 0);
+  assert.equal(result.resumed, 0);
+});
