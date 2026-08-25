@@ -117,3 +117,11 @@ test('resolveGatewayOptions parses boolean flags reliably', () => {
   assert.equal(boolFalse.videoPrefetchEnabled, false);
   assert.equal(boolFalse.leaseBackfillEnabled, false);
 });
+
+test('resolveGatewayOptions parses slowSourceThresholdMs bounds fallback', () => {
+  const zeroThreshold = resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_SLOW_SOURCE_MS: '0' });
+  assert.equal(zeroThreshold.slowSourceThresholdMs, 0);
+
+  const defaultThreshold = resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_SLOW_SOURCE_MS: '-1' });
+  assert.equal(defaultThreshold.slowSourceThresholdMs, 5000);
+});
