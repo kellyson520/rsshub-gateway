@@ -104,3 +104,14 @@ test('starts empty when the affinity file is malformed or stale', async () => {
     assert.equal(refreshed.createdAt, 10_000);
   });
 });
+
+test('session-affinity throws typed SESSION_LANE_UNAVAILABLE when all lanes are unhealthy', async () => {
+  await withRegistry({ laneIds: ['session-01'] }, async ({ registry }) => {
+    await registry.resolve('x', { authToken: 'user-token' });
+    await registry.markLaneUnhealthy('session-01');
+    await assert.rejects(
+      () => registry.resolve('x', { authToken: 'user-token' }),
+      (err) => err.code === 'SESSION_LANE_UNAVAILABLE',
+    );
+  });
+});
