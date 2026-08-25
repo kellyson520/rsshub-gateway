@@ -347,3 +347,12 @@ test('cache peek and readRange handle non-existent keys safely', async () => {
     assert.equal(rangeResult, null);
   });
 });
+
+test('keyFor generates deterministic sha256 cache keys', () => {
+  const cache = createResponseCache();
+  const k1 = cache.keyFor('https://example.com/test', 'html', 'public');
+  const k2 = cache.keyFor('https://example.com/test', 'html', 'public');
+  assert.equal(k1, k2);
+  assert.equal(typeof k1, 'string');
+  assert.equal(k1.length, 64);
+});
