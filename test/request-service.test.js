@@ -41,3 +41,21 @@ test('creates default transports when nothing is injected', () => {
   assert.ok(service.browserFetch);
   service.browserFetch.close();
 });
+
+test('enforces signed-target allowlist on browserFetch hosts', async () => {
+  const service = createRequestService({
+    browserFetch: {
+      fetch: async () => new Response('ok'),
+      fetchdFetch: async () => ({ ok: true }),
+      close: () => {},
+    },
+  });
+
+  // Disallowed target (SSRF prevention)
+  await assert.rejects(
+    service.fetchExternal('http://127.0.0.1:8080/admin', {}),
+    /external target is not allowed/,
+  );
+
+  service.browserFetch.close();
+});
