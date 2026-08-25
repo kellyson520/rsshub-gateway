@@ -8,6 +8,7 @@ import { adapterForUrl } from './adapters/index.js';
 import { renderReaderPage, renderUnavailablePage } from './reader.js';
 import { createInitialReaderManifest, mergeResolvedPage } from './reader-manifest.js';
 import { createSignedChunk, verifySignedChunk } from './download-lease.js';
+import { resolveRedirect } from './dispatcher.js';
 import { chunkSizeFor } from './media/chunks.js';
 import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
@@ -434,6 +435,16 @@ export function createRequestHandler(deps) {
       return;
     }
     const dispatched = dispatcher?.match(requestUrl.pathname) || null;
+    if (dispatched?.route.redirectTo) {
+      const targetPath = resolveRedirect(dispatched.route.redirectTo, dispatched.params);
+      const destination = `${targetPath}${requestUrl.search}`;
+      res.writeHead(301, {
+        location: destination,
+        'cache-control': 'public, max-age=86400',
+      });
+      res.end(`redirecting to ${destination}\n`);
+      return;
+    }
     if (dispatched?.route.backend.startsWith('sidecar://')) {
       const { route, params } = dispatched;
       attribution.source = route.routeId.split('/').filter(Boolean)[0] || 'sidecar';

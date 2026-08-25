@@ -43,7 +43,10 @@ function normalizeRoute(raw) {
   }
   const fallbackUpstream = raw.fallback_upstream === true || raw.fallbackUpstream === true;
   const cacheTtl = Number.isInteger(raw.cacheTtl) && raw.cacheTtl > 0 ? raw.cacheTtl : undefined;
-  return { routeId, backend, fallbackUpstream, cacheTtl, pattern };
+  const redirectTo = typeof raw.redirectTo === 'string' && raw.redirectTo.trim()
+    ? raw.redirectTo.trim()
+    : (typeof raw.redirect_to === 'string' && raw.redirect_to.trim() ? raw.redirect_to.trim() : undefined);
+  return { routeId, backend, fallbackUpstream, cacheTtl, redirectTo, pattern };
 }
 
 function matchSegments(pattern, segments) {
@@ -104,6 +107,14 @@ function cookiesObject(cookies) {
     return Object.fromEntries(Object.entries(cookies).map(([name, value]) => [String(name), String(value)]));
   }
   return {};
+}
+
+export function resolveRedirect(template, params = {}) {
+  if (typeof template !== 'string') return null;
+  return template.replace(/:([a-zA-Z0-9_]+)\??/g, (_, name) => {
+    const value = params[name];
+    return value !== undefined && value !== null ? encodeURIComponent(String(value)) : '';
+  }).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 }
 
 export function createDispatcher({

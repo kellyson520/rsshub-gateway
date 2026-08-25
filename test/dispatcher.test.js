@@ -263,3 +263,28 @@ test('dispatcher unregisterRoutes handles empty, null or missing list gracefully
   assert.deepEqual(dispatcher.unregisterRoutes(null), { removed: 0 });
   assert.deepEqual(dispatcher.unregisterRoutes(undefined), { removed: 0 });
 });
+
+test('dispatcher supports route-level redirection templates', async () => {
+  const { resolveRedirect } = await import('../src/dispatcher.js');
+  assert.equal(resolveRedirect('/new-path/:id', { id: '123' }), '/new-path/123');
+  assert.equal(resolveRedirect('/forum/:cat?/:id', { id: '99' }), '/forum/99');
+  assert.equal(resolveRedirect('/static/url', {}), '/static/url');
+
+  const root = await mkdtemp(path.join(os.tmpdir(), 'rsshub-gateway-dispatcher-redirect-'));
+  try {
+    const file = path.join(root, 'routes.yaml');
+    await writeFile(file, `
+routes:
+  - routeId: "/legacy/user/:id"
+    backend: "redirect"
+    redirectTo: "/v2/users/:id"
+`);
+    const dispatcher = dispatcherWith(file);
+    const match = dispatcher.match('/legacy/user/42');
+    assert.ok(match);
+    assert.equal(match.route.redirectTo, '/v2/users/:id');
+    assert.equal(resolveRedirect(match.route.redirectTo, match.params), '/v2/users/42');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
