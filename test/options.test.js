@@ -107,3 +107,13 @@ test('resolveGatewayOptions initializes imageVariantLimiter properly', () => {
   const options = resolveGatewayOptions({ secret: 'secret' }, {});
   assert.equal(typeof options.imageVariantLimiter, 'function');
 });
+
+test('resolveGatewayOptions parses boolean flags reliably', () => {
+  const boolTrue = resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_VIDEO_PREFETCH: 'true', GATEWAY_LEASE_BACKFILL: 'true' });
+  assert.equal(boolTrue.videoPrefetchEnabled, true);
+  assert.equal(boolTrue.leaseBackfillEnabled, true);
+
+  const boolFalse = resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_VIDEO_PREFETCH: 'false', GATEWAY_LEASE_BACKFILL: 'false' });
+  assert.equal(boolFalse.videoPrefetchEnabled, false);
+  assert.equal(boolFalse.leaseBackfillEnabled, false);
+});
