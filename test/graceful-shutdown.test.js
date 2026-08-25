@@ -89,3 +89,30 @@ test('dispose removes signal handlers', () => {
   const listeners = process.listeners('SIGTERM');
   assert.equal(listeners.some((listener) => listener.toString().includes('shutdown')), false);
 });
+
+test('handles server.close throwing an error gracefully during shutdown', async () => {
+  const exits = [];
+  const brokenServer = {
+    listening: true,
+    close: () => {
+      throw new Error('Already closed or socket error');
+    },
+    closeIdleConnections: () => {},
+    once: (name, fn) => {
+      // simulate immediate close event
+      queueMicrotask(fn);
+    },
+  };
+
+  const shutdown = installGracefulShutdown({
+    servers: [brokenServer],
+    timeoutMs: 200,
+    exitImpl: (code) => exits.push(code),
+    logger: null,
+  });
+
+  assert.equal(shutdown.shutdown('SIGTERM'), true);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.deepEqual(exits, [0]);
+  shutdown.dispose();
+});
