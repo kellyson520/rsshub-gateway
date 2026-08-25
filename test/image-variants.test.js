@@ -35,3 +35,32 @@ test('returns a high-quality WebP only when it reduces transfer bytes', async ()
   assert.equal(result.contentType, 'image/webp');
   assert.deepEqual(result.body, Buffer.from('smaller'));
 });
+
+test('returns original when content type is unsupported, empty, or encoder throws', async () => {
+  const gifSource = Buffer.from('gif-bytes');
+  const unsupportedType = await createImageVariant({
+    body: gifSource,
+    contentType: 'image/gif',
+    width: 1280,
+  });
+  assert.equal(unsupportedType.usedVariant, false);
+  assert.deepEqual(unsupportedType.body, gifSource);
+
+  const empty = await createImageVariant({
+    body: Buffer.alloc(0),
+    contentType: 'image/jpeg',
+    width: 1280,
+  });
+  assert.equal(empty.usedVariant, false);
+
+  const throwing = await createImageVariant({
+    body: Buffer.from('valid-jpeg'),
+    contentType: 'image/jpeg',
+    width: 1280,
+    encoder: async () => {
+      throw new Error('Sharp processing failed');
+    },
+  });
+  assert.equal(throwing.usedVariant, false);
+  assert.deepEqual(throwing.body, Buffer.from('valid-jpeg'));
+});
