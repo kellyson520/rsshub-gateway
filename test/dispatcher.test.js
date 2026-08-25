@@ -256,3 +256,10 @@ routes:
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('dispatcher unregisterRoutes handles empty, null or missing list gracefully', () => {
+  const dispatcher = dispatcherWith('absent.yaml');
+  assert.deepEqual(dispatcher.unregisterRoutes([]), { removed: 0 });
+  assert.deepEqual(dispatcher.unregisterRoutes(null), { removed: 0 });
+  assert.deepEqual(dispatcher.unregisterRoutes(undefined), { removed: 0 });
+});
