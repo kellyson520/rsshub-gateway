@@ -15,23 +15,41 @@ const ROUTE_IDS = [
 ];
 
 async function main() {
-  // jable.tv 有 CF 托管挑战（curl_cffi 指纹传输被拦）：依赖自建浏览器渲染服务。
   const renderClient = createBrowserRenderClient();
+  const { createBrowserFetchClient } = await import('../../src/browser-fetch.js');
+  const browserFetch = createBrowserFetchClient();
   const RENDER_CONFIGURED = Boolean(process.env.GATEWAY_BROWSER_RENDER_URL || '');
   const fetcher = createJableFetcher({
     fetchHtml: async (url) => {
+      try {
+        const response = await browserFetch.fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://jable.tv/',
+          },
+          timeout: 20_000,
+        });
+        if (response.ok) {
+          const text = await response.text();
+          if (!text.includes('Just a moment...') && (text.includes('thumbnail') || text.includes('video-') || text.includes('header'))) {
+            return { ok: true, status: response.status, text: async () => text };
+          }
+        }
+      } catch {
+        // Fall back to headless renderer
+      }
       const rendered = await renderClient.fetchRenderedHtml(url, { timeoutMs: 35_000 });
       if (rendered) {
         return { ok: rendered.status >= 200 && rendered.status < 300, status: rendered.status, text: async () => rendered.html };
       }
-      const error = new Error('browser renderer unavailable');
+      const error = new Error('jable fetch failed');
       error.status = 502;
       throw error;
     },
   });
   const server = createFetcherServer({
     fetcher,
-    health: () => ({ browserRender: RENDER_CONFIGURED ? 'configured' : 'none', transport: 'render' }),
+    health: () => ({ browserRender: RENDER_CONFIGURED ? 'configured' : 'none', transport: 'multi-lane-hybrid' }),
     name: 'fetcher-jable',
   });
   await listen(server, PORT, '0.0.0.0', 'fetcher_jable');
