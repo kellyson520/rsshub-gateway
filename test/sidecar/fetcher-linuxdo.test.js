@@ -166,3 +166,46 @@ test('resolveCategory defaults unknown numeric or slug to generic label', () => 
   assert.equal(resolved.slug, 'unknown-section');
   assert.equal(resolved.name, 'unknown-section');
 });
+
+test('renderLinuxdoReaderPage generates elegant dark/light theme reading view with sanitized HTML', async () => {
+  const { renderLinuxdoReaderPage } = await import('../../src/adapters/linuxdo.js');
+  const html = renderLinuxdoReaderPage({
+    topic: {
+      id: 12345,
+      title: 'Linux.do 深度调优实战',
+      slug: 'deep-dive',
+      views: 3200,
+      posts_count: 5,
+      like_count: 88,
+      post_stream: {
+        posts: [
+          {
+            id: 1,
+            name: '始皇',
+            username: 'neo',
+            avatar_template: '/user_avatar/linux.do/neo/{size}/123.png',
+            created_at: '2026-08-25T12:00:00.000Z',
+            cooked: '<p>欢迎讨论优化 <script>alert("xss")</script><img src="https://linux.do/img/arch.png"></p>',
+          },
+          {
+            id: 2,
+            name: '版主',
+            username: 'mod',
+            created_at: '2026-08-25T12:30:00.000Z',
+            cooked: '<p>顶贴支持！</p>',
+          },
+        ],
+      },
+    },
+    baseUrl: 'https://gateway.example.test',
+    secret: 'test-secret',
+  });
+
+  assert.ok(html.includes('Linux.do 深度调优实战'));
+  assert.ok(html.includes('始皇'));
+  assert.ok(html.includes('@neo'));
+  assert.ok(html.includes('3200 浏览'));
+  assert.ok(html.includes('顶贴支持！'));
+  assert.ok(html.includes('_gateway/media/'));
+  assert.doesNotMatch(html, /<script/);
+});
