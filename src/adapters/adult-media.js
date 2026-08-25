@@ -27,6 +27,8 @@ const ADULT_DOMAINS = [
   'coomer.st',
   'sehuatang.net',
   'uraaka-joshi.com',
+  'netflav.com',
+  '91porn.com',
 ];
 
 export function matches(hostname) {

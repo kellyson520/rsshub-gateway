@@ -102,6 +102,8 @@ test('routes major adult platforms to the adult-media adapter with proper defaul
     'https://coomer.st/onlyfans/user/1/post/1',
     'https://www.sehuatang.net/thread-1-1-1.html',
     'https://www.uraaka-joshi.com/user/1',
+    'https://netflav.com/video?id=123',
+    'https://91porn.com/view_video.php?viewkey=abc',
   ];
 
   for (const targetUrl of domains) {
