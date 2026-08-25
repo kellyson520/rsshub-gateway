@@ -59,6 +59,39 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_JABLE:-true}" = "true" ]; then
       GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-jable
     fi
+    if [ "${GATEWAY_SIDECAR_JAVBUS:-true}" = "true" ]; then
+      start_sidecar fetcher-javbus
+    fi
+    if [ "${GATEWAY_SIDECAR_JAVDB:-true}" = "true" ]; then
+      start_sidecar fetcher-javdb
+    fi
+    if [ "${GATEWAY_SIDECAR_COOMER:-true}" = "true" ]; then
+      start_sidecar fetcher-coomer
+    fi
+    if [ "${GATEWAY_SIDECAR_WNACG:-true}" = "true" ]; then
+      start_sidecar fetcher-wnacg
+    fi
+    if [ "${GATEWAY_SIDECAR_FANBOX:-true}" = "true" ]; then
+      start_sidecar fetcher-fanbox
+    fi
+    if [ "${GATEWAY_SIDECAR_URAAKA:-true}" = "true" ]; then
+      start_sidecar fetcher-uraaka
+    fi
+    if [ "${GATEWAY_SIDECAR_SEHUATANG:-true}" = "true" ]; then
+      start_sidecar fetcher-sehuatang
+    fi
+    if [ "${GATEWAY_SIDECAR_CHIKUBI:-true}" = "true" ]; then
+      start_sidecar fetcher-chikubi
+    fi
+    if [ "${GATEWAY_SIDECAR_LINUXDO:-true}" = "true" ]; then
+      start_sidecar fetcher-linuxdo
+    fi
+    if [ "${GATEWAY_SIDECAR_KEMONO:-true}" = "true" ]; then
+      start_sidecar fetcher-kemono
+    fi
+    if [ "${GATEWAY_SIDECAR_SKEB:-true}" = "true" ]; then
+      start_sidecar fetcher-skeb
+    fi
     exec node src/server.js
     ;;
 esac

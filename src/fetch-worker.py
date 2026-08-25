@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Browser-fingerprint fetch worker for rsshub-gateway.
 
-Cloudflare-protected sources (for example api.iwara.tv) reject plain
+Cloudflare-protected sources (for example api.iwara.tv, linux.do) reject plain
 Node/curl TLS fingerprints. This worker performs requests with a
 Chrome-impersonating client (curl_cffi) and returns results as JSON.
 
@@ -20,6 +20,7 @@ import argparse
 import base64
 import json
 import os
+import random
 import socket
 import sys
 import threading
@@ -38,6 +39,37 @@ SUPPORTED_IMPERSONATIONS = [
     "chrome124", "chrome131", "edge101", "firefox133", "safari17_0",
     "safari17_2_ios",
 ]
+
+# 所有的 Mihomo 出口代理通道
+ALL_PROXY_LANES = [
+    "http://127.0.0.1:7901",
+    "http://127.0.0.1:7908",
+    "http://127.0.0.1:7903",
+    "http://127.0.0.1:7890",
+    "http://127.0.0.1:7902",
+    "http://127.0.0.1:7904",
+    "http://127.0.0.1:7905",
+    "http://127.0.0.1:7906",
+    "http://127.0.0.1:7907",
+    "http://127.0.0.1:7909",
+    "http://127.0.0.1:7910",
+    "http://127.0.0.1:7911",
+    "http://127.0.0.1:7912",
+]
+
+
+def execute_request_with_proxy(method, url, impersonate, headers, body_bytes, proxy, timeout, redirect):
+    return requests.request(
+        method,
+        url,
+        impersonate=impersonate,
+        headers=headers,
+        data=body_bytes,
+        proxies={"http": proxy, "https": proxy},
+        timeout=timeout,
+        allow_redirects=(redirect == "follow"),
+        verify=False,
+    )
 
 
 def run_request(payload):
@@ -60,37 +92,61 @@ def run_request(payload):
     if impersonate not in SUPPORTED_IMPERSONATIONS:
         return {"ok": False, "code": "unsupported_impersonation",
                 "error": f"unsupported impersonation: {impersonate}"}
-    redirect = str(payload.get("redirect") or "manual").lower()
+    redirect = str(payload.get("redirect") or "follow").lower()
     if redirect not in ("manual", "follow"):
         return {"ok": False, "code": "invalid_redirect", "error": "redirect must be manual or follow"}
-    proxy = payload.get("proxy") or DEFAULT_PROXY
-    if not isinstance(proxy, str):
+    primary_proxy = payload.get("proxy") or DEFAULT_PROXY
+    if not isinstance(primary_proxy, str):
         return {"ok": False, "code": "invalid_proxy", "error": "proxy must be a string"}
     try:
         max_body = int(payload.get("maxBody") or DEFAULT_MAX_BODY)
     except (TypeError, ValueError):
         max_body = DEFAULT_MAX_BODY
+
+    body_bytes = body.encode("utf-8") if body is not None else None
     started = time.monotonic()
-    try:
-        response = requests.request(
-            method,
-            url,
-            impersonate=impersonate,
-            headers=headers,
-            data=body.encode("utf-8") if body is not None else None,
-            proxies={"http": proxy, "https": proxy},
-            timeout=timeout,
-            allow_redirects=(redirect == "follow"),
-            verify=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "code": "fetch_failed", "error": f"fetch failed: {exc}",
-                "latencyMs": int((time.monotonic() - started) * 1000)}
+
+    # 动态负载均衡与打散重试，避免单个出口节点触发频控
+    other_lanes = [p for p in ALL_PROXY_LANES if p != primary_proxy]
+    random.shuffle(other_lanes)
+    proxy_candidates = [primary_proxy] + other_lanes
+    last_error = None
+    last_candidate_response = None
+    final_response = None
+    per_proxy_timeout = min(timeout, 3.5)
+
+    for proxy in proxy_candidates:
+        try:
+            res = execute_request_with_proxy(
+                method, url, impersonate, headers, body_bytes, proxy, per_proxy_timeout, redirect
+            )
+            # 2xx / 3xx / 404 等业务正常响应直接采纳
+            if res.status_code not in (429, 403, 502, 503, 504):
+                final_response = res
+                break
+            last_candidate_response = res
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            continue
+
+    response = final_response or last_candidate_response
+    if response is None:
+        return {
+            "ok": False,
+            "code": "fetch_failed",
+            "error": f"fetch failed across proxies: {last_error}",
+            "latencyMs": int((time.monotonic() - started) * 1000),
+        }
+
     content = response.content or b""
     if len(content) > max_body:
-        return {"ok": False, "code": "body_too_large",
-                "error": f"response body too large ({len(content)} > {max_body})",
-                "status": response.status_code, "latencyMs": int((time.monotonic() - started) * 1000)}
+        return {
+            "ok": False,
+            "code": "body_too_large",
+            "error": f"response body too large ({len(content)} > {max_body})",
+            "status": response.status_code,
+            "latencyMs": int((time.monotonic() - started) * 1000),
+        }
     try:
         peer_ip = response.request_headers.get("x-requested-ip") or ""
     except Exception:  # noqa: BLE001

@@ -29,6 +29,12 @@ import {
   iwaraVideoId,
   renderIwaraReaderPage,
 } from './adapters/iwara.js';
+import {
+  fetchLinuxdoTopicDetail,
+  isLinuxdoTopicTarget,
+  linuxdoTopicId,
+  renderLinuxdoReaderPage,
+} from './adapters/linuxdo.js';
 
 function downloadSessionView(session) {
   return {
@@ -779,6 +785,27 @@ export function createRequestHandler(deps) {
             }
           } catch {
             // Fall through to the standard item handling when metadata is unavailable.
+          }
+        }
+        if (gatewayMatch[1] === 'item' && isLinuxdoTopicTarget(target)) {
+          try {
+            const topicId = linuxdoTopicId(target);
+            const detail = await fetchLinuxdoTopicDetail(fetchJsonViaFetchd, topicId);
+            if (detail?.id || detail?.post_stream) {
+              const page = renderLinuxdoReaderPage({ topic: detail, baseUrl: publicBaseUrl(req), secret });
+              const encoded = encodeHtmlResponse({
+                body: page,
+                contentType: 'text/html; charset=utf-8',
+                acceptEncoding: req.headers['accept-encoding'],
+                method: 'GET',
+                minBytes: htmlBrotliMinBytes,
+                quality: htmlBrotliQuality,
+              });
+              writeBuffer(res, 200, encoded.body, 'text/html; charset=utf-8', encoded.headers);
+              return;
+            }
+          } catch {
+            // Fall through to standard item handling when metadata is unavailable.
           }
         }
         const ehImageMediaTarget = gatewayMatch[1] === 'media' && isEhImagePageTarget(target);

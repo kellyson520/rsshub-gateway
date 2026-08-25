@@ -204,8 +204,28 @@ routes:
     fallback_upstream: true
     cacheTtl: 3600
 
-  # fetcher-linuxdo sidecar 服务 Linux.do 最新 feed
+  # fetcher-linuxdo sidecar 服务 Linux.do 论坛全板块 feed
   - routeId: "/linuxdo/latest"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300
+  - routeId: "/linuxdo/hot"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300
+  - routeId: "/linuxdo/top/:period?"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300
+  - routeId: "/linuxdo/category/:category/:period?"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300
+  - routeId: "/linuxdo/c/:category/:period?"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300
+  - routeId: "/linuxdo/:category/:period?"
     backend: "sidecar://127.0.0.1:8017"
     fallback_upstream: true
     cacheTtl: 300

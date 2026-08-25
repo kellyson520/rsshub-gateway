@@ -114,6 +114,9 @@ const ALLOWED_HOSTS = [
   'doubanio.com',
   'music.126.net',
   'xhscdn.com',
+  'linux.do',
+  'ldstatic.com',
+  'linuxdo.org',
 ];
 
 function encode(value) {
