@@ -131,8 +131,28 @@ test('createConcurrencyLimiter throttles concurrent tasks', async () => {
 });
 
 test('readSecret and readSources handle default and fallback states', async () => {
-  const { readSecret, readSources } = await import('../src/http-utils.js');
+  const { readSecret, readSources, writeGatewayError } = await import('../src/http-utils.js');
   assert.equal(typeof readSecret(), 'string');
   assert.ok(readSecret().length > 0);
   assert.equal(typeof readSources(), 'object');
+
+  // Verify writeGatewayError writes proper status and headers
+  let writtenStatus = 0;
+  let writtenHeaders = {};
+  let writtenBody = '';
+  const mockRes = {
+    writeHead(status, headers) {
+      writtenStatus = status;
+      writtenHeaders = headers;
+    },
+    end(body) {
+      writtenBody = body;
+    },
+  };
+  writeGatewayError(mockRes, { status: 503, source: 'x', attempts: 3, retryAfter: 10 });
+  assert.equal(writtenStatus, 503);
+  assert.equal(writtenHeaders['x-gateway-source'], 'x');
+  assert.equal(writtenHeaders['x-gateway-attempts'], '3');
+  assert.equal(writtenHeaders['retry-after'], '10');
+  assert.equal(writtenBody, 'upstream unavailable\n');
 });
