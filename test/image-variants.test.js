@@ -63,4 +63,12 @@ test('returns original when content type is unsupported, empty, or encoder throw
   });
   assert.equal(throwing.usedVariant, false);
   assert.deepEqual(throwing.body, Buffer.from('valid-jpeg'));
+
+  const nonBuffer = await createImageVariant({
+    body: 'not a buffer',
+    contentType: 'image/jpeg',
+    width: 1280,
+  });
+  assert.equal(nonBuffer.usedVariant, false);
+  assert.equal(nonBuffer.body, 'not a buffer');
 });
