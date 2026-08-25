@@ -13,14 +13,27 @@ async function main() {
   const browserFetch = createBrowserFetchClient();
   const fetcher = createSehuatangFetcher({
     fetchHtml: async (url, options = {}) => {
-      const response = await browserFetch.fetch(url, {
-        headers: options.headers || {},
+      const headers = { ...(options.headers || {}) };
+      let response = await browserFetch.fetch(url, {
+        headers,
         timeout: 25_000,
       });
+      let text = await response.text();
+      const safeMatch = text.match(/var safeid=['"]([^'"]+)['"]/);
+      if (safeMatch && safeMatch[1]) {
+        const safeid = safeMatch[1];
+        const existingCookie = headers.Cookie || headers.cookie || '';
+        const safeCookie = `_safe=${safeid}${existingCookie ? `; ${existingCookie}` : ''}`;
+        response = await browserFetch.fetch(url, {
+          headers: { ...headers, Cookie: safeCookie },
+          timeout: 25_000,
+        });
+        text = await response.text();
+      }
       return {
         ok: response.ok,
         status: response.status,
-        text: async () => response.text(),
+        text: async () => text,
       };
     },
   });

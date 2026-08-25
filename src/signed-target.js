@@ -127,8 +127,10 @@ const ALLOWED_HOSTS = [
   'imgix.net',
   'kemono.su',
   'kemono.party',
+  'kemono.cr',
   'coomer.su',
   'coomer.party',
+  'coomer.st',
   'fanbox.cc',
 ];
 

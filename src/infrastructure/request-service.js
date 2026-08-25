@@ -16,7 +16,7 @@ function safeHost(url) {
 // 封面路径例外）。对这些主机，fetchExternal 走 browser-fetch（curl_cffi）
 // 指纹传输；worker 不可用时回退普通 undici 客户端。
 const BROWSER_FETCH_HOSTS = Object.freeze(
-  String(process.env.GATEWAY_BROWSER_FETCH_HOSTS || 'javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,sehuatang.net,linux.do')
+  String(process.env.GATEWAY_BROWSER_FETCH_HOSTS || 'javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,kemono.su,kemono.cr,coomer.su,coomer.st,sehuatang.net,linux.do')
     .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean),
 );
 

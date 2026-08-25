@@ -21,8 +21,10 @@ const ADULT_DOMAINS = [
   'fanbox.cc',
   'kemono.su',
   'kemono.party',
+  'kemono.cr',
   'coomer.su',
   'coomer.party',
+  'coomer.st',
   'sehuatang.net',
   'uraaka-joshi.com',
 ];
