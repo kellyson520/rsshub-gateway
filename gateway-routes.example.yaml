@@ -167,3 +167,9 @@ routes:
     backend: "sidecar://127.0.0.1:8010"
     fallback_upstream: true
     cacheTtl: 900
+
+  # fetcher-wnacg sidecar 服务 WNACG 成人漫画
+  - routeId: "/wnacg/home/:cid?/:tag?"
+    backend: "sidecar://127.0.0.1:8011"
+    fallback_upstream: true
+    cacheTtl: 900
