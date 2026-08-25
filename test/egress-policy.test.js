@@ -119,3 +119,9 @@ test('parseHostList handles invalid JSON fallback seamlessly', () => {
   assert.deepEqual(parseHostList(null), []);
   assert.deepEqual(parseHostList(undefined), []);
 });
+
+test('hostnameFor handles URL objects and non-standard inputs correctly', () => {
+  const urlObj = new URL('https://e-hentai.org/g/1/2/');
+  assert.equal(isPublicEgressTarget(urlObj), true);
+  assert.equal(egressPolicyForUrl(urlObj), EGRESS_POLICIES.PUBLIC);
+});
