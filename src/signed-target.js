@@ -122,6 +122,13 @@ const ALLOWED_HOSTS = [
   'wnacg.org',
   'sehuatang.net',
   'uraaka-joshi.com',
+  'skeb.jp',
+  'imgix.net',
+  'kemono.su',
+  'kemono.party',
+  'coomer.su',
+  'coomer.party',
+  'fanbox.cc',
 ];
 
 function encode(value) {

@@ -12,8 +12,11 @@ const ROUTE_IDS = ['/sehuatang/:subforumid?'];
 async function main() {
   const browserFetch = createBrowserFetchClient();
   const fetcher = createSehuatangFetcher({
-    fetchHtml: async (url) => {
-      const response = await browserFetch.fetch(url, { timeout: 25_000 });
+    fetchHtml: async (url, options = {}) => {
+      const response = await browserFetch.fetch(url, {
+        headers: options.headers || {},
+        timeout: 25_000,
+      });
       return {
         ok: response.ok,
         status: response.status,

@@ -20,19 +20,34 @@ const SUBFORUMS = {
   'dmyc': '39',
 };
 
+const SUBFORUM_NAMES = {
+  '2': '国产原创',
+  '36': '亚洲无码原创',
+  '37': '亚洲有码原创',
+  '103': '高清中文字幕',
+  '107': '三级写真',
+  '160': 'VR视频',
+  '104': '素人幼妻',
+  '38': '欧美无码',
+  '152': '韩国主播',
+  '39': '动漫原创',
+};
+
 const SUPPORTED_ROUTE_IDS = new Set(['/sehuatang/:subforumid?']);
 
 export function sehuatangTarget(routeId, params = {}) {
   if (routeId !== '/sehuatang/:subforumid?') {
     throw new HttpError(400, `unsupported routeId: ${routeId}`);
   }
-  const id = String(params.subforumid || 'gqzwzm').toLowerCase();
-  const fid = SUBFORUMS[id] || id;
+  const rawId = String(params.subforumid || 'gqzwzm').toLowerCase();
+  const fid = SUBFORUMS[rawId] || rawId;
+  const name = SUBFORUM_NAMES[fid] || rawId;
   
   return { 
-    url: `${SITE_BASE}/forum.php?mod=forumdisplay&orderby=dateline&fid=${encodeURIComponent(fid)}`,
+    url: `${SITE_BASE}/forum.php?mod=forumdisplay&fid=${encodeURIComponent(fid)}&orderby=dateline`,
     siteUrl: `${SITE_BASE}/forum.php?mod=forumdisplay&fid=${encodeURIComponent(fid)}`,
-    title: `Sehuatang ${id}`
+    title: `98堂 色花堂 - ${name}`,
+    fid,
   };
 }
 
@@ -52,14 +67,34 @@ export function parseList(html) {
   
   $('#threadlisttableid tbody[id^=normalthread]').each((_, el) => {
     const item = $(el);
-    const title = item.find('a.xst').text().trim();
-    const link = item.find('a.xst').attr('href') || '';
-    const dateStr = item.find('td.by em span span').attr('title') || '';
+    const titleElem = item.find('a.xst');
+    const title = titleElem.text().trim();
+    const link = titleElem.attr('href') || '';
+    if (!title || !link) return;
+
+    const author = item.find('td.by cite a').text().trim();
+    const dateStr = item.find('td.by em span span').attr('title') || item.find('td.by em span').text().trim();
+    const replies = item.find('td.num a.xi2').text().trim() || '0';
+    const views = item.find('td.num em').text().trim() || '0';
     
+    const fullUrl = link.startsWith('http') ? link : `${SITE_BASE}/${link.replace(/^\//, '')}`;
+    const tidMatch = link.match(/thread-(\d+)-/);
+    const tid = tidMatch ? tidMatch[1] : link;
+
+    const desc = [
+      `<p><strong>📌 标题:</strong> ${escapeXml(title)}</p>`,
+      author ? `<p><strong>👤 发布者:</strong> ${escapeXml(author)}</p>` : '',
+      dateStr ? `<p><strong>🕒 发布时间:</strong> ${escapeXml(dateStr)}</p>` : '',
+      `<p><strong>💬 回复/查看:</strong> ${escapeXml(replies)} / ${escapeXml(views)}</p>`,
+      `<p><a href="${escapeXml(fullUrl)}" target="_blank" rel="noopener noreferrer">🔗 在 色花堂 查看完整帖子</a></p>`,
+    ].filter(Boolean).join('\n');
+
     items.push({
-      title: title,
-      url: link.startsWith('http') ? link : `${SITE_BASE}/${link}`,
+      title,
+      url: fullUrl,
+      guid: `sehuatang:thread:${tid}`,
       pubDate: dateStr,
+      description: desc,
     });
   });
   return items;
@@ -70,34 +105,47 @@ export function renderFeed({ title, siteUrl, items = [] }) {
     return `<item>
       <title>${escapeXml(item.title)}</title>
       <link>${escapeXml(item.url)}</link>
-      <pubDate>${escapeXml(item.pubDate)}</pubDate>
+      <guid isPermaLink="false">${escapeXml(item.guid || item.url)}</guid>
+      <pubDate>${escapeXml(item.pubDate || new Date().toUTCString())}</pubDate>
+      <description><![CDATA[${item.description || item.title}]]></description>
+      <content:encoded><![CDATA[${item.description || item.title}]]></content:encoded>
     </item>`;
   }).join('\n');
 
-  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(siteUrl)}</link>
-    <description>Sehuatang forum posts</description>
+    <description>色花堂论坛帖子订阅</description>
+    <language>zh-CN</language>
     ${entries}
-  </channel></rss>`;
+  </channel>
+</rss>`;
 }
 
 export function createSehuatangFetcher({ fetchHtml } = {}) {
   async function handleFetch(body) {
     const routeId = String(body?.routeId || '');
     const params = body?.params || {};
+    const cookie = body?.headers?.cookie || process.env.SEHUATANG_COOKIE || '';
 
     const target = sehuatangTarget(routeId, params);
-    // 简单 cookie 伪造，实际可能需要处理复杂的 sehuatang 防爬逻辑
-    const remote = await fetchHtml(target.url);
-    if (!remote?.ok) throw new HttpError(502, 'upstream failed');
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': `${SITE_BASE}/`,
+    };
+    if (cookie) headers['Cookie'] = cookie;
+
+    const remote = await fetchHtml(target.url, { headers });
+    if (!remote?.ok) throw new HttpError(502, 'sehuatang upstream failed');
     
-    const items = parseList(await remote.text());
-    if (!items.length) throw new HttpError(404, 'no items found');
+    const html = await remote.text();
+    const items = parseList(html);
 
     return { 
       rssXml: renderFeed({ title: target.title, siteUrl: target.siteUrl, items }),
-      cacheHint: { ttl: DEFAULT_CACHE_TTL } 
+      cacheHint: { ttl: items.length > 0 ? DEFAULT_CACHE_TTL : 120 } 
     };
   }
   return { handleFetch };

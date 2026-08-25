@@ -16,6 +16,14 @@ const ADULT_DOMAINS = [
   'wnacg.com',
   'wnacg.org',
   'chikubi.jp',
+  'skeb.jp',
+  'fanbox.cc',
+  'kemono.su',
+  'kemono.party',
+  'coomer.su',
+  'coomer.party',
+  'sehuatang.net',
+  'uraaka-joshi.com',
 ];
 
 export function matches(hostname) {
