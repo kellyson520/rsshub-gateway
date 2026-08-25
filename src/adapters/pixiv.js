@@ -4,7 +4,7 @@ export const publiclyReadable = true;
 export function matches(hostname) {
   return hostname === 'pixiv.net'
     || hostname.endsWith('.pixiv.net')
-    || hostname === 'i.pximg.net'
+    || hostname === 'pximg.net'
     || hostname.endsWith('.pximg.net');
 }
 
