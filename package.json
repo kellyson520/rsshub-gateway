@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "health-check": "node scripts/health-check.js",
     "benchmark:gallery": "node scripts/benchmark-gallery.js",
     "benchmark:cold-start": "node scripts/benchmark-cold-start.js"
   },
