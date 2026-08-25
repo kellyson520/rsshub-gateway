@@ -26,7 +26,7 @@ async function main() {
         error.status = 502;
         throw error;
       }
-      const response = await browserFetch.fetch(url, { timeout: 25_000 });
+      const response = await browserFetch.fetch(url, { timeout: 45_000 });
       return { ok: response.ok, status: response.status, text: async () => response.text() };
     },
   });

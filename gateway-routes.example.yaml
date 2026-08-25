@@ -203,3 +203,9 @@ routes:
     backend: "sidecar://127.0.0.1:8016"
     fallback_upstream: true
     cacheTtl: 3600
+
+  # fetcher-linuxdo sidecar 服务 Linux.do 最新 feed
+  - routeId: "/linuxdo/latest"
+    backend: "sidecar://127.0.0.1:8017"
+    fallback_upstream: true
+    cacheTtl: 300

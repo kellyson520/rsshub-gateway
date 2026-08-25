@@ -61,6 +61,7 @@ services:
       GATEWAY_SIDECAR_URAAKA: "true"
       GATEWAY_SIDECAR_SEHUATANG: "true"
       GATEWAY_SIDECAR_CHIKUBI: "true"
+      GATEWAY_SIDECAR_LINUXDO: "true"
       GATEWAY_SIDECAR_SKEB: "true"
       GATEWAY_SIDECAR_KEMONO: "true"
     ports:
