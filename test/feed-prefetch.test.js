@@ -187,3 +187,10 @@ test('feed prefetch queue exposes idle() that resolves when drained', async () =
   assert.equal(queue.stats().queueLength, 0);
   queue.stop();
 });
+
+test('enqueue handles empty, null or undefined path inputs cleanly', () => {
+  const queue = createFeedPrefetchQueue();
+  assert.deepEqual(queue.enqueue(''), { queued: 0, skipped: 1 });
+  assert.deepEqual(queue.enqueue(null), { queued: 0, skipped: 1 });
+  assert.deepEqual(queue.enqueue(undefined), { queued: 0, skipped: 1 });
+});
