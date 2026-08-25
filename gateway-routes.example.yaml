@@ -155,3 +155,9 @@ routes:
   # - routeId: "/custom/:id"
   #   backend: "sidecar://fetcher-custom:8000"
   #   fallback_upstream: false
+
+  # fetcher-kemono sidecar 服务 Kemono 创作者 feed
+  - routeId: "/kemono/:source?/:id?/:type?"
+    backend: "sidecar://127.0.0.1:8009"
+    fallback_upstream: true
+    cacheTtl: 900
