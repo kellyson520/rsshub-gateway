@@ -1,0 +1,12 @@
+node_modules/
+.worktrees/
+config/mihomo/config.yaml
+config/mihomo/config.yaml.*.bak
+config/mihomo/providers/
+config/mihomo/cache.db
+config/gateway-cache/
+config/sources.json
+gateway-routes.yaml
+secrets/
+.env
+*.log

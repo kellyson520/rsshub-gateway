@@ -1,0 +1,79 @@
+services:
+  gateway:
+    build: .
+    container_name: rsshub-gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_SECRET_FILE: /run/secrets/gateway_secret
+      GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
+      GATEWAY_CACHE_MAX_BYTES: "5368709120"
+      GATEWAY_MEDIA_CACHE_MAX_FILE_BYTES: "33554432"
+      GATEWAY_VIDEO_CACHE_MAX_FILE_BYTES: "268435456"
+      GATEWAY_IMAGE_VARIANT_CONCURRENCY: "2"
+      GATEWAY_IMAGE_VARIANT_MAX_SOURCE_BYTES: "33554432"
+      GATEWAY_HTML_BROTLI_MIN_BYTES: "4096"
+      GATEWAY_HTML_BROTLI_QUALITY: "4"
+      EH_PREFETCH_CONCURRENCY: "8"
+      EH_PREFETCH_MAX_CONCURRENCY: "36"
+      EH_MEDIA_PREFETCH_CONCURRENCY: "6"
+      EH_MEDIA_PREFETCH_MIN_CONCURRENCY: "3"
+      EH_MEDIA_PREFETCH_MAX_CONCURRENCY: "48"
+      EH_MEDIA_PREFETCH_PER_ORIGIN: "48"
+      EH_MEDIA_FOREGROUND_WARM_COUNT: "8"
+      EH_MEDIA_FOREGROUND_WARM_CONCURRENCY: "8"
+      EH_FIRST_PAINT_COUNT: "1"
+      EH_COLD_START_ENABLED: "true"
+      EH_FIRST_DETAIL_BUDGET_MS: "1200"
+      GATEWAY_MEDIA_BROWSER_CACHE_SECONDS: "300"
+      EGRESS_CONTROLLER_URL: http://127.0.0.1:9090
+      EGRESS_PROXY_BASE_URL: http://127.0.0.1
+      EGRESS_LANE_COUNT: "12"
+      EGRESS_SESSION_LANE_COUNT: "12"
+      EGRESS_SESSION_LISTENER_BASE_PORT: "7921"
+      SESSION_AFFINITY_FILE: /var/cache/rsshub-gateway/session-affinity.json
+      EGRESS_MIN_CONCURRENCY_PER_LANE: "3"
+      EGRESS_MAX_CONCURRENCY_PER_LANE: "6"
+      EGRESS_MAX_TOTAL_CONCURRENCY: "48"
+      EGRESS_REFRESH_INTERVAL_MS: "60000"
+      EGRESS_PROBE_URL: https://e-hentai.org/
+      EGRESS_PROBE_TIMEOUT_MS: "5000"
+      EGRESS_PROBE_CACHE_MS: "300000"
+      RSSHUB_URL: http://rsshub:1200
+      SOURCE_CONFIG_FILE: /app/config/sources.json
+      GATEWAY_LEASE_PROXY_PORT: "1301"
+      # Dispatcher 路由注册表（缺省=纯透明增强网关）
+      GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
+      # 疑难站点增强模式（单容器）：sidecar 默认开启，独立进程；关闭设 false
+      # 成人平台 feed 预热（异步预抓取预缓存，阶段3.2）
+      GATEWAY_FEED_PREFETCH_PATHS: "/ggjav/home,/airav/home,/javbus/home,/javdb/home,/netflav,/91porn,/jable/new-release,/missav/new"
+      GATEWAY_SIDECAR_IWARA: "true"
+      GATEWAY_SIDECAR_EH: "true"
+      GATEWAY_SIDECAR_GGJAV: "true"
+      GATEWAY_SIDECAR_AIRAV: "true"
+      GATEWAY_BROWSER_RENDER: "true"
+      GATEWAY_SIDECAR_MISSAV: "true"
+      GATEWAY_SIDECAR_JABLE: "true"
+      GATEWAY_SIDECAR_JAVBUS: "true"
+      GATEWAY_SIDECAR_JAVDB: "true"
+    ports:
+      - 127.0.0.1:1300:1300
+      - 1301:1301
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/gateway-cache:/var/cache/rsshub-gateway
+      - ./config/sources.json:/app/config/sources.json:ro
+      - ./secrets/gateway_secret:/run/secrets/gateway_secret:ro
+      # 疑难站点增强模式：sidecar 兜底路由注册表（backend 指向容器内 127.0.0.1:8000/8001）
+      - ./gateway-routes.yaml:/app/config/gateway-routes.yaml:ro
+    networks:
+      1panel-network:
+        aliases:
+          - rsshub-gateway
+
+  # 疑难站点增强模式采用单容器：fetcher-iwara / fetcher-eh 由容器 entrypoint
+  # 按 GATEWAY_SIDECAR_IWARA / GATEWAY_SIDECAR_EH 环境变量以独立进程拉起，
+  # 与网关基座进程隔离，无需额外容器。多容器形态可另建服务 command: ["fetcher-iwara"]。
+
+networks:
+  1panel-network:
+    external: true

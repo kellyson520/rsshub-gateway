@@ -1,0 +1,7 @@
+.git
+node_modules
+config/mihomo/config.yaml
+config/mihomo/providers
+config/sources.json
+secrets
+*.log

@@ -1,0 +1,157 @@
+# rsshub-gateway 路由注册表（Dispatcher）
+#
+# 默认行为：不配置本文件（或文件缺失）时，网关是完全透明的 RSSHub 增强网关，
+# 所有未匹配内置路由的路径都透传给上游 RSSHub（RSSHUB_URL）。
+#
+# 配置方式：
+#   1. 将本文件复制为 gateway-routes.yaml（或通过 GATEWAY_ROUTES_FILE 指定路径）；
+#   2. 按需注册自定义路由，backend 使用 sidecar://host:port（Fetcher-API，POST /fetch）；
+#   3. fallback_upstream: true 时，sidecar 故障自动降级回上游 RSSHub，不中断服务。
+#
+# 疑难站点增强模式（单容器）：sidecar 默认开启，在同一个网关容器内以独立进程运行；
+#   显式关闭用 GATEWAY_SIDECAR_IWARA=false / GATEWAY_SIDECAR_EH=false（纯透明增强模式）。
+#   backend 指向容器内地址 127.0.0.1:8000 / 127.0.0.1:8001。
+# 多容器模式同样可用：backend 指向 compose 服务名（如 fetcher-iwara:8000）。
+#
+# 动态注册（无需重启网关）：设置 DISPATCHER_REGISTRATION_TOKEN 后，
+# /_gateway/dispatcher/routes 端点支持 GET（列表）/ POST（注册）/ DELETE（注销），
+# 鉴权 Bearer token；sidecar 启动时也可自动上报（见 docs/fetcher-api.md 第 6 节）。
+# 静态配置路由始终优先于运行时注册路由。
+#
+# 路径模式：:name 匹配单个路径段，:name? 为可选尾段，* 匹配剩余路径。
+
+routes:
+  # 示例：fetcher-iwara sidecar 服务 iwara 用户 feed（单容器，进程隔离）
+  - routeId: "/iwara/users/:username/:kind?"
+    backend: "sidecar://127.0.0.1:8000"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：fetcher-eh sidecar 服务 E-Hentai 排名 feed（单容器，进程隔离）
+  - routeId: "/ehviewer/ranking/:period?"
+    backend: "sidecar://127.0.0.1:8001"
+    fallback_upstream: true
+    cacheTtl: 300
+
+  # 示例：fetcher-ggjav sidecar 服务 GGJAV 成人影片 feed（单容器，进程隔离）
+  # 顺序即优先级：video/model/genre 必须先于 /ggjav/:kind/:page?
+  - routeId: "/ggjav/video/:id"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 86400
+  - routeId: "/ggjav/model/:name/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/genre/:tag/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/home/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/ggjav/:kind/:page?"
+    backend: "sidecar://127.0.0.1:8002"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：fetcher-airav sidecar 服务 AIrav 最新發行 feed（单容器，进程隔离）
+  - routeId: "/airav/home"
+    backend: "sidecar://127.0.0.1:8003"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：fetcher-missav sidecar 服务 MissAV feed（客户端渲染，依赖浏览器渲染服务）
+  - routeId: "/missav/new/:page?"
+    backend: "sidecar://127.0.0.1:8005"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/missav/search/:keyword"
+    backend: "sidecar://127.0.0.1:8005"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：fetcher-jable sidecar 服务 Jable 影片 feed（CF 托管挑战，依赖浏览器渲染服务）
+  - routeId: "/jable/video/:code"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/new-release/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/jable/videos/:page?"
+    backend: "sidecar://127.0.0.1:8006"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # fetcher-javbus sidecar 服务 JavBus 影片 feed（需设 ALLOW_USER_SUPPLY_UNSAFE_DOMAIN=true 于上游）
+  # 精确路由优先：video/star/genre/search 先于通配 home
+  - routeId: "/javbus/video/:id"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 86400
+  - routeId: "/javbus/star/:id/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/genre/:tag/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/censored/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/uncensored/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/western/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javbus/home/:page?"
+    backend: "sidecar://127.0.0.1:8007"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # fetcher-javdb sidecar 服务 JavDB 影片 feed
+  - routeId: "/javdb/video/:id"
+    backend: "sidecar://127.0.0.1:8008"
+    fallback_upstream: true
+    cacheTtl: 86400
+  - routeId: "/javdb/actor/:id/:page?"
+    backend: "sidecar://127.0.0.1:8008"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javdb/tag/:id/:page?"
+    backend: "sidecar://127.0.0.1:8008"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javdb/search/:keyword/:page?"
+    backend: "sidecar://127.0.0.1:8008"
+    fallback_upstream: true
+    cacheTtl: 900
+  - routeId: "/javdb/home/:category?/:sort?/:filter?"
+    backend: "sidecar://127.0.0.1:8008"
+    fallback_upstream: true
+    cacheTtl: 900
+
+  # 示例：自定义兜底路由（无 fallback 时 sidecar 故障返回 502）
+  # - routeId: "/custom/:id"
+  #   backend: "sidecar://fetcher-custom:8000"
+  #   fallback_upstream: false

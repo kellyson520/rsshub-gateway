@@ -1,0 +1,58 @@
+# 疑难站点增强模式（单容器）：RSSHub + rsshub-gateway，sidecar 以独立进程在网关容器内运行。
+# 绝大多数路由走 RSSHub；gateway-routes.yaml 注册的个别路由由 sidecar 兜底；
+# sidecar 故障自动回退 RSSHub（fallback_upstream: true），不中断服务。
+#
+# 使用：同 standard 模板，另需：
+#   cp gateway-routes.example.yaml gateway-routes.yaml   # 注册 sidecar 路由（127.0.0.1:8000/8001）
+#   docker compose up -d --build
+#
+# sidecar 进程由容器 entrypoint 按 GATEWAY_SIDECAR_* 环境变量拉起，
+# 与网关基座进程隔离（宪章：站点抓取业务不进入基座进程），容器数量保持不变。
+# 如需多容器形态，可另建服务 command: ["fetcher-iwara"] 并把 backend 改为服务名。
+services:
+  rsshub:
+    image: diygod/rsshub:chromium-bundled
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks:
+      - gateway
+
+  gateway:
+    build: .
+    container_name: rsshub-gateway
+    restart: unless-stopped
+    depends_on:
+      - rsshub
+    ports:
+      - 127.0.0.1:1300:1300
+      - 1301:1301
+    environment:
+      RSSHUB_URL: http://rsshub:1200
+      GATEWAY_SECRET: change-me-to-a-long-random-secret
+      GATEWAY_CACHE_DIR: /var/cache/rsshub-gateway
+      GATEWAY_CACHE_MAX_BYTES: "5368709120"
+      GATEWAY_ROUTES_FILE: /app/config/gateway-routes.yaml
+      # 疑难站点增强：sidecar 默认开启（容器内独立进程）；纯透明模式设为 false
+      # 成人平台 feed 预热（可选）：逗号分隔的路径列表
+      # GATEWAY_FEED_PREFETCH_PATHS: "/ggjav/home,/airav/home,/javbus/home,/javdb/home"
+      GATEWAY_SIDECAR_IWARA: "true"
+      GATEWAY_SIDECAR_EH: "true"
+      GATEWAY_SIDECAR_GGJAV: "true"
+      GATEWAY_SIDECAR_AIRAV: "true"
+      GATEWAY_BROWSER_RENDER: "true"
+      GATEWAY_SIDECAR_MISSAV: "true"
+      GATEWAY_SIDECAR_JABLE: "true"
+    volumes:
+      - ./config/mihomo:/root/.config/mihomo
+      - ./config/sources.json:/app/config/sources.json:ro
+      - ./gateway-routes.yaml:/app/config/gateway-routes.yaml:ro
+      - gateway-cache:/var/cache/rsshub-gateway
+    networks:
+      - gateway
+
+networks:
+  gateway: {}
+
+volumes:
+  gateway-cache: {}
