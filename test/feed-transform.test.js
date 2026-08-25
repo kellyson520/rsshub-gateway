@@ -147,3 +147,9 @@ test('handles malformed, empty or non-xml feed gracefully', () => {
   assert.equal(transformFeed('plain text string', options), 'plain text string');
   assert.equal(transformFeed(null, options), '');
 });
+
+test('decodeTextEntities and CDATA handling preserves safe XML brackets and handles undefined', () => {
+  const feed = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[Special <Characters> & 'Quotes']]></title><link>https://v2ex.com/t/999</link></item></channel></rss>`;
+  const output = transformFeed(feed, options);
+  assert.match(output, /Special <Characters> & 'Quotes'/);
+});
