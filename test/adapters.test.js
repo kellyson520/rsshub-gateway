@@ -85,3 +85,32 @@ test('recognizes login pages without treating service errors as authentication c
   assert.equal(instagram.isAuthenticationChallenge({ status: 200, headers: new Headers(), body: '<form><input name="username"><input name="password"></form>' }), true);
   assert.equal(x.isAuthenticationChallenge({ status: 503, headers: new Headers(), body: 'unavailable' }), false);
 });
+
+test('routes major adult platforms to the adult-media adapter with proper default headers', () => {
+  const domains = [
+    'https://jable.tv/videos/abc/',
+    'https://missav.live/cn/new',
+    'https://www.javbus.com/ABC-123',
+    'https://javdb.com/v/XYZ',
+    'https://airav.io/video/1',
+    'https://ggjav.tv/video/2',
+    'https://www.wnacg.com/photos-index-aid-1.html',
+    'https://chikubi.jp/post-1.html',
+    'https://skeb.jp/@creator/works/1',
+    'https://artist.fanbox.cc/posts/1',
+    'https://kemono.cr/patreon/user/1/post/1',
+    'https://coomer.st/onlyfans/user/1/post/1',
+    'https://www.sehuatang.net/thread-1-1-1.html',
+    'https://www.uraaka-joshi.com/user/1',
+  ];
+
+  for (const targetUrl of domains) {
+    const adapter = adapterForUrl(targetUrl);
+    assert.equal(adapter.name, 'adult-media', `adapter for ${targetUrl}`);
+    assert.equal(adapter.readerTarget(targetUrl), targetUrl);
+    const hdrs = adapter.headers();
+    assert.ok(hdrs['User-Agent']);
+    assert.ok(hdrs['Accept-Language']);
+    assert.ok(adapter.unavailableMessage().includes('原始来源'));
+  }
+});
