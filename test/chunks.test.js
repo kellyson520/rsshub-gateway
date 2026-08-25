@@ -48,4 +48,6 @@ test('handles invalid and negative totalBytes in chunkSizeFor', () => {
   assert.deepEqual(chunkSizeFor(0, 4), { count: 1, size: 256 * 1024 });
   assert.deepEqual(chunkSizeFor(-1024, 2), { count: 1, size: 256 * 1024 });
   assert.deepEqual(chunkSizeFor(null, 2), { count: 1, size: 256 * 1024 });
+  assert.deepEqual(chunkSizeFor(undefined, 2), { count: 1, size: 256 * 1024 });
+  assert.deepEqual(chunkSizeFor(NaN, 2), { count: 1, size: 256 * 1024 });
 });
