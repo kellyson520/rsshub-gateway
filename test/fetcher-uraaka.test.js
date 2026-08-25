@@ -64,6 +64,8 @@ test('renderFeed: produces valid RSS feed', () => {
     items,
   });
   assert.ok(xml.includes('<rss version="2.0"'));
+  assert.ok(xml.includes('xmlns:media="http://search.yahoo.com/mrss/"'));
+  assert.ok(xml.includes('enclosure url="https://img.uraaka.com/avatar1.jpg"'));
   assert.ok(xml.includes('裏垢女子まとめ'));
   assert.ok(xml.includes('@sample_user_1'));
 });

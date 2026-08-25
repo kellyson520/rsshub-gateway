@@ -52,20 +52,26 @@ export function parseList(html) {
 
 export function renderFeed({ title, siteUrl, items = [] }) {
   const entries = items.map((item) => {
+    const coverTag = item.cover ? `<enclosure url="${escapeXml(item.cover)}" type="image/jpeg" length="0" /><media:content url="${escapeXml(item.cover)}" medium="image" />` : '';
+    const imgHtml = item.cover ? `<p><img src="${escapeXml(item.cover)}" alt="${escapeXml(item.title)}" /></p>` : '';
     return `<item>
       <title>${escapeXml(item.title)}</title>
       <link>${escapeXml(item.url)}</link>
-      <description><![CDATA[${item.description.replaceAll(']]>', ']]]]><![CDATA[>')}]]></description>
+      <description><![CDATA[${imgHtml}${item.description.replaceAll(']]>', ']]]]><![CDATA[>')}]]></description>
+      ${coverTag}
       ${item.pubDate ? `<pubDate>${escapeXml(item.pubDate)}</pubDate>` : ''}
     </item>`;
   }).join('\n');
 
-  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(siteUrl)}</link>
     <description>Uraaka feed</description>
     ${entries}
-  </channel></rss>`;
+  </channel>
+</rss>`;
 }
 
 export function createUraakaFetcher({ fetchHtml } = {}) {
