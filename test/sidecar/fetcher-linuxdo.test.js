@@ -107,3 +107,56 @@ test('createLinuxdoFetcher handles category fetch properly', async () => {
   assert.ok(result.rssXml.includes('开发调优'));
   assert.equal(result.cacheHint.ttl, 300);
 });
+
+test('createLinuxdoFetcher handles top route and unknown category fallback', async () => {
+  let requestedUrl = '';
+  const mockFetchJson = async (url) => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        users: [{ id: 2, username: 'tester' }],
+        topic_list: {
+          topics: [{
+            id: 200,
+            title: 'Top Weekly Discussion',
+            slug: 'top-weekly',
+            posts_count: 50,
+            views: 9999,
+            like_count: 120,
+            excerpt: 'Weekly popular topic',
+            category_id: 9999,
+            created_at: '2026-08-25T11:00:00.000Z',
+            posters: [{ user_id: 2 }],
+          }],
+        },
+      }),
+    };
+  };
+
+  const fetcher = createLinuxdoFetcher({ fetchJson: mockFetchJson });
+  const resultTop = await fetcher.handleFetch({
+    routeId: '/linuxdo/top/:period?',
+    params: { period: 'monthly' },
+  });
+
+  assert.ok(requestedUrl.includes('period=monthly'));
+  assert.ok(resultTop.rssXml.includes('Top Weekly Discussion'));
+  assert.ok(resultTop.rssXml.includes('LINUX DO - 精华话题 (monthly)'));
+});
+
+test('createLinuxdoFetcher maps upstream errors properly', async () => {
+  const mockFetchError = async () => ({
+    ok: false,
+    status: 502,
+    statusText: 'Bad Gateway',
+    json: async () => ({}),
+  });
+
+  const fetcher = createLinuxdoFetcher({ fetchJson: mockFetchError });
+  await assert.rejects(
+    () => fetcher.handleFetch({ routeId: '/linuxdo/latest', params: {} }),
+    (err) => err.status === 502 || err.message.includes('502'),
+  );
+});
