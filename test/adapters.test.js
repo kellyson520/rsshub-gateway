@@ -211,6 +211,9 @@ test('exports default unavailable messages and patterns across adapters', async 
   const pixiv = await import('../src/adapters/pixiv.js');
   const tg = await import('../src/adapters/telegram.js');
   const eh = await import('../src/adapters/ehviewer.js');
+  const linuxdo = await import('../src/adapters/linuxdo.js');
+  const iwara = await import('../src/adapters/iwara.js');
+  const index = await import('../src/adapters/index.js');
 
   assert.ok(x.DEFAULT_UNAVAILABLE_MESSAGE.includes('X 内容'));
   assert.ok(x.AUTH_FLOW_LOGIN_PATTERN instanceof RegExp);
@@ -219,5 +222,8 @@ test('exports default unavailable messages and patterns across adapters', async 
   assert.ok(pixiv.DEFAULT_UNAVAILABLE_MESSAGE.includes('Pixiv 内容'));
   assert.ok(tg.DEFAULT_UNAVAILABLE_MESSAGE.includes('Telegram 内容'));
   assert.ok(eh.DEFAULT_UNAVAILABLE_MESSAGE.includes('E-Hentai 内容'));
+  assert.ok(linuxdo.DEFAULT_UNAVAILABLE_MESSAGE.includes('LINUX DO 话题内容'));
+  assert.ok(iwara.DEFAULT_UNAVAILABLE_MESSAGE.includes('Iwara 内容'));
+  assert.ok(index.DEFAULT_UNAVAILABLE_MESSAGE.includes('该来源暂时无法读取'));
   assert.equal(typeof eh.isEhentaiPage, 'function');
 });

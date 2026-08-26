@@ -9,6 +9,8 @@ import * as adultMedia from './adult-media.js';
 
 export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
 
+export const DEFAULT_UNAVAILABLE_MESSAGE = '该来源暂时无法读取，请稍后重试或打开原始来源。';
+
 export const defaultAdapter = {
   name: 'unknown',
   publiclyReadable: false,
@@ -19,7 +21,7 @@ export const defaultAdapter = {
   galleryPageUrls: () => [],
   imagePageUrls: () => [],
   firstImagePageUrl: () => '',
-  unavailableMessage: () => '该来源暂时无法读取，请稍后重试或打开原始来源。',
+  unavailableMessage: () => DEFAULT_UNAVAILABLE_MESSAGE,
 };
 
 export function adapterForUrl(url) {

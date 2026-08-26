@@ -4,6 +4,7 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from '..
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;
+export const DEFAULT_UNAVAILABLE_MESSAGE = 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
 
 const SITE_BASE = 'https://linux.do';
 
@@ -22,7 +23,7 @@ export function readerTarget(url) {
 }
 
 export function unavailableMessage() {
-  return 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
+  return DEFAULT_UNAVAILABLE_MESSAGE;
 }
 
 export function isAuthenticationChallenge({ status, headers, body } = {}) {

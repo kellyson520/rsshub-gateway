@@ -11,6 +11,7 @@ export {
 
 export const name = 'iwara';
 export const publiclyReadable = true;
+export const DEFAULT_UNAVAILABLE_MESSAGE = 'Iwara 内容暂时无法读取，请稍后重试或打开原始来源。';
 
 const API_BASE = 'https://api.iwara.tv';
 const SITE_BASE = 'https://iwara.tv';
@@ -32,7 +33,7 @@ export function readerTarget(url) {
 }
 
 export function unavailableMessage() {
-  return 'Iwara 内容暂时无法读取，请稍后重试或打开原始来源。';
+  return DEFAULT_UNAVAILABLE_MESSAGE;
 }
 
 export function isAuthenticationChallenge({ status, headers, body } = {}) {
