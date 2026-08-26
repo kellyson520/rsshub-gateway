@@ -67,3 +67,23 @@ test('safeHost handles malformed or non-url input gracefully', async () => {
   const res = await service.fetchExternal('not-a-url');
   assert.equal(res.status, 200);
 });
+
+test('exports BROWSER_FETCH_HOSTS, safeHost and browserFetchHost helpers', async () => {
+  const {
+    BROWSER_FETCH_HOSTS,
+    safeHost,
+    browserFetchHost,
+  } = await import('../src/infrastructure/request-service.js');
+
+  assert.ok(Array.isArray(BROWSER_FETCH_HOSTS));
+  assert.ok(BROWSER_FETCH_HOSTS.includes('javbus.com'));
+  assert.ok(BROWSER_FETCH_HOSTS.includes('linux.do'));
+
+  assert.equal(safeHost('https://JavBus.com/path'), 'javbus.com');
+  assert.equal(safeHost('invalid-url'), 'unknown');
+
+  assert.equal(browserFetchHost('https://javbus.com/page'), true);
+  assert.equal(browserFetchHost('https://sub.javbus.com/page'), true);
+  assert.equal(browserFetchHost('https://example.com/page'), false);
+  assert.equal(browserFetchHost('invalid-url'), false);
+});

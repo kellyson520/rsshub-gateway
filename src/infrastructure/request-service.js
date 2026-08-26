@@ -4,7 +4,7 @@ import { createBrowserFetchClient } from '../browser-fetch.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
 
-function safeHost(url) {
+export function safeHost(url) {
   try {
     return new URL(String(url)).hostname.toLowerCase();
   } catch {
@@ -15,12 +15,12 @@ function safeHost(url) {
 // 站点 WAF 只放行浏览器 TLS 指纹（javbus/javdb 页面无 Referer/UA 也 403，
 // 封面路径例外）。对这些主机，fetchExternal 走 browser-fetch（curl_cffi）
 // 指纹传输；worker 不可用时回退普通 undici 客户端。
-const BROWSER_FETCH_HOSTS = Object.freeze(
+export const BROWSER_FETCH_HOSTS = Object.freeze(
   String(process.env.GATEWAY_BROWSER_FETCH_HOSTS || 'javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,kemono.su,kemono.cr,coomer.su,coomer.st,sehuatang.net,linux.do')
     .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean),
 );
 
-function browserFetchHost(url) {
+export function browserFetchHost(url) {
   try {
     const hostname = new URL(String(url)).hostname.toLowerCase();
     return BROWSER_FETCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
