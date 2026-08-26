@@ -4,6 +4,7 @@ import {
   IMAGE_VARIANT_CACHE_VERSION,
   clamp,
   imageVariantCacheUrl,
+  nonNegativeInteger,
   parseByteRange,
   responseFromCachedDocument,
   responseHeaders,
@@ -155,11 +156,10 @@ export function createMediaTransport({
     const result = await cache.getOrLoad(target, kind, async () => {
       const remote = await fetchExternal(target, requestOptions);
       const contentType = remote.headers.get('content-type') || '';
-      const contentLength = Number.parseInt(remote.headers.get('content-length') || '', 10);
+      const contentLength = nonNegativeInteger(remote.headers.get('content-length'), null);
       const cacheable = remote.ok
         && (contentType.toLowerCase().startsWith('image/') || contentType.toLowerCase().startsWith('video/'))
-        && Number.isSafeInteger(contentLength)
-        && contentLength >= 0
+        && contentLength !== null
         && contentLength <= maxBytes;
       if (!cacheable) {
         return { passthrough: remote, cacheable: false };
@@ -244,13 +244,12 @@ export function createMediaTransport({
   async function cacheMedia(target, namespace, response, { bypassInflight = false } = {}) {
     if (!cache) return response;
     const contentType = response.headers.get('content-type') || '';
-    const contentLength = Number.parseInt(response.headers.get('content-length') || '', 10);
+    const contentLength = nonNegativeInteger(response.headers.get('content-length'), null);
     const mediaType = contentType.toLowerCase();
     const mediaBytes = mediaType.startsWith('video/') ? videoCacheMaxFileBytes : mediaCacheMaxFileBytes;
     const cacheable = response.ok
       && (mediaType.startsWith('image/') || mediaType.startsWith('video/'))
-      && Number.isSafeInteger(contentLength)
-      && contentLength >= 0
+      && contentLength !== null
       && contentLength <= mediaBytes;
     if (!cacheable) return response;
     if (bypassInflight) {

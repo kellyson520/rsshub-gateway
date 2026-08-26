@@ -1,5 +1,5 @@
 import { ProxyAgent } from 'undici';
-import { safeEvent } from './http-utils.js';
+import { boundedInteger, positiveInteger, safeEvent } from './http-utils.js';
 
 const DEFAULT_CONTROLLER_URL = process.env.EGRESS_CONTROLLER_URL || 'http://127.0.0.1:9090';
 const DEFAULT_LISTENER_BASE_URL = process.env.EGRESS_PROXY_BASE_URL || 'http://127.0.0.1';
@@ -26,9 +26,7 @@ function isSubscriptionMetadataName(name) {
 }
 
 function boundedPositiveInteger(value, fallback, maximum) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
-  return Math.min(parsed, maximum);
+  return boundedInteger(value, fallback, 1, maximum);
 }
 
 function toUrlList(value) {
@@ -116,15 +114,15 @@ export function createMihomoEgressAdapter({
   onEvent,
 } = {}) {
   const controller = String(controllerUrl).replace(/\/$/, '');
-  const lanesLimit = Math.max(1, Number.parseInt(laneCount, 10) || DEFAULT_LANE_COUNT);
-  const sessionLanesLimit = Math.max(1, Number.parseInt(sessionLaneCount, 10) || DEFAULT_SESSION_LANE_COUNT);
-  const sessionPort = boundedPositiveInteger(sessionListenerBasePort, DEFAULT_SESSION_LISTENER_BASE_PORT, 65_535);
+  const lanesLimit = positiveInteger(laneCount, DEFAULT_LANE_COUNT);
+  const sessionLanesLimit = positiveInteger(sessionLaneCount, DEFAULT_SESSION_LANE_COUNT);
+  const sessionPort = boundedInteger(sessionListenerBasePort, DEFAULT_SESSION_LISTENER_BASE_PORT, 1, 65_535);
   const sourceProbeUrl = String(probeUrl || '').trim();
   const sourceProbeTargets = normalizeProbeTargets(probeTargets, sourceProbeUrl);
   const PROBE_SCOPES = ['public', 'sticky'].filter((scope) => (sourceProbeTargets[scope] || []).length);
   const REQUIRED_PROBE_SCOPE = PROBE_SCOPES.includes('public') ? 'public' : PROBE_SCOPES[0];
-  const sourceProbeTimeoutMs = boundedPositiveInteger(probeTimeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 30_000);
-  const sourceProbeCacheMs = boundedPositiveInteger(probeCacheMs, DEFAULT_PROBE_CACHE_MS, 60 * 60_000);
+  const sourceProbeTimeoutMs = boundedInteger(probeTimeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 1, 30_000);
+  const sourceProbeCacheMs = boundedInteger(probeCacheMs, DEFAULT_PROBE_CACHE_MS, 1, 60 * 60_000);
   let lastLanes = [];
   let degraded = false;
   const probeResults = new Map();
