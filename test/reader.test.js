@@ -276,7 +276,7 @@ test('renderReaderPage safely handles malformed or empty html body', () => {
   assert.match(output, /class="reader"/);
 });
 
-test('exports reader regular expressions and CSS constants', async () => {
+test('exports reader regular expressions, CSS constants and AST extractor helpers', async () => {
   const {
     EH_GALLERY_PATH,
     EH_IMAGE_PATH,
@@ -285,6 +285,9 @@ test('exports reader regular expressions and CSS constants', async () => {
     IMAGE_SIZES,
     READER_CSS,
     escapeHtml,
+    isEhentaiPage,
+    extractEhGalleryTitle,
+    extractEhImagePage,
   } = await import('../src/reader.js');
 
   assert.ok(EH_GALLERY_PATH instanceof RegExp);
@@ -294,4 +297,19 @@ test('exports reader regular expressions and CSS constants', async () => {
   assert.ok(IMAGE_SIZES.includes('1120px'));
   assert.ok(READER_CSS.includes('color-scheme'));
   assert.equal(escapeHtml('foo & bar'), 'foo &amp; bar');
+
+  assert.equal(isEhentaiPage('https://e-hentai.org/g/123/abc/', EH_GALLERY_PATH), true);
+  assert.equal(isEhentaiPage('https://e-hentai.org/s/123/456', EH_GALLERY_PATH), false);
+  assert.equal(isEhentaiPage('not-a-url', EH_GALLERY_PATH), false);
+
+  const galleryHtml = '<html><body><h1 id="gn">Test Gallery</h1></body></html>';
+  assert.equal(extractEhGalleryTitle({ html: galleryHtml }), 'Test Gallery');
+  assert.equal(extractEhGalleryTitle({ html: '<html></html>', url: 'https://e-hentai.org/g/1/2' }), 'https://e-hentai.org/g/1/2');
+
+  const imageHtml = '<html><body><div id="i1"><h1>Gallery Title</h1><div id="i2">1 / 5</div></div><img id="img" src="https://page.example.hath.network/h/1.webp"></body></html>';
+  const page = extractEhImagePage({ url: 'https://e-hentai.org/s/1/2', html: imageHtml, baseUrl: 'http://127.0.0.1:1300', secret: 'test-secret' });
+  assert.ok(page);
+  assert.equal(page.title, 'Gallery Title');
+  assert.equal(page.mediaTarget, 'https://page.example.hath.network/h/1.webp');
+  assert.ok(page.media.startsWith('http://127.0.0.1:1300/_gateway/media/'));
 });

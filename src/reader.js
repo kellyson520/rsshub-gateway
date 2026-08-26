@@ -413,4 +413,8 @@ export {
   mediaSrcset,
   localUrl,
   gatewayUrl,
+  isEhentaiPage,
+  renderEhGalleryPage,
+  renderEhImagePage,
+  renderGenericReaderPage,
 };
