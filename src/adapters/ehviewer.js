@@ -11,6 +11,15 @@ const MAX_ITEMS = 50;
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 
+export {
+  RANKING_PERIODS,
+  MAX_ITEMS,
+  EH_GALLERY_PATH,
+  EH_IMAGE_PATH,
+  escapeXml,
+  cdata,
+};
+
 export const name = 'ehviewer';
 
 export function matches(hostname) {

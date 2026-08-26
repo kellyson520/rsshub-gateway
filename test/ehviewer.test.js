@@ -80,3 +80,22 @@ test('collects E-Hentai gallery pages and ordered unique image pages', () => {
     'https://e-hentai.org/s/second/123-2',
   ]);
 });
+
+test('exports RANKING_PERIODS, MAX_ITEMS, escapeXml and cdata helpers', async () => {
+  const {
+    RANKING_PERIODS,
+    MAX_ITEMS,
+    EH_GALLERY_PATH,
+    EH_IMAGE_PATH,
+    escapeXml,
+    cdata,
+  } = await import('../src/adapters/ehviewer.js');
+
+  assert.equal(typeof RANKING_PERIODS, 'object');
+  assert.equal(RANKING_PERIODS.day.query, '15');
+  assert.equal(MAX_ITEMS, 50);
+  assert.ok(EH_GALLERY_PATH instanceof RegExp);
+  assert.ok(EH_IMAGE_PATH instanceof RegExp);
+  assert.equal(escapeXml('<foo & bar>'), '&lt;foo &amp; bar&gt;');
+  assert.equal(cdata('content'), '<![CDATA[content]]>');
+});
