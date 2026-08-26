@@ -1,6 +1,10 @@
 export const DEFAULT_FAILURE_THRESHOLD = 3;
 export const DEFAULT_COOLDOWN_MS = 30_000;
 
+export const CIRCUIT_STATE_CLOSED = 'closed';
+export const CIRCUIT_STATE_OPEN = 'open';
+export const CIRCUIT_STATE_HALF_OPEN = 'half-open';
+
 export class CircuitBreaker {
   constructor({ failureThreshold = DEFAULT_FAILURE_THRESHOLD, cooldownMs = DEFAULT_COOLDOWN_MS, now = () => Date.now() } = {}) {
     this.failureThreshold = failureThreshold;
@@ -11,17 +15,17 @@ export class CircuitBreaker {
 
   state(key) {
     const entry = this.entries.get(key);
-    if (!entry) return 'closed';
-    if (entry.state === 'open' && this.now() - entry.openedAt >= this.cooldownMs) return 'half-open';
+    if (!entry) return CIRCUIT_STATE_CLOSED;
+    if (entry.state === CIRCUIT_STATE_OPEN && this.now() - entry.openedAt >= this.cooldownMs) return CIRCUIT_STATE_HALF_OPEN;
     return entry.state;
   }
 
   canRequest(key) {
     const entry = this.entries.get(key);
-    if (!entry || entry.state === 'closed') return true;
-    if (entry.state === 'open') {
+    if (!entry || entry.state === CIRCUIT_STATE_CLOSED) return true;
+    if (entry.state === CIRCUIT_STATE_OPEN) {
       if (this.now() - entry.openedAt < this.cooldownMs) return false;
-      entry.state = 'half-open';
+      entry.state = CIRCUIT_STATE_HALF_OPEN;
       entry.probeInFlight = true;
       return true;
     }
@@ -29,11 +33,11 @@ export class CircuitBreaker {
   }
 
   recordFailure(key) {
-    const entry = this.entries.get(key) || { state: 'closed', failures: 0, openedAt: 0, probeInFlight: false };
+    const entry = this.entries.get(key) || { state: CIRCUIT_STATE_CLOSED, failures: 0, openedAt: 0, probeInFlight: false };
     entry.failures += 1;
     entry.probeInFlight = false;
-    if (entry.state === 'half-open' || entry.failures >= this.failureThreshold) {
-      entry.state = 'open';
+    if (entry.state === CIRCUIT_STATE_HALF_OPEN || entry.failures >= this.failureThreshold) {
+      entry.state = CIRCUIT_STATE_OPEN;
       entry.openedAt = this.now();
     }
     this.entries.set(key, entry);
@@ -45,7 +49,7 @@ export class CircuitBreaker {
 
   openKeys() {
     return [...this.entries.entries()]
-      .filter(([key, entry]) => this.state(key) === 'open')
+      .filter(([key, entry]) => this.state(key) === CIRCUIT_STATE_OPEN)
       .map(([key]) => key)
       .sort();
   }
@@ -55,10 +59,10 @@ export class CircuitBreaker {
   }
 
   stats() {
-    const byState = { closed: 0, open: 0, 'half-open': 0 };
+    const byState = { [CIRCUIT_STATE_CLOSED]: 0, [CIRCUIT_STATE_OPEN]: 0, [CIRCUIT_STATE_HALF_OPEN]: 0 };
     for (const [key, entry] of this.entries.entries()) {
       byState[this.state(key)] += 1;
     }
-    return { byState, open: byState.open, openKeys: this.openKeys() };
+    return { byState, open: byState[CIRCUIT_STATE_OPEN], openKeys: this.openKeys() };
   }
 }

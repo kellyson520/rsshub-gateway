@@ -177,8 +177,29 @@ test('allows major adult source hosts and their media CDNs', () => {
 });
 
 test('exports DEFAULT_TTL_SECONDS and MEDIA_CACHE_TTL_SECONDS constants', async () => {
-  const { DEFAULT_TTL_SECONDS, MEDIA_CACHE_TTL_SECONDS, ALLOWED_HOSTS } = await import('../src/signed-target.js');
+  const {
+    DEFAULT_TTL_SECONDS,
+    MEDIA_CACHE_TTL_SECONDS,
+    ALLOWED_HOSTS,
+    EGRESS_SCOPES,
+    encode,
+    decode,
+    routeMetadata,
+  } = await import('../src/signed-target.js');
+
   assert.equal(DEFAULT_TTL_SECONDS, 900);
   assert.equal(MEDIA_CACHE_TTL_SECONDS, 86400);
   assert.ok(Array.isArray(ALLOWED_HOSTS));
+  assert.ok(EGRESS_SCOPES instanceof Set);
+  assert.ok(EGRESS_SCOPES.has('public'));
+  assert.ok(EGRESS_SCOPES.has('session'));
+  assert.ok(EGRESS_SCOPES.has('sticky'));
+
+  const encoded = encode('hello-world');
+  assert.equal(decode(encoded), 'hello-world');
+
+  assert.deepEqual(routeMetadata({ egressScope: 'session', source: 'x' }), { egressScope: 'session', source: 'x' });
+  assert.deepEqual(routeMetadata({}), {});
+  assert.throws(() => routeMetadata({ egressScope: 'unknown' }), /unsupported egress scope/);
+  assert.throws(() => routeMetadata({ source: 'INVALID SOURCE!' }), /unsupported route source/);
 });

@@ -104,8 +104,17 @@ test('clearAll resets all open and half-open circuit breakers', () => {
   assert.equal(breaker.canRequest('site-1.com'), true);
 });
 
-test('exports DEFAULT_FAILURE_THRESHOLD and DEFAULT_COOLDOWN_MS constants', async () => {
-  const { DEFAULT_FAILURE_THRESHOLD, DEFAULT_COOLDOWN_MS } = await import('../src/circuit-breaker.js');
+test('exports default circuit breaker constants and state identifiers', async () => {
+  const {
+    DEFAULT_FAILURE_THRESHOLD,
+    DEFAULT_COOLDOWN_MS,
+    CIRCUIT_STATE_CLOSED,
+    CIRCUIT_STATE_OPEN,
+    CIRCUIT_STATE_HALF_OPEN,
+  } = await import('../src/circuit-breaker.js');
   assert.equal(DEFAULT_FAILURE_THRESHOLD, 3);
   assert.equal(DEFAULT_COOLDOWN_MS, 30_000);
+  assert.equal(CIRCUIT_STATE_CLOSED, 'closed');
+  assert.equal(CIRCUIT_STATE_OPEN, 'open');
+  assert.equal(CIRCUIT_STATE_HALF_OPEN, 'half-open');
 });

@@ -231,4 +231,7 @@ export {
   EGRESS_SCOPES,
   DEFAULT_TTL_SECONDS,
   MEDIA_CACHE_TTL_SECONDS,
+  encode,
+  decode,
+  routeMetadata,
 };
