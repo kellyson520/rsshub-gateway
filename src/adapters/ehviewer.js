@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
-import { cdata, escapeXml } from '../feed-transform.js';
-import { asDate, matchesHost } from '../http-utils.js';
+import { asDate, cdata, escapeXml, matchesHost } from '../http-utils.js';
 
 const RANKING_PERIODS = Object.freeze({
   day: { query: '15', label: '昨日热度' },

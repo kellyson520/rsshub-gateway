@@ -2,9 +2,8 @@ import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
-import { escapeHtml } from './feed-transform.js';
 import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
-import { clamp, cleanText } from './http-utils.js';
+import { clamp, cleanText, escapeHtml } from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';

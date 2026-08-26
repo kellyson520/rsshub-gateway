@@ -380,6 +380,20 @@ test('cleanText collapses whitespace and trims string cleanly', async () => {
   assert.equal(cleanText(12345), '12345');
 });
 
+test('escapeHtml, escapeXml and cdata safely encode text entities and CDATA payload blocks', async () => {
+  const { escapeHtml, escapeXml, cdata } = await import('../src/http-utils.js');
+
+  assert.equal(escapeHtml('<div class="box" id=\'1\'>Tom & Jerry</div>'), '&lt;div class=&quot;box&quot; id=&#39;1&#39;&gt;Tom &amp; Jerry&lt;/div&gt;');
+  assert.equal(escapeHtml(null), '');
+
+  assert.equal(escapeXml('<item title="A&B\'s">test</item>'), '&lt;item title=&quot;A&amp;B&apos;s&quot;&gt;test&lt;/item&gt;');
+  assert.equal(escapeXml(null), '');
+
+  assert.equal(cdata('raw text'), '<![CDATA[raw text]]>');
+  assert.equal(cdata('a ]]> b'), '<![CDATA[a ]]]]><![CDATA[> b]]>');
+  assert.equal(cdata(null), '<![CDATA[]]>');
+});
+
 test('atomicWriteJson safely creates target directory and writes valid JSON atomically', async () => {
   const { atomicWriteJson } = await import('../src/http-utils.js');
   const os = await import('node:os');

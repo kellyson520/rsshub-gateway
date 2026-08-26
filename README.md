@@ -379,6 +379,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
   - `failureMessage(kind, pageNumber)`, `cleanText(value)`: Standardized multilingual gallery degradation messaging and text whitespace normalizer.
+  - `escapeHtml(value)`, `escapeXml(value)`, `cdata(value)`: Standardized DOM entity and XML/CDATA payload encoders.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.

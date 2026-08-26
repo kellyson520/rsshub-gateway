@@ -1,8 +1,7 @@
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from '../signed-target.js';
-import { escapeHtml } from '../feed-transform.js';
-import { matchesHost } from '../http-utils.js';
+import { escapeHtml, matchesHost } from '../http-utils.js';
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;

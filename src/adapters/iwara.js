@@ -1,6 +1,5 @@
 import { createMediaSignedTarget } from '../signed-target.js';
-import { cdata, escapeXml } from '../feed-transform.js';
-import { jwtExpiryMs, matchesHost } from '../http-utils.js';
+import { cdata, escapeXml, jwtExpiryMs, matchesHost } from '../http-utils.js';
 
 export {
   API_BASE,
