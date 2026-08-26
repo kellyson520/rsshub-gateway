@@ -195,6 +195,18 @@ export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now()
   return createSignedTarget(url, secret, expiresAt - now, now, metadata);
 }
 
+export function isTargetSignatureValid(token, secret) {
+  const [payload, signature] = String(token || '').split('.');
+  if (!payload || !signature) return false;
+  try {
+    const expected = createHmac('sha256', secret).update(payload).digest();
+    const actual = Buffer.from(signature, 'base64url');
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
 export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000)) {
   const [payload, signature] = String(token).split('.');
   if (!payload || !signature) {

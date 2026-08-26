@@ -33,14 +33,19 @@ test('uses one signed media URL for each cache day', () => {
 });
 
 test('accepts Telegram post and media hosts', () => {
-  assert.equal(
-    verifySignedTarget(createSignedTarget('https://t.me/baipiaotg/67333', 'secret'), 'secret').url,
-    'https://t.me/baipiaotg/67333',
-  );
-  assert.equal(
-    verifySignedTarget(createSignedTarget('https://cdn5.telesco.pe/file/demo.jpg', 'secret'), 'secret').url,
-    'https://cdn5.telesco.pe/file/demo.jpg',
-  );
+  assert.equal(verifySignedTarget(createSignedTarget('https://t.me/baipiaotg/67333', 'secret'), 'secret').url, 'https://t.me/baipiaotg/67333');
+  assert.equal(verifySignedTarget(createSignedTarget('https://cdn5.telesco.pe/file/demo.jpg', 'secret'), 'secret').url, 'https://cdn5.telesco.pe/file/demo.jpg');
+});
+
+test('isTargetSignatureValid verifies cryptographic signature without decoding payload', async () => {
+  const { isTargetSignatureValid } = await import('../src/signed-target.js');
+  const validToken = createSignedTarget('https://www.iwara.tv/video/abc', 'secret');
+  assert.equal(isTargetSignatureValid(validToken, 'secret'), true);
+  assert.equal(isTargetSignatureValid(validToken, 'wrong-secret'), false);
+  assert.equal(isTargetSignatureValid(`${validToken}tampered`, 'secret'), false);
+  assert.equal(isTargetSignatureValid('malformed-token', 'secret'), false);
+  assert.equal(isTargetSignatureValid(null, 'secret'), false);
+  assert.equal(isTargetSignatureValid(undefined, 'secret'), false);
 });
 
 test('allows common RSSHub feed media CDNs', () => {
