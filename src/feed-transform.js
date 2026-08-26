@@ -181,6 +181,13 @@ function matchesFilters($, entry, filters = {}) {
   return false;
 }
 
+export {
+  decodeTextEntities,
+  normalizeNumericEntities,
+  isValidXmlCodePoint,
+  rewriteHtml,
+};
+
 export function transformFeed(xml, options = {}) {
   if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
     return '';

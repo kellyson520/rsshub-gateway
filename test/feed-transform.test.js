@@ -189,3 +189,11 @@ test('transformFeed applies keyword and author filtering rules properly', () => 
   assert.doesNotMatch(filtered, /Another Post/);
   assert.doesNotMatch(filtered, /blocked_user/);
 });
+
+test('exports helper methods for direct XML entity and code point manipulations', async () => {
+  const { decodeTextEntities, normalizeNumericEntities, isValidXmlCodePoint } = await import('../src/feed-transform.js');
+  assert.equal(decodeTextEntities('&lt;hello&gt; &amp; &quot;world&quot;'), '<hello> & "world"');
+  assert.equal(normalizeNumericEntities('&#x4f60;&#x597d;'), '你好');
+  assert.equal(isValidXmlCodePoint(0x20), true);
+  assert.equal(isValidXmlCodePoint(0x0), false);
+});
