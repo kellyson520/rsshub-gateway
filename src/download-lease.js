@@ -1,17 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
+import { decode, encode, isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
 const DEFAULT_MAX_CONCURRENCY = 8;
-
-function encode(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function decode(value) {
-  return Buffer.from(value, 'base64url').toString('utf8');
-}
 
 /**
  * One-time, short-lived download leases.
