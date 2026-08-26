@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { sha256Hex } from './http-utils.js';
+import { atomicWriteJson, sha256Hex } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -111,13 +111,10 @@ export function createResponseCache({
   let operationSequence = 0;
 
   async function writeIndex() {
-    const payload = JSON.stringify({ version: 1, entries: [...entries.values()] });
-    const tempPath = `${indexPath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await fsp.writeFile(tempPath, payload, 'utf8');
-      await fsp.rename(tempPath, indexPath);
+      await atomicWriteJson(indexPath, { version: 1, entries: [...entries.values()] }, { mode: null, dirMode: 0o755 });
     } catch {
-      await fsp.rm(tempPath, { force: true }).catch(() => {});
+      // Best-effort index persistence.
     }
   }
 

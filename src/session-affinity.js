@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { canonicalHeadersString, dedupe, hmacSha256, sha256Hex } from './http-utils.js';
+import { atomicWriteJson, canonicalHeadersString, dedupe, hmacSha256, sha256Hex } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -91,17 +91,10 @@ export function createSessionAffinity({
   }
 
   async function writeRecords() {
-    const payload = JSON.stringify({ version: VERSION, records: [...records.values()] });
-    const directory = path.dirname(targetFile);
-    const temporary = `${targetFile}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
-      await fsp.writeFile(temporary, payload, { encoding: 'utf8', mode: 0o600 });
-      await fsp.chmod(temporary, 0o600);
-      await fsp.rename(temporary, targetFile);
-      await fsp.chmod(targetFile, 0o600);
+      await atomicWriteJson(targetFile, { version: VERSION, records: [...records.values()] }, { mode: 0o600, dirMode: 0o700 });
     } catch {
-      await fsp.rm(temporary, { force: true }).catch(() => {});
+      // Best-effort persistence.
     }
   }
 

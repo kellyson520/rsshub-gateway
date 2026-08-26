@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
+import { atomicWriteJson } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -66,17 +67,10 @@ export function createDownloadSessionStore({
   }
 
   async function writeRecords() {
-    const payload = JSON.stringify({ version: VERSION, sessions: [...sessions.values()] });
-    const directory = path.dirname(targetFile);
-    const temporary = `${targetFile}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
-      await fsp.writeFile(temporary, payload, { encoding: 'utf8', mode: 0o600 });
-      await fsp.chmod(temporary, 0o600);
-      await fsp.rename(temporary, targetFile);
-      await fsp.chmod(targetFile, 0o600);
+      await atomicWriteJson(targetFile, { version: VERSION, sessions: [...sessions.values()] }, { mode: 0o600, dirMode: 0o700 });
     } catch {
-      await fsp.rm(temporary, { force: true }).catch(() => {});
+      // Best-effort persistence.
     }
   }
 

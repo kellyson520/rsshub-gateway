@@ -1,4 +1,7 @@
 import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 
 export function readSecret() {
@@ -371,8 +374,6 @@ export function createConcurrencyLimiter(limit) {
   };
 }
 
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-
 export function sha256Hex(value) {
   return createHash('sha256').update(String(value ?? '')).digest('hex');
 }
@@ -446,6 +447,24 @@ export function asDate(value) {
   const normalized = String(value || '').trim().replace(' ', 'T');
   const date = normalized ? new Date(`${normalized}Z`) : null;
   return date && Number.isNaN(date.getTime()) ? '' : date?.toUTCString() || '';
+}
+
+export async function atomicWriteJson(targetFile, data, { mode = 0o600, dirMode = 0o700, indent } = {}) {
+  if (!targetFile) return false;
+  const payload = typeof data === 'string' ? data : (indent ? JSON.stringify(data, null, indent) : JSON.stringify(data));
+  const directory = path.dirname(targetFile);
+  const temporary = `${targetFile}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fsp.mkdir(directory, { recursive: true, mode: dirMode });
+    await fsp.writeFile(temporary, payload, { encoding: 'utf8', mode });
+    if (mode) await fsp.chmod(temporary, mode).catch(() => {});
+    await fsp.rename(temporary, targetFile);
+    if (mode) await fsp.chmod(targetFile, mode).catch(() => {});
+    return true;
+  } catch (error) {
+    await fsp.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 export {

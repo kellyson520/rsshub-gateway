@@ -350,6 +350,28 @@ test('normalizeHeaderMap and canonicalHeadersString sort and sanitize headers de
   assert.equal(canonicalHeadersString(undefined), '');
 });
 
+test('atomicWriteJson safely creates target directory and writes valid JSON atomically', async () => {
+  const { atomicWriteJson } = await import('../src/http-utils.js');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const fsp = await import('node:fs/promises');
+
+  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'atomic-json-'));
+  const targetFile = path.join(tmpDir, 'nested', 'sub', 'test.json');
+
+  try {
+    const ok = await atomicWriteJson(targetFile, { a: 1, b: 'two' }, { mode: 0o600 });
+    assert.equal(ok, true);
+
+    const content = JSON.parse(await fsp.readFile(targetFile, 'utf8'));
+    assert.deepEqual(content, { a: 1, b: 'two' });
+
+    assert.equal(await atomicWriteJson(null, { a: 1 }), false);
+  } finally {
+    await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

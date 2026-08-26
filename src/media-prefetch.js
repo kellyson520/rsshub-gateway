@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
-import { boundedInteger, clamp, safeEvent, sleep as defaultSleep } from './http-utils.js';
+import { atomicWriteJson, boundedInteger, clamp, safeEvent, sleep as defaultSleep } from './http-utils.js';
 import {
   isRetryableStatus as retryableStatus,
   isSuccessfulStatus as successfulStatus,
@@ -104,14 +104,7 @@ export function createMediaPrefetchQueue(options = {}) {
     if (!persistEnabled) return Promise.resolve();
     const items = [...records.values()].map((record) => ({ ...record }));
     persistChain = persistChain.then(async () => {
-      await fsp.mkdir(path.dirname(queueFile), { recursive: true });
-      const tempFile = `${queueFile}.${process.pid}.${randomUUID()}.tmp`;
-      try {
-        await fsp.writeFile(tempFile, JSON.stringify({ version: 1, items }), 'utf8');
-        await fsp.rename(tempFile, queueFile);
-      } finally {
-        await fsp.rm(tempFile, { force: true }).catch(() => {});
-      }
+      await atomicWriteJson(queueFile, { version: 1, items }, { mode: null, dirMode: 0o755 });
     }, async () => {}).catch(() => {});
     return persistChain;
   }
