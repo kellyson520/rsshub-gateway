@@ -366,6 +366,8 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `initialEhGalleryManifest(opts)`: Pure cold-start gallery preview manifest constructor.
   - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
+  - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`: High-performance cryptographic digest and HMAC serializers.
+  - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
   - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
