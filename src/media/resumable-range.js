@@ -76,6 +76,10 @@ function pipeAttempt(stream, res, onBytes, onAbort) {
   });
 }
 
+export function isResumableStatus(status) {
+  return Number.isInteger(status) && (status === 200 || status === 206);
+}
+
 export async function pumpResumableRange({
   response,
   fetchRange,

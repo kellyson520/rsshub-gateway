@@ -226,3 +226,14 @@ test('pumpResumableRange handles null or invalid response gracefully', async () 
   assert.equal(result.written, 0);
   assert.equal(truncatedCalls, 1);
 });
+
+test('isResumableStatus identifies 200 and 206 HTTP status codes correctly', async () => {
+  const { isResumableStatus } = await import('../src/media/resumable-range.js');
+  assert.equal(isResumableStatus(200), true);
+  assert.equal(isResumableStatus(206), true);
+  assert.equal(isResumableStatus(404), false);
+  assert.equal(isResumableStatus(500), false);
+  assert.equal(isResumableStatus(null), false);
+  assert.equal(isResumableStatus(undefined), false);
+  assert.equal(isResumableStatus('200'), false);
+});
