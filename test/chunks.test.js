@@ -51,3 +51,17 @@ test('handles invalid and negative totalBytes in chunkSizeFor', () => {
   assert.deepEqual(chunkSizeFor(undefined, 2), { count: 1, size: 256 * 1024 });
   assert.deepEqual(chunkSizeFor(NaN, 2), { count: 1, size: 256 * 1024 });
 });
+
+test('planChunks partitions totalBytes into ordered bounded chunk ranges', async () => {
+  const { planChunks } = await import('../src/media/chunks.js');
+  const chunks = planChunks(1000, { chunkSize: 400 });
+  assert.equal(chunks.length, 3);
+  assert.deepEqual(chunks[0], { index: 0, start: 0, end: 399, size: 400 });
+  assert.deepEqual(chunks[1], { index: 1, start: 400, end: 799, size: 400 });
+  assert.deepEqual(chunks[2], { index: 2, start: 800, end: 999, size: 200 });
+
+  // Edge cases
+  assert.deepEqual(planChunks(0), []);
+  assert.deepEqual(planChunks(-100), []);
+  assert.deepEqual(planChunks(null), []);
+});

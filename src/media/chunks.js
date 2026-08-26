@@ -57,3 +57,30 @@ export function chunkSizeFor(totalBytes, chunks, {
   const size = Math.min(max, Math.max(min, align64k(totalBytes / count)));
   return { count, size };
 }
+
+export function planChunks(totalBytes, {
+  chunkSize,
+  chunks,
+  min = MIN_CHUNK_SIZE,
+  max = MAX_CHUNK_SIZE,
+  bytesPerSecond,
+  targetSeconds,
+} = {}) {
+  const safeTotal = Number.isSafeInteger(totalBytes) && totalBytes > 0 ? totalBytes : 0;
+  if (safeTotal === 0) return [];
+  const plan = chunkSizeFor(safeTotal, chunks, { min, max, bytesPerSecond, targetSeconds });
+  const effectiveSize = Number.isInteger(chunkSize) && chunkSize > 0 ? chunkSize : plan.size;
+  const list = [];
+  let index = 0;
+  for (let offset = 0; offset < safeTotal; offset += effectiveSize) {
+    const end = Math.min(offset + effectiveSize - 1, safeTotal - 1);
+    list.push({
+      index,
+      start: offset,
+      end,
+      size: end - offset + 1,
+    });
+    index += 1;
+  }
+  return list;
+}
