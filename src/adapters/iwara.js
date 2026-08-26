@@ -1,5 +1,12 @@
 import { createMediaSignedTarget } from '../signed-target.js';
 
+export {
+  API_BASE,
+  SITE_BASE,
+  escapeXml,
+  cdata,
+};
+
 export const name = 'iwara';
 export const publiclyReadable = true;
 

@@ -4,6 +4,7 @@ import * as xAdapter from '../src/adapters/x.js';
 import * as instagramAdapter from '../src/adapters/instagram.js';
 import * as telegramAdapter from '../src/adapters/telegram.js';
 import * as pixivAdapter from '../src/adapters/pixiv.js';
+import * as iwaraAdapter from '../src/adapters/iwara.js';
 
 // ===== X (Twitter) Adapter 测试 =====
 
@@ -106,4 +107,18 @@ test('pixivAdapter: matches domains and sets referer header', () => {
   const authenticated = pixivAdapter.headers({ cookie: 'PHPSESSID=123' }, { includeCredentials: true });
   assert.equal(authenticated.cookie, 'PHPSESSID=123');
   assert.equal(authenticated.referer, 'https://www.pixiv.net/');
+});
+
+// ===== Iwara Adapter 测试 =====
+
+test('iwaraAdapter: matches domains and exports configuration constants', () => {
+  assert.equal(iwaraAdapter.matches('iwara.tv'), true);
+  assert.equal(iwaraAdapter.matches('www.iwara.tv'), true);
+  assert.equal(iwaraAdapter.matches('api.iwara.tv'), true);
+  assert.equal(iwaraAdapter.matches('other.tv'), false);
+
+  assert.equal(iwaraAdapter.API_BASE, 'https://api.iwara.tv');
+  assert.equal(iwaraAdapter.SITE_BASE, 'https://iwara.tv');
+  assert.equal(iwaraAdapter.escapeXml('<foo & bar>'), '&lt;foo &amp; bar&gt;');
+  assert.equal(iwaraAdapter.cdata('test'), '<![CDATA[test]]>');
 });
