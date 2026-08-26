@@ -33,11 +33,15 @@ export {
   isSuccess,
   isRetryable,
   poolError,
+  safeEvent,
   DEFAULT_MIN_CONCURRENCY_PER_LANE,
   DEFAULT_MAX_CONCURRENCY_PER_LANE,
   DEFAULT_SUCCESS_RAMP_AFTER,
   DEFAULT_COOLDOWN_MS,
   DEFAULT_BACKGROUND_RESERVE_PER_LANE,
+  EWMA_ALPHA,
+  MAX_LATENCY_SAMPLE_MS,
+  RETRYABLE_STATUSES,
 };
 
 export function createEgressPool(options = {}) {

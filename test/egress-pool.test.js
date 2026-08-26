@@ -295,3 +295,27 @@ test('exports pool predicate functions and concurrency constants', async () => {
   assert.equal(DEFAULT_COOLDOWN_MS, 500);
   assert.equal(DEFAULT_BACKGROUND_RESERVE_PER_LANE, 1);
 });
+
+test('exports EWMA_ALPHA, MAX_LATENCY_SAMPLE_MS, RETRYABLE_STATUSES and safeEvent', async () => {
+  const {
+    EWMA_ALPHA,
+    MAX_LATENCY_SAMPLE_MS,
+    RETRYABLE_STATUSES,
+    safeEvent,
+  } = await import('../src/egress-pool.js');
+
+  assert.equal(EWMA_ALPHA, 0.2);
+  assert.equal(MAX_LATENCY_SAMPLE_MS, 10_000);
+  assert.ok(RETRYABLE_STATUSES instanceof Set);
+  assert.ok(RETRYABLE_STATUSES.has(429));
+  assert.ok(RETRYABLE_STATUSES.has(408));
+
+  let eventRecorded = null;
+  safeEvent((e) => { eventRecorded = e; }, { state: 'test' });
+  assert.deepEqual(eventRecorded, { state: 'test' });
+
+  // Error throwing inside onEvent should be silently caught
+  assert.doesNotThrow(() => {
+    safeEvent(() => { throw new Error('diagnostics exploded'); }, { state: 'test' });
+  });
+});
