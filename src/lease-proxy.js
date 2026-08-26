@@ -28,6 +28,11 @@ function parseAuthority(value) {
  * Tunnels are chained through the mihomo mixed proxy so egress follows the
  * same rules as gateway fetches (for example iwara.tv -> sticky lanes).
  */
+export {
+  parseProxyAuth,
+  parseAuthority,
+};
+
 export function createLeaseProxy({
   leaseStore,
   upstreamProxyHost = '127.0.0.1',

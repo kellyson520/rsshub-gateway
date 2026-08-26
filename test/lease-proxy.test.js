@@ -246,3 +246,22 @@ test('parseProxyAuth and parseAuthority handle invalid inputs gracefully', async
   assert.match(responseText, /host not allowed by lease/);
   proxy.close();
 });
+
+test('exports parseProxyAuth and parseAuthority parsing utilities', async () => {
+  const { parseProxyAuth, parseAuthority } = await import('../src/lease-proxy.js');
+
+  const authHeader = `Basic ${Buffer.from('admin_user:secret_pass').toString('base64')}`;
+  assert.deepEqual(parseProxyAuth(authHeader), {
+    username: 'admin_user',
+    password: 'secret_pass',
+  });
+  assert.equal(parseProxyAuth('Bearer token'), null);
+  assert.equal(parseProxyAuth(null), null);
+
+  assert.deepEqual(parseAuthority('example.com:443'), {
+    hostname: 'example.com',
+    port: 443,
+  });
+  assert.equal(parseAuthority('invalid_authority'), null);
+  assert.equal(parseAuthority(null), null);
+});
