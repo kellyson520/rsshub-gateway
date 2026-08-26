@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { atomicWriteJson, isSha256Hex, positiveInteger, sha256Hex } from './http-utils.js';
+import { atomicWriteJson, isSha256Hex, positiveInteger, safeJsonParse, sha256Hex } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -136,7 +136,8 @@ export function createResponseCache({
     await fsp.mkdir(cacheRoot, { recursive: true }).catch(() => {});
     let parsed;
     try {
-      parsed = JSON.parse(await fsp.readFile(indexPath, 'utf8'));
+      const content = await fsp.readFile(indexPath, 'utf8');
+      parsed = safeJsonParse(content, { entries: [] });
     } catch {
       parsed = { entries: [] };
     }

@@ -285,6 +285,17 @@ test('isBearerAuthorized validates authorization header in constant time', async
   assert.equal(isBearerAuthorized(`Bearer ${token}`, null), false);
 });
 
+test('safeJsonParse parses valid json safely and returns fallback for corrupt payloads', async () => {
+  const { safeJsonParse } = await import('../src/http-utils.js');
+
+  assert.deepEqual(safeJsonParse('{"a":1,"b":"two"}'), { a: 1, b: 'two' });
+  assert.deepEqual(safeJsonParse(Buffer.from('["item1","item2"]')), ['item1', 'item2']);
+  assert.deepEqual(safeJsonParse({ already: 'object' }), { already: 'object' });
+  assert.equal(safeJsonParse('{corrupted json', 'fallback-val'), 'fallback-val');
+  assert.equal(safeJsonParse(null, 'default'), 'default');
+  assert.equal(safeJsonParse(undefined, 'default'), 'default');
+});
+
 test('readJsonBody parses stream payload into JSON object', async () => {
   const { Readable } = await import('node:stream');
   const { readJsonBody } = await import('../src/http-utils.js');

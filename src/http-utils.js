@@ -87,15 +87,22 @@ export function matchesHost(hostname, hosts) {
   return list.some((base) => isHostOrSubdomain(h, base));
 }
 
+export function safeJsonParse(value, fallback = null) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object' && !Buffer.isBuffer(value)) return value;
+  try {
+    const text = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+
 export function parseHostList(value) {
   if (!value) return [];
-  try {
-    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-    if (Array.isArray(parsed)) {
-      return dedupe(parsed.map(String).map((host) => host.trim().toLowerCase()).filter(Boolean));
-    }
-  } catch {
-    // Fall through to comma-separated string parsing.
+  const parsed = safeJsonParse(value, null);
+  if (Array.isArray(parsed)) {
+    return dedupe(parsed.map(String).map((host) => host.trim().toLowerCase()).filter(Boolean));
   }
   return dedupe(String(value).split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
 }
@@ -291,22 +298,16 @@ export function parseStatusList(value, fallback = []) {
 }
 
 export function parseProbeTargets(value, legacyProbeUrl) {
-  if (value && typeof value === 'string') {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      // Fall through to default targets.
-    }
-  }
-  if (value && typeof value === 'object') {
+  const parsed = safeJsonParse(value, null);
+  if (parsed && typeof parsed === 'object') {
     const list = (input) => {
       if (!input) return [];
       return (Array.isArray(input) ? input : [input]).map(String).filter(Boolean);
     };
     return {
-      public: list(value.public),
-      sticky: list(value.sticky),
-      hosts: value.hosts && typeof value.hosts === 'object' ? value.hosts : {},
+      public: list(parsed.public),
+      sticky: list(parsed.sticky),
+      hosts: parsed.hosts && typeof parsed.hosts === 'object' ? parsed.hosts : {},
     };
   }
   return {
@@ -449,12 +450,11 @@ export function safeEvent(onEvent, event) {
 }
 
 export function decodeJwtPayload(value) {
-  try {
-    const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
-    return payload && typeof payload === 'object' ? payload : null;
-  } catch {
-    return null;
-  }
+  const parts = String(value || '').split('.');
+  if (parts.length < 2) return null;
+  const decoded = Buffer.from(parts[1], 'base64url').toString('utf8');
+  const payload = safeJsonParse(decoded, null);
+  return payload && typeof payload === 'object' ? payload : null;
 }
 
 export function jwtExpiryMs(value, { now = Date.now } = {}) {

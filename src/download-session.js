@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
-import { atomicWriteJson } from './http-utils.js';
+import { atomicWriteJson, safeJsonParse } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -84,7 +84,8 @@ export function createDownloadSessionStore({
     if (!targetFile) return;
     let payload;
     try {
-      payload = JSON.parse(await fsp.readFile(targetFile, 'utf8'));
+      const content = await fsp.readFile(targetFile, 'utf8');
+      payload = safeJsonParse(content, null);
     } catch {
       return;
     }

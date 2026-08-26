@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
-import { atomicWriteJson, boundedInteger, clamp, safeEvent, sleep as defaultSleep } from './http-utils.js';
+import { atomicWriteJson, boundedInteger, clamp, safeEvent, safeJsonParse, sleep as defaultSleep } from './http-utils.js';
 import {
   isRetryableStatus as retryableStatus,
   isSuccessfulStatus as successfulStatus,
@@ -250,7 +250,8 @@ export function createMediaPrefetchQueue(options = {}) {
     }
     await fsp.mkdir(path.dirname(queueFile), { recursive: true }).catch(() => {});
     try {
-      const parsed = JSON.parse(await fsp.readFile(queueFile, 'utf8'));
+      const content = await fsp.readFile(queueFile, 'utf8');
+      const parsed = safeJsonParse(content, null);
       for (const item of Array.isArray(parsed?.items) ? parsed.items : []) {
         const target = String(item?.target || '');
         const enqueuedAt = Number(item?.enqueuedAt);

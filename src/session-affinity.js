@@ -8,6 +8,7 @@ import {
   dedupe,
   hmacSha256,
   isSha256Hex,
+  safeJsonParse,
   sha256Hex,
 } from './http-utils.js';
 
@@ -112,7 +113,8 @@ export function createSessionAffinity({
   async function load() {
     let payload;
     try {
-      payload = JSON.parse(await fsp.readFile(targetFile, 'utf8'));
+      const content = await fsp.readFile(targetFile, 'utf8');
+      payload = safeJsonParse(content, null);
     } catch {
       return;
     }
