@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import readline from 'node:readline';
 import { createFetchdClient, fetchdJson } from './fetchd.js';
 import { GatewayUpstreamError } from './upstream-errors.js';
+import { positiveInteger } from './http-utils.js';
 
 const DEFAULT_WORKER_PATH = new URL('./fetch-worker.py', import.meta.url).pathname;
 export const DEFAULT_PYTHON_BIN = 'python3';
@@ -50,7 +51,7 @@ export function createBrowserFetchClient({
   pythonBin = process.env.BROWSER_FETCH_PYTHON || DEFAULT_PYTHON_BIN,
   httpFallbackUrl = process.env.IWARA_FETCHD_URL || '',
   impersonate = process.env.FETCHD_IMPERSONATE || DEFAULT_IMPERSONATE,
-  maxBody = Number.parseInt(process.env.FETCHD_MAX_BODY || '', 10) || DEFAULT_MAX_BODY,
+  maxBody = positiveInteger(process.env.FETCHD_MAX_BODY, DEFAULT_MAX_BODY),
   spawnImpl = nodeSpawn,
   canSpawn = () => true,
 } = {}) {

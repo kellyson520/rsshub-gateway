@@ -3,7 +3,7 @@ import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
-import { clamp, cleanText, escapeHtml } from './http-utils.js';
+import { clamp, cleanText, escapeHtml, nonNegativeInteger } from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
@@ -267,7 +267,7 @@ export function renderEhImageSequence({
       : ''),
   })).filter((page) => page.media);
   const safeTotalPages = Math.max(Number(totalPages) || pages.length, pages.length);
-  const eagerCount = clamp(Number.parseInt(preloadCount, 10) || 0, 0, renderedPages.length);
+  const eagerCount = clamp(nonNegativeInteger(preloadCount, 0), 0, renderedPages.length);
   const readerTitle = `${title || 'E-Hentai 画廊'} · 连续阅读 · 共 ${safeTotalPages} 页`;
   const summary = `<p class="eh-image-summary">已加载 ${renderedPages.length} / ${safeTotalPages} 页</p>`;
   const imageBlocks = renderedPages.map((page, index) => {

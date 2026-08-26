@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { atomicWriteJson, isSha256Hex, sha256Hex } from './http-utils.js';
+import { atomicWriteJson, isSha256Hex, positiveInteger, sha256Hex } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -78,7 +78,7 @@ export {
 
 export function createResponseCache({
   root = process.env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT,
-  maxBytes = Number.parseInt(process.env.GATEWAY_CACHE_MAX_BYTES || '', 10) || DEFAULT_MAX_BYTES,
+  maxBytes = positiveInteger(process.env.GATEWAY_CACHE_MAX_BYTES, DEFAULT_MAX_BYTES),
   ttlSeconds = {},
   evictionPriority = {},
   now = () => Date.now(),
