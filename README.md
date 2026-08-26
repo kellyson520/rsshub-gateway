@@ -300,8 +300,32 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `fingerprintFor(credentials, secret)`: Deterministic SHA-256 hashing preserving zero plaintext.
   - `chooseLane(fingerprint, laneIds)`: Consistent hash-ring candidate selection.
 - **HTML Transformation & Enclosure Extractors (`src/feed-transform.js`)**:
-  - `decodeTextEntities(str)`, `normalizeNumericEntities(str)`, `isValidXmlCodePoint(cp)`: Robust XML/HTML sanitization.
-  - `rewriteHtml(html, transformUrl)`: High-performance streaming image tag rewriter.
+  - `decodeEntity(entity)`, `decodeTextEntities(str)`, `normalizeNumericEntities(str)`, `isValidXmlCodePoint(cp)`: Robust XML/HTML entity decoding and code point sanitization.
+  - `rewriteHtml(html, transformUrl)`: High-performance streaming image and media tag rewriter.
+  - `matchesFilters($, entry, filters)`: Keyword and author blacklist predicate filter.
+  - `NAMED_ENTITIES`: XML standard named entity mappings.
+- **HTTP Encoding Negotiation & Stream Compression (`src/http-encoding.js`)**:
+  - `acceptsCoding(header, coding)`, `acceptsBrotli(header)`, `acceptsGzip(header)`: Safe HTTP `Accept-Encoding` negotiation and quality factor parsing (`q=0`).
+  - `isCompressibleContentType(type)`: Safe MIME format text compression predicate.
+  - `withVary(headers)`: Idempotent `Vary: Accept-Encoding` response header builder.
+  - `COMPRESSIBLE_CONTENT_TYPES`, `DEFAULT_HTML_BROTLI_MIN_BYTES`, `DEFAULT_HTML_BROTLI_QUALITY`: Compression tuning standards.
+- **Adaptive Media Transport, Resumable Range & Chunks (`src/media/media-transport.js`, `src/media/resumable-range.js`, `src/media/chunks.js`)**:
+  - `sliceRanges(start, end, size, opts)`: 64KiB sector-aligned media slice range planner with lookahead.
+  - `adaptiveChunkSize(totalBytes, opts)`, `chunkSizeFor(totalBytes, chunks, opts)`, `planChunks(totalBytes, opts)`: Adaptive byte-range partitioning.
+  - `pipeAttempt(stream, res, onBytes, onAbort)`: Resilient single stream pump with backpressure (`drain` event pause/resume) and client abort tracking.
+  - `isResumableStatus(status)`: HTTP 200/206 status check for range streams.
+  - `SLICE_ALIGN`, `MIN_CHUNK_SIZE`, `MAX_CHUNK_SIZE`, `MAX_CHUNKS`: Shared 64KiB alignment and file slicing bounds.
+- **Background Tasks & Infrastructure Schedulers (`src/infrastructure/poller.js`, `src/graceful-shutdown.js`, `src/lease-backfill.js`)**:
+  - `createPoller(opts)`: Periodic background task execution with jitter to prevent thundering herds.
+  - `installGracefulShutdown(opts)`: Connection draining and signal trapping for zero-downtime restarts.
+  - `createLeaseBackfillQueue(opts)`: Background slice cache warmer for video download leases.
+  - `DEFAULT_POLLER_INTERVAL_MS`, `DEFAULT_POLLER_JITTER_RATIO`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_MAX_CONCURRENCY`: Infrastructure operational defaults.
+- **Content Sources & Adapters (`src/adapters/linuxdo.js`, `src/fetchd.js`, `src/reader.js`)**:
+  - `escapeHtml(value)`: Universal XSS-safe HTML entity escaper.
+  - `rewriteCookedHtml(html, opts)`: Discourse topic HTML sanitizer and media gateway link rewriter.
+  - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`: Pure topic route identification and ID extractor.
+  - `DEFAULT_BASE_URL` (Fetchd Sidecar), `SITE_BASE` (LINUX DO): Direct upstream integration bases.
+  - `EH_GALLERY_PATH`, `EH_IMAGE_PATH`, `READER_CSS`, `IMAGE_VARIANT_WIDTHS`: Universal reading engine styles and responsive breakpoints.
 
 ## Rollback
 
