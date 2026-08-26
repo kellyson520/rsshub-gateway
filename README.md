@@ -351,10 +351,13 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `HOTLINK_REFERERS`, `refererFor(url)`: Anti-hotlinking CDN source referer resolution table.
   - `withoutCredentials(headers)`, `isAuthenticationRedirect(res)`, `isAuthenticationChallenge(res, url, cb)`: Security boundary credentials stripping and challenge detection.
   - `safeHost(url)`, `browserFetchHost(url)`: Safe URL host normalizer and TLS browser fingerprint route classifier.
-- **Dynamic Microservice Frameworks, Gateways & Server Utilities (`src/fetcher-server.js`, `src/server.js`, `src/request-handler.js`, `src/gallery-benchmark.js`)**:
+- **Dynamic Microservice Frameworks, Gateways & Server Utilities (`src/fetcher-server.js`, `src/server.js`, `src/request-handler.js`, `src/gallery-benchmark.js`, `src/http-utils.js`)**:
   - `DEFAULT_FETCHER_PORT`, `DEFAULT_FETCHER_HOST`: Sidecar standalone server defaults (`8000` / `0.0.0.0`).
   - `registerDispatcherRoutes(opts)`, `unregisterDispatcherRoutes(opts)`: Sidecar lifecycle self-registration and teardown with backoff.
   - `HttpError`, `readRequestBody(req)`: Standard HTTP status error wrapper and raw payload buffer reader.
+  - `routeBucket(pathname)`: Fast prefix-based route category bucket parser for Prometheus and logging segregation.
+  - `initialEhGalleryManifest(opts)`: Pure cold-start gallery preview manifest constructor.
+  - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
   - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
