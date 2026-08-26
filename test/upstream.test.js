@@ -481,4 +481,12 @@ test('exports default upstream constants and authentication predicates', async (
 
   assert.equal(isAuthenticationRedirect(new Response(null, { status: 302, headers: { location: '/login' } })), true);
   assert.equal(isAuthenticationRedirect(new Response(null, { status: 200, headers: { location: '/login' } })), false);
+
+  const { isAuthenticationChallenge, sourceHeaders } = await import('../src/upstream.js');
+  assert.equal(await isAuthenticationChallenge(new Response(null, { status: 401 }), 'https://x.com/item/1'), true);
+  assert.equal(await isAuthenticationChallenge(new Response(null, { status: 200 }), 'https://x.com/item/1'), false);
+
+  const headers = sourceHeaders('https://javbus.com/sample', {});
+  assert.equal(headers['user-agent'], 'rsshub-gateway/0.1');
+  assert.equal(headers.referer, 'https://www.javbus.com/');
 });
