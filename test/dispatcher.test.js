@@ -298,3 +298,33 @@ test('compilePattern throws on misplaced star or handles special characters safe
   assert.equal(res.registered, 0);
   assert.equal(res.rejected, 1);
 });
+
+test('dispatcher exports pattern compilation, route normalization and helper utilities', async () => {
+  const {
+    compilePattern,
+    normalizeRoute,
+    matchSegments,
+    sidecarUrl,
+    cookiesObject,
+    DEFAULT_SIDECAR_TIMEOUT_MS,
+  } = await import('../src/dispatcher.js');
+
+  const pattern = compilePattern('/items/:id/:action?/*');
+  assert.equal(pattern.length, 4);
+  assert.equal(pattern[0].type, 'literal');
+  assert.equal(pattern[1].type, 'param');
+  assert.equal(pattern[2].type, 'optional');
+  assert.equal(pattern[3].type, 'star');
+
+  const matched = matchSegments(pattern, ['items', '99', 'view', 'extra', 'tail']);
+  assert.deepEqual(matched, { id: '99', action: 'view' });
+
+  assert.equal(sidecarUrl('sidecar://fetcher-test:8080/'), 'http://fetcher-test:8080');
+  assert.equal(sidecarUrl('invalid://url'), null);
+
+  assert.deepEqual(cookiesObject('a=1; b=2; c=val=ue'), { a: '1', b: '2', c: 'val=ue' });
+  assert.deepEqual(cookiesObject({ foo: 'bar' }), { foo: 'bar' });
+  assert.deepEqual(cookiesObject(null), {});
+
+  assert.equal(DEFAULT_SIDECAR_TIMEOUT_MS, 60_000);
+});

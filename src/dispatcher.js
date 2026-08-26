@@ -117,6 +117,15 @@ export function resolveRedirect(template, params = {}) {
   }).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 }
 
+export {
+  compilePattern,
+  normalizeRoute,
+  matchSegments,
+  sidecarUrl,
+  cookiesObject,
+  DEFAULT_SIDECAR_TIMEOUT_MS,
+};
+
 export function createDispatcher({
   routesFile = DEFAULT_ROUTES_FILE,
   readFileImpl = readFileSync,
