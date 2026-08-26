@@ -12,6 +12,15 @@ const MAX_CHUNK_SIZE = 16 * 1024 * 1024;
 const MAX_CHUNKS = 256;
 const DEFAULT_TARGET_SECONDS = 10;
 
+export {
+  MIN_CHUNK_SIZE,
+  MAX_CHUNK_SIZE,
+  MAX_CHUNKS,
+  DEFAULT_TARGET_SECONDS,
+  sizeTier,
+  align64k,
+};
+
 function sizeTier(totalBytes) {
   if (totalBytes <= 64 * 1024 * 1024) return 1024 * 1024;
   if (totalBytes <= 512 * 1024 * 1024) return 4 * 1024 * 1024;

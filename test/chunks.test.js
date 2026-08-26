@@ -65,3 +65,28 @@ test('planChunks partitions totalBytes into ordered bounded chunk ranges', async
   assert.deepEqual(planChunks(-100), []);
   assert.deepEqual(planChunks(null), []);
 });
+
+test('exports chunk partitioning constants and sizing utilities', async () => {
+  const {
+    MIN_CHUNK_SIZE,
+    MAX_CHUNK_SIZE,
+    MAX_CHUNKS,
+    DEFAULT_TARGET_SECONDS,
+    sizeTier,
+    align64k,
+  } = await import('../src/media/chunks.js');
+
+  assert.equal(MIN_CHUNK_SIZE, 256 * 1024);
+  assert.equal(MAX_CHUNK_SIZE, 16 * 1024 * 1024);
+  assert.equal(MAX_CHUNKS, 256);
+  assert.equal(DEFAULT_TARGET_SECONDS, 10);
+
+  assert.equal(sizeTier(10 * 1024 * 1024), 1024 * 1024);
+  assert.equal(sizeTier(100 * 1024 * 1024), 4 * 1024 * 1024);
+  assert.equal(sizeTier(1024 * 1024 * 1024), 8 * 1024 * 1024);
+  assert.equal(sizeTier(3 * 1024 ** 3), 16 * 1024 * 1024);
+
+  assert.equal(align64k(100), 64 * 1024);
+  assert.equal(align64k(64 * 1024), 64 * 1024);
+  assert.equal(align64k(64 * 1024 + 1), 128 * 1024);
+});
