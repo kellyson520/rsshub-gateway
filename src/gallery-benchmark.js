@@ -1,6 +1,17 @@
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const MEDIA_CONCURRENCY = 8;
 
+export {
+  LOCAL_HOSTS,
+  MEDIA_CONCURRENCY,
+  localGatewayUrl,
+  mediaUrls,
+  mapWithConcurrency,
+  numericContentLength,
+  durationCheckpoint,
+  variantUrl,
+};
+
 function localGatewayUrl(value) {
   let target;
   try {

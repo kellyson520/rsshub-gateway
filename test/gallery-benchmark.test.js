@@ -73,3 +73,40 @@ test('benchmarkGallery rejects URLs with credentials embedded in authority', asy
   );
 });
 
+test('exports benchmark helpers and concurrency constants', async () => {
+  const {
+    LOCAL_HOSTS,
+    MEDIA_CONCURRENCY,
+    mediaUrls,
+    variantUrl,
+    numericContentLength,
+    durationCheckpoint,
+    mapWithConcurrency,
+  } = await import('../src/gallery-benchmark.js');
+
+  assert.ok(LOCAL_HOSTS instanceof Set);
+  assert.ok(LOCAL_HOSTS.has('127.0.0.1'));
+  assert.ok(LOCAL_HOSTS.has('localhost'));
+  assert.equal(MEDIA_CONCURRENCY, 8);
+
+  const html = '<div><img src="/_gateway/media/abc"><img src="https://other.com/ext.jpg"></div>';
+  const urls = mediaUrls(html, new URL('http://127.0.0.1:1300/_gateway/item/token'));
+  assert.deepEqual(urls, ['http://127.0.0.1:1300/_gateway/media/abc']);
+
+  assert.equal(
+    variantUrl('http://127.0.0.1:1300/_gateway/media/token'),
+    'http://127.0.0.1:1300/_gateway/media/token?w=1920',
+  );
+
+  const mockRes = new Response(null, { headers: { 'content-length': '2048' } });
+  assert.equal(numericContentLength(mockRes), 2048);
+  assert.equal(numericContentLength(new Response(null)), 0);
+
+  const results = [{ completedAt: 100 }, { completedAt: 300 }, { completedAt: 200 }];
+  assert.equal(durationCheckpoint(results, 2), 200);
+  assert.equal(durationCheckpoint(results, 0), 0);
+
+  const mapped = await mapWithConcurrency([1, 2, 3], 2, async (x) => x * 10);
+  assert.deepEqual(mapped, [10, 20, 30]);
+});
+

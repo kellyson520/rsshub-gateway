@@ -125,3 +125,37 @@ test('unregisterDispatcherRoutes sends a DELETE with route ids', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('exports default constants, HttpError and readRequestBody helper', async () => {
+  const {
+    DEFAULT_FETCHER_PORT,
+    DEFAULT_FETCHER_HOST,
+    DEFAULT_REGISTER_RETRIES,
+    DEFAULT_REGISTER_RETRY_DELAY_MS,
+    DEFAULT_REGISTER_TIMEOUT_MS,
+    DEFAULT_UNREGISTER_TIMEOUT_MS,
+    HttpError,
+    readRequestBody,
+  } = await import('../src/fetcher-server.js');
+
+  assert.equal(DEFAULT_FETCHER_PORT, 8000);
+  assert.equal(DEFAULT_FETCHER_HOST, '0.0.0.0');
+  assert.equal(DEFAULT_REGISTER_RETRIES, 10);
+  assert.equal(DEFAULT_REGISTER_RETRY_DELAY_MS, 2000);
+  assert.equal(DEFAULT_REGISTER_TIMEOUT_MS, 5000);
+  assert.equal(DEFAULT_UNREGISTER_TIMEOUT_MS, 3000);
+
+  const err = new HttpError(404, 'custom not found');
+  assert.equal(err.status, 404);
+  assert.equal(err.message, 'custom not found');
+  assert.ok(err instanceof Error);
+
+  const { EventEmitter } = await import('node:events');
+  const mockReq = new EventEmitter();
+  const promise = readRequestBody(mockReq);
+  mockReq.emit('data', Buffer.from('hello '));
+  mockReq.emit('data', Buffer.from('world'));
+  mockReq.emit('end');
+  const body = await promise;
+  assert.equal(body, 'hello world');
+});

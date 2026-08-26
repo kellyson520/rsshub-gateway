@@ -1,5 +1,12 @@
 import { createServer } from 'node:http';
 
+export const DEFAULT_FETCHER_PORT = 8000;
+export const DEFAULT_FETCHER_HOST = '0.0.0.0';
+export const DEFAULT_REGISTER_RETRIES = 10;
+export const DEFAULT_REGISTER_RETRY_DELAY_MS = 2000;
+export const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
+export const DEFAULT_UNREGISTER_TIMEOUT_MS = 3000;
+
 export class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -43,7 +50,7 @@ export function createFetcherServer({ fetcher, health = () => ({ ok: true }), na
   });
 }
 
-export function listen(server, port = 8000, host = '0.0.0.0', name = 'fetcher') {
+export function listen(server, port = DEFAULT_FETCHER_PORT, host = DEFAULT_FETCHER_HOST, name = 'fetcher') {
   return new Promise((resolve) => server.listen(port, host, resolve))
     .then(() => {
       process.stdout.write(JSON.stringify({ event: `${name}_listening`, port, ts: new Date().toISOString() }) + '\n');
@@ -55,10 +62,10 @@ export async function registerDispatcherRoutes({
   token,
   routes,
   name = 'fetcher',
-  retries = 10,
-  retryDelayMs = 2000,
+  retries = DEFAULT_REGISTER_RETRIES,
+  retryDelayMs = DEFAULT_REGISTER_RETRY_DELAY_MS,
   fetchImpl = fetch,
-  timeoutMs = 5000,
+  timeoutMs = DEFAULT_REGISTER_TIMEOUT_MS,
 } = {}) {
   if (!url || !token || !Array.isArray(routes) || routes.length === 0) return false;
   const payload = JSON.stringify({ routes });
@@ -98,7 +105,7 @@ export async function unregisterDispatcherRoutes({
   routeIds,
   name = 'fetcher',
   fetchImpl = fetch,
-  timeoutMs = 3000,
+  timeoutMs = DEFAULT_UNREGISTER_TIMEOUT_MS,
 } = {}) {
   if (!url || !token || !Array.isArray(routeIds) || routeIds.length === 0) return;
   try {
@@ -122,7 +129,7 @@ export async function unregisterDispatcherRoutes({
   }
 }
 
-function readRequestBody(req) {
+export function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
