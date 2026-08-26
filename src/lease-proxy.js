@@ -1,6 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
-import { safeEvent, writeText } from './http-utils.js';
+import { positiveInteger, safeEvent, writeText } from './http-utils.js';
 
 const AUTH_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
 
@@ -17,7 +17,7 @@ function parseProxyAuth(header) {
 function parseAuthority(value) {
   const match = String(value || '').match(/^([^:]+):(\d+)$/);
   if (!match) return null;
-  return { hostname: match[1].toLowerCase(), port: Number.parseInt(match[2], 10) };
+  return { hostname: match[1].toLowerCase(), port: positiveInteger(match[2], 0) };
 }
 
 /**

@@ -135,8 +135,10 @@ export function createUpstreamClient({
   }
 
   function retryAfter(response) {
-    const value = Number.parseInt(response.headers.get('retry-after') || '', 10);
-    return Number.isFinite(value) ? clamp(value, 0, 60) : undefined;
+    const value = response.headers.get('retry-after');
+    if (value === null || value === undefined || value === '') return undefined;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? clamp(parsed, 0, 60) : undefined;
   }
 
   async function requestWithPolicy(url, {

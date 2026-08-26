@@ -1,5 +1,5 @@
 import { createMediaSignedTarget } from '../signed-target.js';
-import { cdata, escapeXml, jwtExpiryMs, matchesHost } from '../http-utils.js';
+import { cdata, escapeXml, jwtExpiryMs, matchesHost, nonNegativeInteger } from '../http-utils.js';
 
 export {
   API_BASE,
@@ -90,9 +90,9 @@ export function renderIwaraFeed({ username = '', kind = 'video', videos = [], se
     const thumbnailId = isImage ? video.thumbnail?.id : file.id;
     const thumbnail = thumbnailId ? iwaraThumbnailUrl(thumbnailId, 0) : '';
     const enclosure = isImage
-      ? (thumbnail ? `<enclosure url="${escapeXml(thumbnail)}" type="${escapeXml(file.mime || 'image/jpeg')}" length="${Number.parseInt(file.size, 10) || 0}"/>` : '')
+      ? (thumbnail ? `<enclosure url="${escapeXml(thumbnail)}" type="${escapeXml(file.mime || 'image/jpeg')}" length="${nonNegativeInteger(file.size, 0)}"/>` : '')
       : (isIwaraVideoTarget(link)
-        ? `<enclosure url="${escapeXml(link)}" type="video/mp4" length="${Number.parseInt(file.size, 10) || 0}"/>`
+        ? `<enclosure url="${escapeXml(link)}" type="video/mp4" length="${nonNegativeInteger(file.size, 0)}"/>`
         : '');
     const media = isImage
       ? (thumbnail ? `<media:content url="${escapeXml(thumbnail)}" type="image/jpeg" medium="image"/>` : '')
