@@ -916,3 +916,15 @@ test('imageVariantCacheUrl handles targets with pre-existing hashes safely', () 
   const url = imageVariantCacheUrl('https://example.com/photo.jpg#original-hash', 1080);
   assert.equal(url, 'https://example.com/photo.jpg#rsshub-gateway-v1-w1080');
 });
+
+test('exports CACHE_RESPONSE_HEADERS, IMAGE_VARIANT_CACHE_VERSION and SLICE_ALIGN constants', async () => {
+  const {
+    CACHE_RESPONSE_HEADERS,
+    IMAGE_VARIANT_CACHE_VERSION,
+    SLICE_ALIGN,
+  } = await import('../src/media/media-transport.js');
+
+  assert.ok(Array.isArray(CACHE_RESPONSE_HEADERS));
+  assert.equal(IMAGE_VARIANT_CACHE_VERSION, 'v1');
+  assert.equal(SLICE_ALIGN, 64 * 1024);
+});

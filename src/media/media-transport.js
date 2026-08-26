@@ -4,6 +4,12 @@ const CACHE_RESPONSE_HEADERS = ['content-type', 'content-length', 'etag', 'last-
 const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 const SLICE_ALIGN = 64 * 1024;
 
+export {
+  CACHE_RESPONSE_HEADERS,
+  IMAGE_VARIANT_CACHE_VERSION,
+  SLICE_ALIGN,
+};
+
 export function sliceRanges(start, end, size, {
   sliceSize = 4 * 1024 * 1024,
   lookahead = 16 * 1024 * 1024,
