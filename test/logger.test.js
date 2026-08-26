@@ -107,3 +107,17 @@ test('createLogger: handles null or undefined fields without throwing', () => {
   assert.equal(lines[0].event, 'empty_fields');
   assert.equal(lines[1].event, 'undefined_fields');
 });
+
+test('createNoopLogger: returns a silent noop logger instance', async () => {
+  const { createNoopLogger } = await import('../src/infrastructure/logger.js');
+  const noop = createNoopLogger();
+  assert.doesNotThrow(() => {
+    noop.debug('test');
+    noop.info('test');
+    noop.warn('test');
+    noop.error('test');
+    const child = noop.child({ req: 1 });
+    child.info('child_test');
+  });
+  assert.equal(noop.threshold, 100);
+});

@@ -39,6 +39,19 @@ function redactFields(fields) {
   return output;
 }
 
+export function createNoopLogger() {
+  const noop = () => {};
+  return {
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    child: () => createNoopLogger(),
+    sink: noop,
+    threshold: 100,
+  };
+}
+
 export function createLogger({
   level = process.env.GATEWAY_LOG_LEVEL || 'info',
   sink = (line) => process.stdout.write(`${line}\n`),
