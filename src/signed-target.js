@@ -5,7 +5,7 @@ const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
 const EGRESS_SCOPES = new Set(['public', 'session', 'sticky']);
 
-const ALLOWED_HOSTS = [
+const ALLOWED_HOSTS = Object.freeze([
   'iwara.tv',
   'x.com',
   'twitter.com',
@@ -132,7 +132,7 @@ const ALLOWED_HOSTS = [
   'coomer.party',
   'coomer.st',
   'fanbox.cc',
-];
+]);
 
 function encode(value) {
   return Buffer.from(value).toString('base64url');
