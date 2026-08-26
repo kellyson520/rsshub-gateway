@@ -273,6 +273,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `egressPolicyForUrl(url)`, `egressPolicyForRequest(url, opts)`: Declarative policy resolution (`public` vs `sticky`).
   - `isSubscriptionMetadataName(name)`: Subscription node garbage filtering for proxy pool discovery.
   - `laneId(index)`, `laneGroup(index)`, `sessionLaneId(index)`, `sessionLaneGroup(index)`, `listenerUrl(baseUrl, index, port)`: Predictable naming and endpoint formation.
+  - `DEFAULT_PROBE_TIMEOUT_MS`, `DEFAULT_PROBE_CACHE_MS`, `PUBLIC_GROUP`, `GROUP_TYPES`, `RESERVED_NAMES`: Egress health probing windows and Mihomo group classifications.
 - **Sidecar Routing & Pattern AST Engine (`src/dispatcher.js`)**:
   - `compilePattern(pattern)`: Compiles `/path/:param` into regex with tokenized keys.
   - `matchSegments(compiled, pathname)`: AST segment extraction and parameter mapping.
