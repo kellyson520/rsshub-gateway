@@ -182,10 +182,13 @@ function matchesFilters($, entry, filters = {}) {
 }
 
 export {
+  NAMED_ENTITIES,
+  decodeEntity,
   decodeTextEntities,
   normalizeNumericEntities,
   isValidXmlCodePoint,
   rewriteHtml,
+  matchesFilters,
 };
 
 export function transformFeed(xml, options = {}) {
