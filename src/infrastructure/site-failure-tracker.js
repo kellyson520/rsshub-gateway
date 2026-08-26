@@ -6,15 +6,22 @@
  * only when the failure count crosses the threshold inside the window;
  * the caller owns any block cooldown derived from the trip.
  */
+export const DEFAULT_SITE_FAILURE_THRESHOLD = 3;
+export const DEFAULT_SITE_FAILURE_WINDOW_MS = 60_000;
+
+export function failureKey(laneId, host) {
+  return `${String(laneId)}\n${String(host).toLowerCase()}`;
+}
+
 export function createSiteFailureTracker({
-  threshold = 3,
-  windowMs = 60_000,
+  threshold = DEFAULT_SITE_FAILURE_THRESHOLD,
+  windowMs = DEFAULT_SITE_FAILURE_WINDOW_MS,
   now = () => Date.now(),
 } = {}) {
   const states = new Map();
 
   function key(laneId, host) {
-    return `${String(laneId)}\n${String(host).toLowerCase()}`;
+    return failureKey(laneId, host);
   }
 
   function record(laneId, host, status) {

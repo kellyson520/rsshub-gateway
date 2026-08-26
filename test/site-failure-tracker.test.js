@@ -68,3 +68,17 @@ test('clearAll flushes all lane failure records completely', () => {
   assert.equal(tracker.stats().length, 0);
   assert.equal(tracker.blocked('lane-01', 'site-a.com'), false);
 });
+
+test('exports failureKey helper and failure tracker default constants', async () => {
+  const {
+    failureKey,
+    DEFAULT_SITE_FAILURE_THRESHOLD,
+    DEFAULT_SITE_FAILURE_WINDOW_MS,
+  } = await import('../src/infrastructure/site-failure-tracker.js');
+
+  assert.equal(failureKey('lane-01', 'IWARA.TV'), 'lane-01\niwara.tv');
+  assert.equal(failureKey(123, 'Example.Com'), '123\nexample.com');
+
+  assert.equal(DEFAULT_SITE_FAILURE_THRESHOLD, 3);
+  assert.equal(DEFAULT_SITE_FAILURE_WINDOW_MS, 60_000);
+});
