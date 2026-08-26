@@ -237,3 +237,10 @@ test('isResumableStatus identifies 200 and 206 HTTP status codes correctly', asy
   assert.equal(isResumableStatus(undefined), false);
   assert.equal(isResumableStatus('200'), false);
 });
+
+test('exports sleep helper function', async () => {
+  const { sleep } = await import('../src/media/resumable-range.js');
+  const start = Date.now();
+  await sleep(10);
+  assert.ok(Date.now() - start >= 8);
+});
