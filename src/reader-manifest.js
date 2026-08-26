@@ -22,6 +22,11 @@ export function mergeResolvedPage(manifest, page) {
   return { ...manifest, pages };
 }
 
+export function isManifestComplete(manifest) {
+  if (!manifest || !Array.isArray(manifest.pages) || manifest.pages.length === 0) return false;
+  return manifest.pages.every((page) => page.state === 'resolved');
+}
+
 export function withForegroundDeadline(promise, timeoutMs) {
   return new Promise((resolve) => {
     let settled = false;

@@ -85,3 +85,30 @@ test('mergeResolvedPage returns unchanged manifest when pageNumber or detailTarg
   });
   assert.deepEqual(unmerged, manifest);
 });
+
+test('isManifestComplete checks whether all pages in manifest are resolved', async () => {
+  const { isManifestComplete } = await import('../src/reader-manifest.js');
+  const incomplete = createInitialReaderManifest({
+    imageUrls: ['https://e-hentai.org/s/one/gallery-1', 'https://e-hentai.org/s/two/gallery-2'],
+  });
+  assert.equal(isManifestComplete(incomplete), false);
+
+  const partial = mergeResolvedPage(incomplete, {
+    pageNumber: 1,
+    detailTarget: 'https://e-hentai.org/s/one/gallery-1',
+    mediaTarget: 'https://cdn.example.com/1.jpg',
+  });
+  assert.equal(isManifestComplete(partial), false);
+
+  const complete = mergeResolvedPage(partial, {
+    pageNumber: 2,
+    detailTarget: 'https://e-hentai.org/s/two/gallery-2',
+    mediaTarget: 'https://cdn.example.com/2.jpg',
+  });
+  assert.equal(isManifestComplete(complete), true);
+
+  // Edge cases
+  assert.equal(isManifestComplete(null), false);
+  assert.equal(isManifestComplete({}), false);
+  assert.equal(isManifestComplete({ pages: [] }), false);
+});
