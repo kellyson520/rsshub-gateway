@@ -117,7 +117,7 @@ export function writeGatewayError(res, error) {
     'x-gateway-source': error.source,
     'x-gateway-attempts': String(error.attempts),
   };
-  if (error.retryAfter !== undefined) headers['retry-after'] = String(Math.min(Math.max(error.retryAfter, 0), 60));
+  if (error.retryAfter !== undefined) headers['retry-after'] = String(clamp(error.retryAfter, 0, 60));
   writeText(res, error.status, 'upstream unavailable\n', 'text/plain; charset=utf-8', headers);
 }
 

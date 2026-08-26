@@ -4,7 +4,7 @@ import { adapterForUrl } from './adapters/index.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { GatewayUpstreamError, isRetryableStatus } from './upstream-errors.js';
 import { egressPolicyForRequest } from './egress-policy.js';
-import { sleep as defaultSleep } from './http-utils.js';
+import { clamp, sleep as defaultSleep } from './http-utils.js';
 
 const DEFAULT_PROXY = 'http://127.0.0.1:7890';
 const DEFAULT_TIMEOUT = 30_000;
@@ -136,7 +136,7 @@ export function createUpstreamClient({
 
   function retryAfter(response) {
     const value = Number.parseInt(response.headers.get('retry-after') || '', 10);
-    return Number.isFinite(value) ? Math.min(Math.max(value, 0), 60) : undefined;
+    return Number.isFinite(value) ? clamp(value, 0, 60) : undefined;
   }
 
   async function requestWithPolicy(url, {

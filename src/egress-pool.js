@@ -1,5 +1,5 @@
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
-import { safeEvent } from './http-utils.js';
+import { clamp, safeEvent } from './http-utils.js';
 import {
   DEFAULT_BLOCKED_STATUSES,
   isRetryableStatus as isRetryable,
@@ -223,7 +223,7 @@ export function createEgressPool(options = {}) {
         if (released) return;
         released = true;
         lane.active = Math.max(0, lane.active - 1);
-        const durationMs = Math.min(Math.max(0, now() - startedAt), MAX_LATENCY_SAMPLE_MS);
+        const durationMs = clamp(now() - startedAt, 0, MAX_LATENCY_SAMPLE_MS);
         recordResult(lane, { ...result, host: result.host || context.host }, durationMs);
         drain();
       },

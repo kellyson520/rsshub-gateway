@@ -4,6 +4,7 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 import { escapeHtml } from './feed-transform.js';
 import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
+import { clamp } from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
@@ -119,7 +120,7 @@ export function extractEhGalleryTitle({ url, html }) {
 function numericStyle(style, property, fallback) {
   const match = String(style || '').match(new RegExp(`${property}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px`, 'i'));
   const value = Number(match?.[1]);
-  return Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 5000) : fallback;
+  return Number.isFinite(value) ? clamp(Math.round(value), 1, 5000) : fallback;
 }
 
 function parseTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata) {
@@ -269,7 +270,7 @@ export function renderEhImageSequence({
       : ''),
   })).filter((page) => page.media);
   const safeTotalPages = Math.max(Number(totalPages) || pages.length, pages.length);
-  const eagerCount = Math.min(Math.max(Number.parseInt(preloadCount, 10) || 0, 0), renderedPages.length);
+  const eagerCount = clamp(Number.parseInt(preloadCount, 10) || 0, 0, renderedPages.length);
   const readerTitle = `${title || 'E-Hentai 画廊'} · 连续阅读 · 共 ${safeTotalPages} 页`;
   const summary = `<p class="eh-image-summary">已加载 ${renderedPages.length} / ${safeTotalPages} 页</p>`;
   const imageBlocks = renderedPages.map((page, index) => {

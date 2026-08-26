@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import {
   CACHE_RESPONSE_HEADERS,
   IMAGE_VARIANT_CACHE_VERSION,
+  clamp,
   imageVariantCacheUrl,
   parseByteRange,
   responseFromCachedDocument,
@@ -595,7 +596,7 @@ export function createMediaTransport({
     }
     const missingCount = parts.filter((item) => !item.ranged).length;
     if (missingCount) {
-      for (let index = 0; index < Math.min(Math.max(1, sliceFillConcurrency), missingCount); index += 1) {
+      for (let index = 0; index < clamp(sliceFillConcurrency, 1, missingCount); index += 1) {
         void worker();
       }
     }
