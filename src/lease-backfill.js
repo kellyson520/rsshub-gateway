@@ -1,12 +1,8 @@
+import { boundedInteger } from './http-utils.js';
+
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_EVICTION_BUDGET = 128 * 1024 ** 2;
 const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
-
-function boundedInteger(value, fallback, minimum, maximum) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed)) return fallback;
-  return Math.min(Math.max(parsed, minimum), maximum);
-}
 
 export {
   DEFAULT_MAX_CONCURRENCY,

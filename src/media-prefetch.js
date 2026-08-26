@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
+import { boundedInteger } from './http-utils.js';
 
 const DEFAULT_CACHE_ROOT = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
 const DEFAULT_INITIAL_CONCURRENCY = 6;
@@ -14,12 +15,6 @@ const DEFAULT_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_QUEUE_ITEMS = 2_000;
 const MAX_PER_ORIGIN_CONCURRENCY = 48;
 const RETRYABLE_STATUSES = new Set([408, 425, 429]);
-
-function boundedInteger(value, fallback, min, max) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed)) return fallback;
-  return Math.min(Math.max(parsed, min), max);
-}
 
 function originFor(target) {
   try {
