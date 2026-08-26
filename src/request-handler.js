@@ -37,6 +37,16 @@ import {
   renderLinuxdoReaderPage,
 } from './adapters/linuxdo.js';
 
+export {
+  downloadSessionView,
+  withPrefetchStatus,
+  promLabel,
+  sourceMetricName,
+  writeEncodedText,
+  DEFAULT_PREFETCH_WAIT_MS,
+  MAX_PREFETCH_WAIT_MS,
+};
+
 function downloadSessionView(session) {
   return {
     id: session.id,

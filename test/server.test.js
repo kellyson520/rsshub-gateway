@@ -2766,3 +2766,40 @@ test('supports prefetch togglePause and revoke-session endpoints', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('exports request-handler helper utilities and default constants', async () => {
+  const {
+    downloadSessionView,
+    withPrefetchStatus,
+    promLabel,
+    sourceMetricName,
+    DEFAULT_PREFETCH_WAIT_MS,
+    MAX_PREFETCH_WAIT_MS,
+  } = await import('../src/request-handler.js');
+
+  assert.equal(DEFAULT_PREFETCH_WAIT_MS, 30_000);
+  assert.equal(MAX_PREFETCH_WAIT_MS, 60_000);
+
+  assert.equal(promLabel('a"b\nc\\d'), 'a\\"b\\nc\\\\d');
+  assert.equal(sourceMetricName('e-hentai.org'), 'source_e_hentai_org_duration_seconds');
+  assert.equal(sourceMetricName(''), null);
+
+  const mockSession = {
+    id: 's-123',
+    size: 1000,
+    chunkSize: 500,
+    doneBytes: 500,
+    chunks: [
+      { index: 0, start: 0, end: 499, size: 500, status: 'done', url: 'http://c0' },
+      { index: 1, start: 500, end: 999, size: 500, status: 'pending', url: 'http://c1' },
+    ],
+  };
+  const view = downloadSessionView(mockSession);
+  assert.equal(view.id, 's-123');
+  assert.equal(view.count, 2);
+  assert.equal(view.doneChunks, 1);
+  assert.equal(view.doneBytes, 500);
+
+  const viewWithPrefetch = withPrefetchStatus(view, 'https://cdn.example/video.mp4', () => ({ progress: 50 }));
+  assert.deepEqual(viewWithPrefetch.prefetch, { progress: 50 });
+});
