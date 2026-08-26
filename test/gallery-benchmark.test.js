@@ -77,6 +77,7 @@ test('exports benchmark helpers and concurrency constants', async () => {
   const {
     LOCAL_HOSTS,
     MEDIA_CONCURRENCY,
+    DEFAULT_BENCHMARK_VARIANT_WIDTH,
     mediaUrls,
     variantUrl,
     numericContentLength,
@@ -88,6 +89,7 @@ test('exports benchmark helpers and concurrency constants', async () => {
   assert.ok(LOCAL_HOSTS.has('127.0.0.1'));
   assert.ok(LOCAL_HOSTS.has('localhost'));
   assert.equal(MEDIA_CONCURRENCY, 8);
+  assert.equal(DEFAULT_BENCHMARK_VARIANT_WIDTH, 1920);
 
   const html = '<div><img src="/_gateway/media/abc"><img src="https://other.com/ext.jpg"></div>';
   const urls = mediaUrls(html, new URL('http://127.0.0.1:1300/_gateway/item/token'));
@@ -96,6 +98,10 @@ test('exports benchmark helpers and concurrency constants', async () => {
   assert.equal(
     variantUrl('http://127.0.0.1:1300/_gateway/media/token'),
     'http://127.0.0.1:1300/_gateway/media/token?w=1920',
+  );
+  assert.equal(
+    variantUrl('http://127.0.0.1:1300/_gateway/media/token', 1280),
+    'http://127.0.0.1:1300/_gateway/media/token?w=1280',
   );
 
   const mockRes = new Response(null, { headers: { 'content-length': '2048' } });

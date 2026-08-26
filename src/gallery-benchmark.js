@@ -1,9 +1,13 @@
+import { mapWithConcurrency } from './http-utils.js';
+
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const MEDIA_CONCURRENCY = 8;
+const DEFAULT_BENCHMARK_VARIANT_WIDTH = 1920;
 
 export {
   LOCAL_HOSTS,
   MEDIA_CONCURRENCY,
+  DEFAULT_BENCHMARK_VARIANT_WIDTH,
   localGatewayUrl,
   mediaUrls,
   mapWithConcurrency,
@@ -41,20 +45,6 @@ function mediaUrls(html, baseUrl) {
   return [...urls];
 }
 
-async function mapWithConcurrency(items, concurrency, worker) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  async function run() {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await worker(items[index]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(items.length, concurrency) }, run));
-  return results;
-}
-
 function numericContentLength(response) {
   const value = Number.parseInt(response.headers.get('content-length') || '', 10);
   return Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -68,9 +58,9 @@ function durationCheckpoint(results, count) {
     .slice(0, count));
 }
 
-function variantUrl(original) {
+function variantUrl(original, width = DEFAULT_BENCHMARK_VARIANT_WIDTH) {
   const target = new URL(original);
-  target.searchParams.set('w', '1920');
+  target.searchParams.set('w', String(width));
   return target.toString();
 }
 
