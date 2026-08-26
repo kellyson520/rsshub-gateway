@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
+import { DEFAULT_CACHE_ROOT } from './options.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -71,10 +72,11 @@ export {
   DEFAULT_TTL_SECONDS,
   DEFAULT_MAX_BYTES,
   DEFAULT_EVICTION_PRIORITY,
+  DEFAULT_CACHE_ROOT,
 };
 
 export function createResponseCache({
-  root = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
+  root = process.env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT,
   maxBytes = Number.parseInt(process.env.GATEWAY_CACHE_MAX_BYTES || '', 10) || DEFAULT_MAX_BYTES,
   ttlSeconds = {},
   evictionPriority = {},

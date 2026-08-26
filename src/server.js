@@ -25,7 +25,7 @@ import {
   responseFromCachedDocument,
   responseHeaders,
 } from './http-utils.js';
-import { resolveGatewayOptions } from './options.js';
+import { DEFAULT_CACHE_ROOT, resolveGatewayOptions } from './options.js';
 
 
 import { withForegroundDeadline } from './reader-manifest.js';
@@ -861,7 +861,7 @@ export function createGatewayServer(options = {}) {
   const mediaPreloadQueue = cache
     ? createMediaPrefetchQueue({
       queueFile: options.mediaPrefetchQueueFile
-        || path.join(cache.root || process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway', 'media-prefetch.json'),
+        || path.join(cache.root || process.env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT, 'media-prefetch.json'),
       initialConcurrency: ehMediaPrefetchConcurrency,
       minConcurrency: ehMediaPrefetchMinConcurrency,
       maxConcurrency: ehMediaPrefetchMaxConcurrency,

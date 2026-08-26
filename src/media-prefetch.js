@@ -4,8 +4,8 @@ import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
 import { boundedInteger, safeEvent } from './http-utils.js';
 import { isRetryableStatus as retryableStatus, isSuccessfulStatus as successfulStatus } from './upstream-errors.js';
+import { DEFAULT_CACHE_ROOT } from './options.js';
 
-const DEFAULT_CACHE_ROOT = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
 const DEFAULT_INITIAL_CONCURRENCY = 6;
 const DEFAULT_MIN_CONCURRENCY = 3;
 const DEFAULT_MAX_CONCURRENCY = 12;

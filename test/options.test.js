@@ -128,11 +128,13 @@ test('resolveGatewayOptions parses slowSourceThresholdMs bounds fallback', () =>
 
 test('options exports default constants for external callers', async () => {
   const {
+    DEFAULT_CACHE_ROOT,
     DEFAULT_EH_PREFETCH_CONCURRENCY,
     DEFAULT_EGRESS_LANE_COUNT,
     DEFAULT_FEED_PREFETCH_INTERVAL_MS,
     DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
   } = await import('../src/options.js');
+  assert.equal(DEFAULT_CACHE_ROOT, '/var/cache/rsshub-gateway');
   assert.equal(DEFAULT_EH_PREFETCH_CONCURRENCY, 8);
   assert.equal(DEFAULT_EGRESS_LANE_COUNT, 12);
   assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900_000);

@@ -40,8 +40,10 @@ const DEFAULT_LEASE_TTL_MS = 30 * 60_000;
 const DEFAULT_LEASE_MAX_BYTES = 2 * 1024 ** 3;
 const DEFAULT_LEASE_MAX_CONCURRENCY = 8;
 const DEFAULT_SLOW_SOURCE_THRESHOLD_MS = 5_000;
+const DEFAULT_CACHE_ROOT = '/var/cache/rsshub-gateway';
 
 export {
+  DEFAULT_CACHE_ROOT,
   DEFAULT_EH_PREFETCH_CONCURRENCY,
   DEFAULT_EH_PREFETCH_MAX_CONCURRENCY,
   DEFAULT_EH_MAX_PREFETCH_PAGES,
@@ -313,7 +315,7 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     32,
   );
   const egressProxyBaseUrl = options.egressProxyBaseUrl || env.EGRESS_PROXY_BASE_URL;
-  const sessionAffinityRoot = options.sessionAffinityRoot || env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
+  const sessionAffinityRoot = options.sessionAffinityRoot || env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT;
   const sessionAffinityFile = options.sessionAffinityFile || env.SESSION_AFFINITY_FILE;
   const downloadSessionFile = options.downloadSessionFile || env.GATEWAY_DOWNLOAD_SESSION_FILE;
   const videoPrefetchEnabled = options.videoPrefetchEnabled !== false

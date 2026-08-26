@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
+import { DEFAULT_CACHE_ROOT } from './options.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -65,6 +66,7 @@ function validRecord(record, now, maxAgeMs) {
 export {
   VERSION,
   DEFAULT_MAX_AGE_MS,
+  DEFAULT_CACHE_ROOT,
   fingerprintFor,
   normalizedLaneIds,
   normalizedCredentials,
@@ -74,7 +76,7 @@ export {
 };
 
 export function createSessionAffinity({
-  root = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
+  root = process.env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT,
   file = process.env.SESSION_AFFINITY_FILE,
   secret,
   laneIds = [],
