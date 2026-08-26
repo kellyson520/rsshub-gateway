@@ -169,6 +169,27 @@ test('parseByteRange parses single, suffix, open-ended and unsatisfiable ranges'
   assert.equal(parseByteRange('bytes=0-100,200-300', 1000), null);
 });
 
+test('createConcurrencyLimiter bounds active concurrent tasks', async () => {
+  const { createConcurrencyLimiter } = await import('../src/http-utils.js');
+  const limiter = createConcurrencyLimiter(2);
+  let active = 0;
+  let maxActive = 0;
+
+  const tasks = Array.from({ length: 6 }, async (_, i) => {
+    return limiter(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active -= 1;
+      return i * 10;
+    });
+  });
+
+  const results = await Promise.all(tasks);
+  assert.equal(maxActive, 2);
+  assert.deepEqual(results, [0, 10, 20, 30, 40, 50]);
+});
+
 test('exports CACHE_RESPONSE_HEADERS constants', async () => {
   const { CACHE_RESPONSE_HEADERS } = await import('../src/http-utils.js');
   assert.ok(Array.isArray(CACHE_RESPONSE_HEADERS));

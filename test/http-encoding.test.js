@@ -106,6 +106,7 @@ test('exports COMPRESSIBLE_CONTENT_TYPES and header parsing helpers', async () =
     DEFAULT_HTML_BROTLI_MIN_BYTES,
     DEFAULT_HTML_BROTLI_QUALITY,
     DEFAULT_TEXT_COMPRESS_MIN_BYTES,
+    DEFAULT_GZIP_LEVEL,
   } = await import('../src/http-encoding.js');
 
   assert.ok(Array.isArray(COMPRESSIBLE_CONTENT_TYPES));
@@ -131,5 +132,6 @@ test('exports COMPRESSIBLE_CONTENT_TYPES and header parsing helpers', async () =
   assert.equal(DEFAULT_HTML_BROTLI_MIN_BYTES, 4096);
   assert.equal(DEFAULT_HTML_BROTLI_QUALITY, 4);
   assert.equal(DEFAULT_TEXT_COMPRESS_MIN_BYTES, 1024);
+  assert.equal(DEFAULT_GZIP_LEVEL, 6);
 });
 

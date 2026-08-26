@@ -3,6 +3,7 @@ import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 export const DEFAULT_HTML_BROTLI_MIN_BYTES = 4 * 1024;
 export const DEFAULT_HTML_BROTLI_QUALITY = 4;
 export const DEFAULT_TEXT_COMPRESS_MIN_BYTES = 1024;
+export const DEFAULT_GZIP_LEVEL = 6;
 
 // Content types eligible for lossless text compression on the gateway edge.
 // Media (image/video/audio) and already-compressed formats stay untouched.
