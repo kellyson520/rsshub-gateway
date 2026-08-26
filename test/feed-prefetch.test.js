@@ -225,3 +225,23 @@ test('feed prefetch applies exponential backoff on repeated 429/5xx and supports
   assert.equal(queue.stats().paths['/feed/rate-limited'].paused, false);
   queue.stop();
 });
+
+test('exports default feed prefetch configuration constants', async () => {
+  const {
+    DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+    DEFAULT_FEED_PREFETCH_CONCURRENCY,
+    DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+    DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS,
+    MAX_FEED_PREFETCH_CONCURRENCY,
+    MAX_FEED_PREFETCH_RETRIES,
+    MAX_FEED_PREFETCH_INTERVAL_CAP_MS,
+  } = await import('../src/feed-prefetch.js');
+
+  assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900_000);
+  assert.equal(DEFAULT_FEED_PREFETCH_CONCURRENCY, 2);
+  assert.equal(DEFAULT_FEED_PREFETCH_MAX_RETRIES, 2);
+  assert.equal(DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS, 5_000);
+  assert.equal(MAX_FEED_PREFETCH_CONCURRENCY, 8);
+  assert.equal(MAX_FEED_PREFETCH_RETRIES, 5);
+  assert.equal(MAX_FEED_PREFETCH_INTERVAL_CAP_MS, 4 * 60 * 60_000);
+});

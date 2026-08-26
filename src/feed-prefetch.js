@@ -1,3 +1,11 @@
+export const DEFAULT_FEED_PREFETCH_INTERVAL_MS = 900_000;
+export const DEFAULT_FEED_PREFETCH_CONCURRENCY = 2;
+export const DEFAULT_FEED_PREFETCH_MAX_RETRIES = 2;
+export const DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS = 5_000;
+export const MAX_FEED_PREFETCH_CONCURRENCY = 8;
+export const MAX_FEED_PREFETCH_RETRIES = 5;
+export const MAX_FEED_PREFETCH_INTERVAL_CAP_MS = 4 * 60 * 60_000;
+
 /**
  * Asynchronous feed prefetch / precache task queue (architecture v0.2, phase 3.2).
  *
@@ -10,10 +18,10 @@
  */
 export function createFeedPrefetchQueue({
   paths = [],
-  intervalMs = 900_000,
-  concurrency = 2,
-  maxRetries = 2,
-  retryBackoffMs = 5_000,
+  intervalMs = DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+  concurrency = DEFAULT_FEED_PREFETCH_CONCURRENCY,
+  maxRetries = DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+  retryBackoffMs = DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS,
   fetchFeed = async () => ({ ok: false, status: 503 }),
   logger = { info() {}, warn() {}, error() {} },
   now = () => Date.now(),
@@ -23,9 +31,9 @@ export function createFeedPrefetchQueue({
     const timer = setTimeout(resolve, delay);
     timer.unref?.();
   });
-  const limit = Math.min(8, Math.max(1, Math.floor(Number(concurrency) || 2)));
-  const retries = Math.min(5, Math.max(0, Math.floor(Number(maxRetries) || 0)));
-  const interval = Math.max(1_000, Number(intervalMs) || 900_000);
+  const limit = Math.min(MAX_FEED_PREFETCH_CONCURRENCY, Math.max(1, Math.floor(Number(concurrency) || DEFAULT_FEED_PREFETCH_CONCURRENCY)));
+  const retries = Math.min(MAX_FEED_PREFETCH_RETRIES, Math.max(0, Math.floor(Number(maxRetries) || 0)));
+  const interval = Math.max(1_000, Number(intervalMs) || DEFAULT_FEED_PREFETCH_INTERVAL_MS);
   const configured = [...new Set(paths.map(String).filter(Boolean))];
   const pending = new Map();
   const pathStats = new Map();
@@ -82,7 +90,7 @@ export function createFeedPrefetchQueue({
   function effectiveInterval(key) {
     const entry = pathStats.get(key);
     const multiplier = entry?.backoffMultiplier || 1;
-    return Math.min(interval * multiplier, 4 * 60 * 60_000); // capped at 4 hours
+    return Math.min(interval * multiplier, MAX_FEED_PREFETCH_INTERVAL_CAP_MS);
   }
 
   function enqueue(path, { force = false } = {}) {
