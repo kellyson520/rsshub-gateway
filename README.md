@@ -293,6 +293,10 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `lineError(message, options)`: Typed upstream failure instantiation.
   - `requestTimeoutMs(timeout)`: Adaptive IPC timeout bounds `[25s, 65s]`.
   - `DEFAULT_WORKER_PATH`, `DEFAULT_RENDER_URL`: Zero-config defaults.
+- **Unified Request Service & Transport Orchestration (`src/infrastructure/request-service.js`)**:
+  - `createRequestService(opts)`: Unified facade combining browser TLS fingerprints and upstream pool dispatchers.
+  - `DEFAULT_BROWSER_FETCH_HOSTS`, `parseBrowserFetchHosts(env)`: Configurable list of Cloudflare/WAF-protected domain targets.
+  - `safeHost(url)`, `browserFetchHost(url)`: Pure hostname extractors and browser fetch routing predicates.
 - **Resilient Media & Feed Prefetchers (`src/media-prefetch.js`, `src/feed-prefetch.js`)**:
   - `originFor(target)`: Whitelist-backed media origin resolution.
   - `retryableStatus(status)`, `successfulStatus(status)`: HTTP status classifiers.

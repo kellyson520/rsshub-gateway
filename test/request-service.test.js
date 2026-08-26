@@ -68,12 +68,26 @@ test('safeHost handles malformed or non-url input gracefully', async () => {
   assert.equal(res.status, 200);
 });
 
-test('exports BROWSER_FETCH_HOSTS, safeHost and browserFetchHost helpers', async () => {
+test('parseBrowserFetchHosts parses JSON arrays and comma-separated string lists', async () => {
+  const { parseBrowserFetchHosts, DEFAULT_BROWSER_FETCH_HOSTS } = await import('../src/infrastructure/request-service.js');
+  assert.deepEqual(parseBrowserFetchHosts(null), DEFAULT_BROWSER_FETCH_HOSTS);
+  assert.deepEqual(parseBrowserFetchHosts('site-a.com, Site-B.com'), ['site-a.com', 'site-b.com']);
+  assert.deepEqual(parseBrowserFetchHosts(JSON.stringify(['SITE-C.COM', 'site-d.com'])), ['site-c.com', 'site-d.com']);
+  assert.deepEqual(parseBrowserFetchHosts('{ bad json }'), ['{ bad json }']);
+});
+
+test('exports DEFAULT_BROWSER_FETCH_HOSTS, BROWSER_FETCH_HOSTS, safeHost and browserFetchHost helpers', async () => {
   const {
+    DEFAULT_BROWSER_FETCH_HOSTS,
     BROWSER_FETCH_HOSTS,
     safeHost,
     browserFetchHost,
+    parseBrowserFetchHosts,
   } = await import('../src/infrastructure/request-service.js');
+
+  assert.ok(Array.isArray(DEFAULT_BROWSER_FETCH_HOSTS));
+  assert.ok(DEFAULT_BROWSER_FETCH_HOSTS.includes('javbus.com'));
+  assert.ok(DEFAULT_BROWSER_FETCH_HOSTS.includes('linux.do'));
 
   assert.ok(Array.isArray(BROWSER_FETCH_HOSTS));
   assert.ok(BROWSER_FETCH_HOSTS.includes('javbus.com'));
