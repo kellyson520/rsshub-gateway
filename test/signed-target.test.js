@@ -175,3 +175,10 @@ test('allows major adult source hosts and their media CDNs', () => {
   }
   assert.equal(isAllowedTarget('https://example.com/outside.mp4'), false);
 });
+
+test('exports DEFAULT_TTL_SECONDS and MEDIA_CACHE_TTL_SECONDS constants', async () => {
+  const { DEFAULT_TTL_SECONDS, MEDIA_CACHE_TTL_SECONDS, ALLOWED_HOSTS } = await import('../src/signed-target.js');
+  assert.equal(DEFAULT_TTL_SECONDS, 900);
+  assert.equal(MEDIA_CACHE_TTL_SECONDS, 86400);
+  assert.ok(Array.isArray(ALLOWED_HOSTS));
+});

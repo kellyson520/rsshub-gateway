@@ -226,4 +226,9 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
   return { url: new URL(data.url).toString(), exp: data.exp, ...routeMetadata(data) };
 }
 
-export { ALLOWED_HOSTS, EGRESS_SCOPES };
+export {
+  ALLOWED_HOSTS,
+  EGRESS_SCOPES,
+  DEFAULT_TTL_SECONDS,
+  MEDIA_CACHE_TTL_SECONDS,
+};
