@@ -261,3 +261,32 @@ test('enqueue handles empty, null or undefined input gracefully', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('exports helper functions and constants for media prefetch scheduling', async () => {
+  const {
+    originFor,
+    retryableStatus,
+    successfulStatus,
+    DEFAULT_INITIAL_CONCURRENCY,
+    DEFAULT_MIN_CONCURRENCY,
+    DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_PER_ORIGIN_CONCURRENCY,
+  } = await import('../src/media-prefetch.js');
+
+  assert.equal(originFor('https://page.example.hath.network/h/1.jpg'), 'page.example.hath.network');
+  assert.equal(originFor('http://127.0.0.1:8080/invalid'), '');
+  assert.equal(originFor('not-a-url'), '');
+
+  assert.equal(retryableStatus(429), true);
+  assert.equal(retryableStatus(503), true);
+  assert.equal(retryableStatus(200), false);
+
+  assert.equal(successfulStatus(200), true);
+  assert.equal(successfulStatus(206), true);
+  assert.equal(successfulStatus(500), false);
+
+  assert.equal(DEFAULT_INITIAL_CONCURRENCY, 6);
+  assert.equal(DEFAULT_MIN_CONCURRENCY, 3);
+  assert.equal(DEFAULT_MAX_CONCURRENCY, 12);
+  assert.equal(DEFAULT_PER_ORIGIN_CONCURRENCY, 2);
+});

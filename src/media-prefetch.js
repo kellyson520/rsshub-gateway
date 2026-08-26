@@ -46,6 +46,16 @@ function safeEvent(onEvent, event) {
   }
 }
 
+export {
+  originFor,
+  retryableStatus,
+  successfulStatus,
+  DEFAULT_INITIAL_CONCURRENCY,
+  DEFAULT_MIN_CONCURRENCY,
+  DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_PER_ORIGIN_CONCURRENCY,
+};
+
 export function createMediaPrefetchQueue(options = {}) {
   const queueFile = path.resolve(options.queueFile || path.join(DEFAULT_CACHE_ROOT, 'media-prefetch.json'));
   const initialConcurrency = boundedInteger(options.initialConcurrency, DEFAULT_INITIAL_CONCURRENCY, 1, DEFAULT_MAX_CONCURRENCY);
