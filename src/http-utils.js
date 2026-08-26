@@ -378,6 +378,10 @@ export function sha256Hex(value) {
   return createHash('sha256').update(String(value ?? '')).digest('hex');
 }
 
+export function isSha256Hex(value) {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+}
+
 export function hmacSha256(value, secret, encoding) {
   const hmac = createHmac('sha256', secret).update(String(value ?? ''));
   return encoding ? hmac.digest(encoding) : hmac.digest();

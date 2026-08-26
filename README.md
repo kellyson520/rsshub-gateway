@@ -375,7 +375,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
   - `normalizeHeaderMap(headers)`, `canonicalHeadersString(headers)`: Deterministic HTTP header/credential normalization and canonical serialization.
   - `atomicWriteJson(file, data, opts)`: Crash-resilient POSIX atomic JSON writer with temporary file rename and directory creation.
-  - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`: High-performance cryptographic digest and HMAC serializers.
+  - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`, `isSha256Hex(value)`: High-performance cryptographic digest serializers and 64-char lowercase hex validators.
   - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
   - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.

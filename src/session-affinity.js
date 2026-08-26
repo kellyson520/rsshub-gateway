@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { atomicWriteJson, canonicalHeadersString, dedupe, hmacSha256, sha256Hex } from './http-utils.js';
+import {
+  atomicWriteJson,
+  canonicalHeadersString,
+  dedupe,
+  hmacSha256,
+  isSha256Hex,
+  sha256Hex,
+} from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -47,8 +54,7 @@ function chooseLane(fingerprint, laneIds, unhealthyLanes) {
 
 function validRecord(record, now, maxAgeMs) {
   return record
-    && typeof record.fingerprint === 'string'
-    && /^[a-f0-9]{64}$/.test(record.fingerprint)
+    && isSha256Hex(record.fingerprint)
     && typeof record.source === 'string'
     && record.source
     && typeof record.laneId === 'string'

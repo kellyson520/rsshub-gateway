@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { atomicWriteJson, sha256Hex } from './http-utils.js';
+import { atomicWriteJson, isSha256Hex, sha256Hex } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -144,7 +144,7 @@ export function createResponseCache({
       ? parsed.entries
       : Object.values(parsed?.entries || {});
     for (const record of records) {
-      if (!record || !/^[a-f0-9]{64}$/.test(record.key) || record.file !== `${record.key}.body`
+      if (!record || !isSha256Hex(record.key) || record.file !== `${record.key}.body`
         || !Number.isFinite(record.size) || record.size < 0
         || !['string', 'buffer'].includes(record.bodyType)) continue;
       try {

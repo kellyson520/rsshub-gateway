@@ -220,9 +220,17 @@ test('decodeJwtPayload, jwtExpiryMs and asDate helpers format and parse correctl
   assert.equal(asDate(null), '');
 });
 
-test('sha256Hex produces deterministic lowercase hex digest', async () => {
-  const { sha256Hex } = await import('../src/http-utils.js');
-  assert.equal(sha256Hex('hello world'), 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9');
+test('sha256Hex and isSha256Hex format and validate 64-character lowercase hexadecimal digests', async () => {
+  const { sha256Hex, isSha256Hex } = await import('../src/http-utils.js');
+  const digest = sha256Hex('hello world');
+  assert.equal(digest, 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9');
+  assert.equal(isSha256Hex(digest), true);
+  assert.equal(isSha256Hex(digest.toUpperCase()), false);
+  assert.equal(isSha256Hex('short'), false);
+  assert.equal(isSha256Hex(null), false);
+  assert.equal(isSha256Hex(undefined), false);
+  assert.equal(isSha256Hex(123), false);
+
   assert.equal(sha256Hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
   assert.equal(sha256Hex(null), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
 });
