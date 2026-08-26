@@ -7,6 +7,12 @@ function boundedInteger(value, fallback, minimum, maximum) {
   return Math.min(Math.max(parsed, minimum), maximum);
 }
 
+export {
+  DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_EVICTION_BUDGET,
+  boundedInteger,
+};
+
 /**
  * One-time lease download backfill.
  *

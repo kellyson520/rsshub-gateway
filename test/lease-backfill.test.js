@@ -223,3 +223,16 @@ test('cancel is idempotent for non-existent targets', () => {
     queue.cancel(null);
   });
 });
+
+test('exports DEFAULT_MAX_CONCURRENCY and DEFAULT_EVICTION_BUDGET constants', async () => {
+  const {
+    DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_EVICTION_BUDGET,
+    boundedInteger,
+  } = await import('../src/lease-backfill.js');
+
+  assert.equal(DEFAULT_MAX_CONCURRENCY, 2);
+  assert.equal(DEFAULT_EVICTION_BUDGET, 128 * 1024 ** 2);
+  assert.equal(boundedInteger('5', 2, 1, 10), 5);
+  assert.equal(boundedInteger('invalid', 2, 1, 10), 2);
+});
