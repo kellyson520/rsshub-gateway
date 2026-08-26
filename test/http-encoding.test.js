@@ -95,3 +95,41 @@ test('isCompressibleContentType identifies text, xml, json and ignores binary me
   assert.equal(isCompressibleContentType(undefined), false);
 });
 
+test('exports COMPRESSIBLE_CONTENT_TYPES and header parsing helpers', async () => {
+  const {
+    COMPRESSIBLE_CONTENT_TYPES,
+    acceptsCoding,
+    acceptsBrotli,
+    acceptsGzip,
+    asBuffer,
+    withVary,
+    DEFAULT_HTML_BROTLI_MIN_BYTES,
+    DEFAULT_HTML_BROTLI_QUALITY,
+    DEFAULT_TEXT_COMPRESS_MIN_BYTES,
+  } = await import('../src/http-encoding.js');
+
+  assert.ok(Array.isArray(COMPRESSIBLE_CONTENT_TYPES));
+  assert.ok(COMPRESSIBLE_CONTENT_TYPES.includes('application/json'));
+
+  assert.equal(acceptsBrotli('gzip, br'), true);
+  assert.equal(acceptsBrotli('gzip, deflate'), false);
+
+  assert.equal(acceptsGzip('gzip;q=0.8, br'), true);
+  assert.equal(acceptsGzip('br, identity'), false);
+
+  assert.equal(acceptsCoding('gzip, custom', 'custom'), true);
+  assert.equal(acceptsCoding('custom;q=0', 'custom'), false);
+
+  const buf = asBuffer('hello');
+  assert.ok(Buffer.isBuffer(buf));
+  assert.equal(buf.toString('utf8'), 'hello');
+
+  assert.equal(withVary({}), 'Accept-Encoding');
+  assert.equal(withVary({ vary: 'Origin' }), 'Origin, Accept-Encoding');
+  assert.equal(withVary({ vary: 'Accept-Encoding' }), 'Accept-Encoding');
+
+  assert.equal(DEFAULT_HTML_BROTLI_MIN_BYTES, 4096);
+  assert.equal(DEFAULT_HTML_BROTLI_QUALITY, 4);
+  assert.equal(DEFAULT_TEXT_COMPRESS_MIN_BYTES, 1024);
+});
+

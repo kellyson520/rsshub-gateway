@@ -54,6 +54,15 @@ function withVary(headers) {
   return values.join(', ');
 }
 
+export {
+  COMPRESSIBLE_CONTENT_TYPES,
+  acceptsCoding,
+  acceptsBrotli,
+  acceptsGzip,
+  asBuffer,
+  withVary,
+};
+
 /**
  * Lossless edge compression for text responses (charter: 统一后处理层 Brotli/gzip).
  * Prefers brotli, falls back to gzip, and never compresses when the output would
