@@ -1,5 +1,5 @@
 import net from 'node:net';
-import { hmacSha256, isSignatureMatch } from './http-utils.js';
+import { hmacSha256, isHostOrSubdomain, isSignatureMatch, matchesHost } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
@@ -167,7 +167,7 @@ export function isAllowedTarget(value) {
     return false;
   }
   const hostname = target.hostname.toLowerCase();
-  const isHathHost = hostname === 'hath.network' || hostname.endsWith('.hath.network');
+  const isHathHost = isHostOrSubdomain(hostname, 'hath.network');
   const isHathMedia = isHathHost
     && (target.pathname.startsWith('/h/') || target.pathname.startsWith('/om/') || /^\/c\d+\//.test(target.pathname));
   const isHathPortMedia = isHathHost
@@ -177,7 +177,7 @@ export function isAllowedTarget(value) {
   if ((isHathHost && !isHathMedia) || (target.port && !isValidHathMediaPort)) {
     return false;
   }
-  return ALLOWED_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  return matchesHost(hostname, ALLOWED_HOSTS);
 }
 
 export function createSignedTarget(url, secret, ttlSeconds = DEFAULT_TTL_SECONDS, now = Math.floor(Date.now() / 1000), metadata = {}) {

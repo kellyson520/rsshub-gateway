@@ -3,14 +3,9 @@ import { createUpstreamClient } from '../upstream.js';
 import { createBrowserFetchClient } from '../browser-fetch.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
+import { matchesHost, safeHost } from '../http-utils.js';
 
-export function safeHost(url) {
-  try {
-    return new URL(String(url)).hostname.toLowerCase();
-  } catch {
-    return 'unknown';
-  }
-}
+export { safeHost };
 
 export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
   'javbus.com',
@@ -58,12 +53,8 @@ export const BROWSER_FETCH_HOSTS = Object.freeze(
 );
 
 export function browserFetchHost(url) {
-  try {
-    const hostname = new URL(String(url)).hostname.toLowerCase();
-    return BROWSER_FETCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
-  } catch {
-    return false;
-  }
+  const host = safeHost(url, '');
+  return Boolean(host) && matchesHost(host, BROWSER_FETCH_HOSTS);
 }
 
 /**

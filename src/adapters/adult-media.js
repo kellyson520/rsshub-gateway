@@ -1,3 +1,5 @@
+import { matchesHost } from '../http-utils.js';
+
 export const name = 'adult-media';
 export const publiclyReadable = true;
 
@@ -35,7 +37,7 @@ export const ADULT_DOMAINS = Object.freeze([
 ]);
 
 export function matches(hostname) {
-  return ADULT_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`));
+  return matchesHost(hostname, ADULT_DOMAINS);
 }
 
 export function headers() {

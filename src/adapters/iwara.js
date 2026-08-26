@@ -1,6 +1,6 @@
 import { createMediaSignedTarget } from '../signed-target.js';
 import { cdata, escapeXml } from '../feed-transform.js';
-import { jwtExpiryMs } from '../http-utils.js';
+import { jwtExpiryMs, matchesHost } from '../http-utils.js';
 
 export {
   API_BASE,
@@ -20,7 +20,7 @@ const SITE_BASE = 'https://iwara.tv';
 const MATCH_HOSTS = Object.freeze(['iwara.tv']);
 
 export function matches(hostname) {
-  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  return matchesHost(hostname, MATCH_HOSTS);
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {

@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { cdata, escapeXml } from '../feed-transform.js';
-import { asDate } from '../http-utils.js';
+import { asDate, matchesHost } from '../http-utils.js';
 
 const RANKING_PERIODS = Object.freeze({
   day: { query: '15', label: '昨日热度' },
@@ -32,7 +32,7 @@ export {
 export const name = 'ehviewer';
 
 export function matches(hostname) {
-  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  return matchesHost(hostname, MATCH_HOSTS);
 }
 
 export function headers() {

@@ -1,3 +1,5 @@
+import { isHostOrSubdomain, matchesHost, safeHost } from './http-utils.js';
+
 const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'e-hentai.org',
   'ehgt.org',
@@ -78,25 +80,17 @@ export const EGRESS_POLICIES = Object.freeze({
 });
 
 function hostnameFor(value) {
-  try {
-    return (value instanceof URL ? value : new URL(String(value))).hostname.toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-function isHostOrSubdomain(hostname, base) {
-  return hostname === base || hostname.endsWith(`.${base}`);
+  return safeHost(value, '');
 }
 
 export function isPublicEgressTarget(value) {
   const hostname = hostnameFor(value);
-  return Boolean(hostname) && PUBLIC_HOSTS.some((base) => isHostOrSubdomain(hostname, base));
+  return Boolean(hostname) && matchesHost(hostname, PUBLIC_HOSTS);
 }
 
 export function isPublicRequestTarget(value) {
   const hostname = hostnameFor(value);
-  return Boolean(hostname) && PUBLIC_REQUEST_HOSTS.some((base) => isHostOrSubdomain(hostname, base));
+  return Boolean(hostname) && matchesHost(hostname, PUBLIC_REQUEST_HOSTS);
 }
 
 export function egressPolicyForUrl(value) {

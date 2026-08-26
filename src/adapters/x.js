@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { matchesHost } from '../http-utils.js';
 
 export const name = 'x';
 export const publiclyReadable = true;
@@ -8,7 +9,7 @@ export const DEFAULT_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开�
 export const AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
 
 export function matches(hostname) {
-  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  return matchesHost(hostname, MATCH_HOSTS);
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {

@@ -270,6 +270,27 @@ test('readJsonBody parses stream payload into JSON object', async () => {
   await assert.rejects(() => readJsonBody(invalidStream), /JSON/);
 });
 
+test('safeHost, isHostOrSubdomain and matchesHost handle hostnames and subdomains safely', async () => {
+  const { safeHost, isHostOrSubdomain, matchesHost } = await import('../src/http-utils.js');
+
+  assert.equal(safeHost('https://JavBus.COM/path'), 'javbus.com');
+  assert.equal(safeHost('https://sub.domain.org:8080/v/1'), 'sub.domain.org');
+  assert.equal(safeHost('not-a-url'), 'unknown');
+  assert.equal(safeHost('not-a-url', ''), '');
+  assert.equal(safeHost(null), 'unknown');
+
+  assert.equal(isHostOrSubdomain('sub.example.com', 'example.com'), true);
+  assert.equal(isHostOrSubdomain('example.com', 'example.com'), true);
+  assert.equal(isHostOrSubdomain('fake-example.com', 'example.com'), false);
+  assert.equal(isHostOrSubdomain('', 'example.com'), false);
+  assert.equal(isHostOrSubdomain(null, 'example.com'), false);
+
+  assert.equal(matchesHost('api.iwara.tv', ['iwara.tv', 'x.com']), true);
+  assert.equal(matchesHost('x.com', ['iwara.tv', 'x.com']), true);
+  assert.equal(matchesHost('notallowed.com', ['iwara.tv', 'x.com']), false);
+  assert.equal(matchesHost('', ['iwara.tv']), false);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

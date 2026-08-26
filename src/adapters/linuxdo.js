@@ -2,15 +2,17 @@ import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from '../signed-target.js';
 import { escapeHtml } from '../feed-transform.js';
+import { matchesHost } from '../http-utils.js';
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;
+export const MATCH_HOSTS = Object.freeze(['linux.do']);
 export const DEFAULT_UNAVAILABLE_MESSAGE = 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
 
 const SITE_BASE = 'https://linux.do';
 
 export function matches(hostname) {
-  return hostname === 'linux.do' || hostname.endsWith('.linux.do');
+  return matchesHost(hostname, MATCH_HOSTS);
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {

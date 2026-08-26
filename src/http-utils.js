@@ -62,6 +62,28 @@ export function isBearerAuthorized(reqOrHeader, expectedToken) {
   return constantTimeEquals(provided, expected);
 }
 
+export function safeHost(url, fallback = 'unknown') {
+  try {
+    return new URL(String(url || '')).hostname.toLowerCase();
+  } catch {
+    return fallback;
+  }
+}
+
+export function isHostOrSubdomain(hostname, base) {
+  const h = String(hostname || '').toLowerCase();
+  const b = String(base || '').toLowerCase();
+  if (!h || !b) return false;
+  return h === b || h.endsWith(`.${b}`);
+}
+
+export function matchesHost(hostname, hosts) {
+  const h = String(hostname || '').toLowerCase();
+  if (!h) return false;
+  const list = Array.isArray(hosts) ? hosts : (hosts ? [hosts] : []);
+  return list.some((base) => isHostOrSubdomain(h, base));
+}
+
 export function mediaFileName(target, contentType) {
   try {
     const pathname = new URL(target).pathname;

@@ -7,6 +7,8 @@ import * as pixiv from './pixiv.js';
 import * as linuxdo from './linuxdo.js';
 import * as adultMedia from './adult-media.js';
 
+import { safeHost } from '../http-utils.js';
+
 export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
 
 export const DEFAULT_UNAVAILABLE_MESSAGE = '该来源暂时无法读取，请稍后重试或打开原始来源。';
@@ -25,10 +27,8 @@ export const defaultAdapter = {
 };
 
 export function adapterForUrl(url) {
-  let hostname = '';
-  try {
-    hostname = new URL(String(url)).hostname.toLowerCase();
-  } catch {
+  const hostname = safeHost(url, '');
+  if (!hostname) {
     return { ...defaultAdapter };
   }
   return { ...defaultAdapter, ...adapters.find((adapter) => adapter.matches(hostname)) };
