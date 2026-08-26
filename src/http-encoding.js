@@ -103,7 +103,7 @@ export function encodeTextResponse({
       }
     }
     if (acceptsGzip(acceptEncoding)) {
-      const encoded = gzipSync(source, { level: 6 });
+      const encoded = gzipSync(source, { level: DEFAULT_GZIP_LEVEL });
       if (encoded.length < source.length) {
         resultHeaders['content-encoding'] = 'gzip';
         resultHeaders['content-length'] = String(encoded.length);
@@ -150,7 +150,7 @@ export function encodeHtmlResponse({
       }
     }
     if (acceptsGzip(acceptEncoding)) {
-      const encoded = gzipSync(source, { level: 6 });
+      const encoded = gzipSync(source, { level: DEFAULT_GZIP_LEVEL });
       if (encoded.length < source.length) {
         resultHeaders['content-encoding'] = 'gzip';
         resultHeaders['content-length'] = String(encoded.length);
