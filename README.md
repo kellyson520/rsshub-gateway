@@ -321,7 +321,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `publicUrl(val, host)`, `asDate(val)`: Safe public URL canonicalizer and UTC ISO date parser.
   - `RANKING_PERIODS`, `MAX_ITEMS`: E-Hentai/EhViewer toplist query configurations and ceiling bounds.
   - `DEFAULT_BASE_URL` (Fetchd Sidecar), `DEFAULT_FETCHD_TIMEOUT_MS`, `MAX_FETCHD_TIMEOUT_MS`, `FETCHD_TIMEOUT_SLACK_MS`, `SITE_BASE` (LINUX DO / Iwara), `API_BASE` (Iwara REST), `DEFAULT_REFERER` (Pixiv): Direct upstream integration bases and browser-fetch timeouts.
-  - `ADULT_DOMAINS`, `DEFAULT_USER_AGENT`, `DEFAULT_ACCEPT_LANGUAGE`: Adult media content routing and default header profiles.
+  - `ADULT_DOMAINS`, `DEFAULT_USER_AGENT`, `DEFAULT_ACCEPT_LANGUAGE`, `DEFAULT_UNAVAILABLE_MESSAGE`: Standardized adapter error prompts, adult media content routing, and default header profiles.
   - `EH_GALLERY_PATH`, `EH_IMAGE_PATH`, `READER_CSS`, `IMAGE_VARIANT_WIDTHS`: Universal reading engine styles and responsive breakpoints.
   - `isEhentaiPage(url, pattern)`, `extractEhGalleryTitle(opts)`, `extractEhImagePage(opts)`: Pure gallery/image AST parsers.
   - `renderEhGalleryPage(opts)`, `renderEhImagePage(opts)`, `renderGenericReaderPage(opts)`: Responsive reading views.
