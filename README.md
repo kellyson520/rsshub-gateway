@@ -209,6 +209,23 @@ The foundation exposes only safe transport behavior to modules: target allowlist
 
 Egress health is judged per site, not globally. Each lease records the upstream host on release; repeated `401/403/407/429` responses from one host slide a failure window and temporarily remove the lane from that host's candidate set (emitting `site-blocked`), while a success resets the counter. When every eligible lane is blocked for a host, the pool degrades to the remaining lanes and logs `site-degraded` instead of failing the request. Diagnostics expose per-lane `siteBlocked` host lists and `healthyScopes` on `GET /_gateway/infra`.
 
+## Reusable Subsystem & Infrastructure Utilities
+
+The gateway provides low-level, reusable primitive behaviors and predicates across all modules to ensure zero-redundancy and high composability:
+
+- **HTTP Byte-Range & Partitions (`src/http-utils.js`, `src/media/chunks.js`)**: RFC 7233/9110 parsing with `parseByteRange(rangeHeader, totalBytes)` and structured chunk planning with `planChunks(totalBytes, options)`.
+- **Lossless Compression & Content Predicates (`src/http-encoding.js`)**: Edge compression detection via `isCompressibleContentType(contentType)` for text, HTML, XML, JSON, and SVG payloads.
+- **Cryptographic Signing & Verification (`src/signed-target.js`, `src/download-lease.js`)**: Constant-time HMAC SHA-256 validation (`isTargetSignatureValid`, `isChunkSignatureValid`) without payload decoding overhead.
+- **Circuit Breaker & Failure Tracking (`src/circuit-breaker.js`, `src/infrastructure/site-failure-tracker.js`)**: Sliding-window tracking with full lifecycle controls (`clearAll()`).
+- **Resilient Stream & Transport (`src/media/resumable-range.js`, `src/upstream-errors.js`)**: Standardized status assertions (`isResumableStatus`) and client abort diagnostics (`isClientAbortError`).
+- **Image Variant Rules (`src/image-variants.js`)**: Supported MIME validation (`isSupportedImageVariantType`) and resolution whitelist assertions (`isValidImageVariantWidth`).
+- **Reader Lifecycle & Manifests (`src/reader-manifest.js`)**: Whole-gallery completeness checks (`isManifestComplete`).
+- **Background Task Scheduling (`src/infrastructure/poller.js`)**: Periodic jitter task scheduler with dynamic unregistration (`unregister(name)`).
+- **Session Affinity & Hash Ring (`src/session-affinity.js`)**: Deterministic HMAC SHA-256 fingerprinting (`fingerprintFor`), credential canonicalization, and consistent lane selection (`chooseLane`).
+- **Unified Cache Architecture (`src/cache.js`)**: Key hashing (`keyFor`), namespace canonicalization, and priority eviction constants (`DEFAULT_EVICTION_PRIORITY`).
+- **Adapter Ecosystem (`src/adapters/index.js`)**: Source discovery (`getSupportedSourceNames`) and origin matching (`isKnownSourceUrl`).
+- **XML/Feed Transforms (`src/feed-transform.js`)**: Entity decoding (`decodeTextEntities`), Unicode normalizer (`normalizeNumericEntities`), and XML code point validation (`isValidXmlCodePoint`).
+
 Probe targets and failure tuning are configurable:
 
 | Environment | Default | Meaning |
