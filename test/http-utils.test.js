@@ -328,6 +328,20 @@ test('withoutCredentials, isAuthenticationRedirect and isAuthenticationChallenge
   assert.equal(await isAuthenticationChallenge({ status: 200 }, 'https://example.com', () => { throw new Error('fail'); }), false);
 });
 
+test('HOTLINK_REFERERS and refererFor correctly identify hotlinking-protected upstream media targets', async () => {
+  const { HOTLINK_REFERERS, refererFor } = await import('../src/http-utils.js');
+
+  assert.equal(refererFor('https://www.javbus.com/pics/thumb.jpg'), 'https://www.javbus.com/');
+  assert.equal(refererFor('https://img.jpgcdn.com/sample.jpg'), 'https://www.javbus.com/');
+  assert.equal(refererFor('https://pics.dmm.co.jp/cover.jpg'), 'https://www.dmm.co.jp/');
+  assert.equal(refererFor('https://cdn.jable.tv/video.mp4'), 'https://jable.tv/');
+  assert.equal(refererFor('https://custom.example.com/pic.png', { 'example.com': 'https://example.com/' }), 'https://example.com/');
+  assert.equal(refererFor('https://github.com/'), undefined);
+  assert.equal(refererFor('invalid-url'), undefined);
+  assert.equal(refererFor(null), undefined);
+  assert.ok(Object.isFrozen(HOTLINK_REFERERS));
+});
+
 test('safeJsonParse parses valid json safely and returns fallback for corrupt payloads', async () => {
   const { safeJsonParse } = await import('../src/http-utils.js');
 

@@ -6,8 +6,10 @@ import { GatewayUpstreamError, isRetryableStatus } from './upstream-errors.js';
 import { egressPolicyForRequest } from './egress-policy.js';
 import {
   clamp,
+  HOTLINK_REFERERS,
   isAuthenticationChallenge,
   isAuthenticationRedirect,
+  refererFor,
   sleep as defaultSleep,
   withoutCredentials,
 } from './http-utils.js';
@@ -16,33 +18,6 @@ const DEFAULT_PROXY = 'http://127.0.0.1:7890';
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_REDIRECTS_PER_ATTEMPT = 5;
-
-// 防盗链 CDN/图床：不带 Referer 直接返回 403（javbus/jpgcdn 等已验证）。
-// 匹配目标主机名或其子域时，给请求附加源站 Referer。
-const HOTLINK_REFERERS = Object.freeze({
-  'javbus.com': 'https://www.javbus.com/',
-  'javbus.one': 'https://www.javbus.com/',
-  'jpgcdn.com': 'https://www.javbus.com/',
-  'mgstage.com': 'https://www.mgstage.com/',
-  'dmm.co.jp': 'https://www.dmm.co.jp/',
-  'javdb.com': 'https://javdb.com/',
-  'jdbstatic.com': 'https://javdb.com/',
-  'missav.ai': 'https://missav.ai/',
-  'missav.com': 'https://missav.com/',
-  'jable.tv': 'https://jable.tv/',
-});
-
-function refererFor(url) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    for (const [base, referer] of Object.entries(HOTLINK_REFERERS)) {
-      if (hostname === base || hostname.endsWith(`.${base}`)) return referer;
-    }
-  } catch {
-    // Malformed diagnostic URLs never carry a referer.
-  }
-  return undefined;
-}
 
 function sourceHeaders(url, sources = {}, { includeCredentials = false, credentials } = {}) {
   const adapter = adapterForUrl(url);

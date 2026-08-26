@@ -105,6 +105,29 @@ export function matchesHost(hostname, hosts) {
   return list.some((base) => isHostOrSubdomain(h, base));
 }
 
+export const HOTLINK_REFERERS = Object.freeze({
+  'javbus.com': 'https://www.javbus.com/',
+  'javbus.one': 'https://www.javbus.com/',
+  'jpgcdn.com': 'https://www.javbus.com/',
+  'mgstage.com': 'https://www.mgstage.com/',
+  'dmm.co.jp': 'https://www.dmm.co.jp/',
+  'javdb.com': 'https://javdb.com/',
+  'jdbstatic.com': 'https://javdb.com/',
+  'missav.ai': 'https://missav.ai/',
+  'missav.com': 'https://missav.com/',
+  'jable.tv': 'https://jable.tv/',
+});
+
+export function refererFor(url, referers = HOTLINK_REFERERS) {
+  const hostname = safeHost(url, '');
+  if (!hostname) return undefined;
+  const table = referers && typeof referers === 'object' ? referers : HOTLINK_REFERERS;
+  for (const [base, referer] of Object.entries(table)) {
+    if (isHostOrSubdomain(hostname, base)) return referer;
+  }
+  return undefined;
+}
+
 export function parseHostList(value) {
   if (!value) return [];
   const parsed = safeJsonParse(value, null);
