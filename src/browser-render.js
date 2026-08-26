@@ -3,6 +3,10 @@
 
 const DEFAULT_RENDER_URL = process.env.GATEWAY_BROWSER_RENDER_URL || '';
 
+export {
+  DEFAULT_RENDER_URL,
+};
+
 export function createBrowserRenderClient({
   renderUrl = DEFAULT_RENDER_URL,
   fetchImpl = fetch,

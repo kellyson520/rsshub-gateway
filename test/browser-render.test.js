@@ -118,3 +118,8 @@ test('createBrowserRenderClient: enforces minimum 5000ms timeout budget', async 
   await client.fetchRenderedHtml('https://example.com/page', { timeoutMs: 1000 });
   assert.equal(passedTimeout, 5000);
 });
+
+test('createBrowserRenderClient exports DEFAULT_RENDER_URL constant', async () => {
+  const { DEFAULT_RENDER_URL } = await import('../src/browser-render.js');
+  assert.equal(typeof DEFAULT_RENDER_URL, 'string');
+});
