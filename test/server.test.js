@@ -2803,3 +2803,18 @@ test('exports request-handler helper utilities and default constants', async () 
   const viewWithPrefetch = withPrefetchStatus(view, 'https://cdn.example/video.mp4', () => ({ progress: 50 }));
   assert.deepEqual(viewWithPrefetch.prefetch, { progress: 50 });
 });
+
+test('exports server low-level utilities parseByteRange and failureMessage', async () => {
+  const { parseByteRange, failureMessage } = await import('../src/server.js');
+
+  assert.equal(failureMessage('gallery', 2), '画廊分页 2 暂时无法读取');
+  assert.equal(failureMessage('image', 5), '第 5 页暂时无法读取');
+
+  assert.deepEqual(parseByteRange('bytes=0-499', 1000), { start: 0, end: 499 });
+  assert.deepEqual(parseByteRange('bytes=500-', 1000), { start: 500, end: 999 });
+  assert.deepEqual(parseByteRange('bytes=-200', 1000), { start: 800, end: 999 });
+  assert.deepEqual(parseByteRange('bytes=1500-', 1000), { unsatisfiable: true });
+  assert.deepEqual(parseByteRange('bytes=500-200', 1000), { unsatisfiable: true });
+  assert.equal(parseByteRange('invalid', 1000), null);
+  assert.equal(parseByteRange('bytes=-', 1000), null);
+});

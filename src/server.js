@@ -47,6 +47,15 @@ import { createPoller } from './infrastructure/poller.js';
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
 import { createMediaTransport } from './media/media-transport.js';
 
+export {
+  loadCachedMedia,
+  fetchCachedMedia,
+  parseByteRange,
+  warmEhMedia,
+  failureMessage,
+  discoverEhGallery,
+};
+
 async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, request }) {
   const requestOptions = { ...request, range, circuit: false };
   const foreground = request?.priority === 'foreground';
