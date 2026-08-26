@@ -11,6 +11,7 @@ const MAX_ITEMS = 50;
 const MATCH_HOSTS = ['e-hentai.org', 'ehgt.org'];
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
+const DEFAULT_UNAVAILABLE_MESSAGE = 'E-Hentai 内容暂时无法读取，请稍后重试或打开原始来源。';
 
 export {
   RANKING_PERIODS,
@@ -18,6 +19,8 @@ export {
   MATCH_HOSTS,
   EH_GALLERY_PATH,
   EH_IMAGE_PATH,
+  DEFAULT_UNAVAILABLE_MESSAGE,
+  isEhentaiPage,
   publicUrl,
   asDate,
   escapeXml,

@@ -4,6 +4,8 @@ export const name = 'x';
 export const publiclyReadable = true;
 
 export const MATCH_HOSTS = ['x.com', 'twitter.com', 'twimg.com'];
+export const DEFAULT_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
+export const AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
 
 export function matches(hostname) {
   return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
@@ -22,7 +24,7 @@ export function readerTarget(url) {
 }
 
 export function unavailableMessage() {
-  return 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
+  return DEFAULT_UNAVAILABLE_MESSAGE;
 }
 
 export function isReaderUnavailable(html) {
@@ -34,6 +36,6 @@ export function isReaderUnavailable(html) {
 export function isAuthenticationChallenge({ status, headers, body } = {}) {
   if (status === 401) return true;
   const location = headers?.get?.('location') || headers?.location || '';
-  if (status >= 300 && status < 400 && /\/i\/flow\/login(?:[/?#]|$)/i.test(location)) return true;
+  if (status >= 300 && status < 400 && AUTH_FLOW_LOGIN_PATTERN.test(location)) return true;
   return status >= 200 && status < 300 && typeof body === 'string' && isReaderUnavailable(body);
 }

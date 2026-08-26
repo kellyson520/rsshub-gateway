@@ -204,3 +204,20 @@ test('exports adult-media adapter constants and domain array', async () => {
   assert.equal(isAuthenticationChallenge({ status: 200, body: '<html>cf-challenge active</html>' }), true);
   assert.equal(isAuthenticationChallenge({ status: 200, body: '<html>normal page</html>' }), false);
 });
+
+test('exports default unavailable messages and patterns across adapters', async () => {
+  const x = await import('../src/adapters/x.js');
+  const ig = await import('../src/adapters/instagram.js');
+  const pixiv = await import('../src/adapters/pixiv.js');
+  const tg = await import('../src/adapters/telegram.js');
+  const eh = await import('../src/adapters/ehviewer.js');
+
+  assert.ok(x.DEFAULT_UNAVAILABLE_MESSAGE.includes('X 内容'));
+  assert.ok(x.AUTH_FLOW_LOGIN_PATTERN instanceof RegExp);
+  assert.ok(ig.DEFAULT_UNAVAILABLE_MESSAGE.includes('Instagram 内容'));
+  assert.ok(ig.AUTH_LOGIN_PATTERN instanceof RegExp);
+  assert.ok(pixiv.DEFAULT_UNAVAILABLE_MESSAGE.includes('Pixiv 内容'));
+  assert.ok(tg.DEFAULT_UNAVAILABLE_MESSAGE.includes('Telegram 内容'));
+  assert.ok(eh.DEFAULT_UNAVAILABLE_MESSAGE.includes('E-Hentai 内容'));
+  assert.equal(typeof eh.isEhentaiPage, 'function');
+});
