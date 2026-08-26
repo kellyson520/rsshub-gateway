@@ -138,3 +138,21 @@ test('options exports default constants for external callers', async () => {
   assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900_000);
   assert.equal(DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES, 256 * 1024 ** 2);
 });
+
+test('exports newly sunk lease, image variant and slow source threshold defaults', async () => {
+  const {
+    DEFAULT_IMAGE_VARIANT_CONCURRENCY,
+    DEFAULT_LEASE_BACKFILL_CONCURRENCY,
+    DEFAULT_LEASE_TTL_MS,
+    DEFAULT_LEASE_MAX_BYTES,
+    DEFAULT_LEASE_MAX_CONCURRENCY,
+    DEFAULT_SLOW_SOURCE_THRESHOLD_MS,
+  } = await import('../src/options.js');
+
+  assert.equal(DEFAULT_IMAGE_VARIANT_CONCURRENCY, 2);
+  assert.equal(DEFAULT_LEASE_BACKFILL_CONCURRENCY, 2);
+  assert.equal(DEFAULT_LEASE_TTL_MS, 30 * 60_000);
+  assert.equal(DEFAULT_LEASE_MAX_BYTES, 2 * 1024 ** 3);
+  assert.equal(DEFAULT_LEASE_MAX_CONCURRENCY, 8);
+  assert.equal(DEFAULT_SLOW_SOURCE_THRESHOLD_MS, 5_000);
+});
