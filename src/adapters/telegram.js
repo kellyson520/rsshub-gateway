@@ -1,5 +1,6 @@
 export const name = 'telegram';
 export const publiclyReadable = true;
+export const MATCH_HOSTS = ['t.me'];
 
 export function matches(hostname) {
   return hostname === 't.me' || hostname.endsWith('.t.me');

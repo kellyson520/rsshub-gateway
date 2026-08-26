@@ -8,14 +8,18 @@ const RANKING_PERIODS = Object.freeze({
 });
 
 const MAX_ITEMS = 50;
+const MATCH_HOSTS = ['e-hentai.org', 'ehgt.org'];
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 
 export {
   RANKING_PERIODS,
   MAX_ITEMS,
+  MATCH_HOSTS,
   EH_GALLERY_PATH,
   EH_IMAGE_PATH,
+  publicUrl,
+  asDate,
   escapeXml,
   cdata,
 };
@@ -23,7 +27,7 @@ export {
 export const name = 'ehviewer';
 
 export function matches(hostname) {
-  return ['e-hentai.org', 'ehgt.org'].some((base) => hostname === base || hostname.endsWith(`.${base}`));
+  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
 }
 
 export function headers() {

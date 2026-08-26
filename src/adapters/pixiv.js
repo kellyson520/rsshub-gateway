@@ -1,4 +1,5 @@
 export const DEFAULT_REFERER = 'https://www.pixiv.net/';
+export const MATCH_HOSTS = ['pixiv.net', 'pximg.net'];
 export const name = 'pixiv';
 export const publiclyReadable = true;
 

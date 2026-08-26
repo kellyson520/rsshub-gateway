@@ -133,6 +133,12 @@ test('exports configuration constants and domain match arrays across social adap
   assert.ok(instagramAdapter.MATCH_HOSTS.includes('fbcdn.net'));
 
   assert.equal(pixivAdapter.DEFAULT_REFERER, 'https://www.pixiv.net/');
+  assert.ok(Array.isArray(pixivAdapter.MATCH_HOSTS));
+  assert.ok(pixivAdapter.MATCH_HOSTS.includes('pixiv.net'));
+  assert.ok(pixivAdapter.MATCH_HOSTS.includes('pximg.net'));
+
+  assert.ok(Array.isArray(telegramAdapter.MATCH_HOSTS));
+  assert.ok(telegramAdapter.MATCH_HOSTS.includes('t.me'));
 
   assert.equal(telegramAdapter.isTelegramChannelPostUrl('https://t.me/durov/123'), true);
   assert.equal(telegramAdapter.isTelegramChannelPostUrl('https://t.me/s/durov'), false);

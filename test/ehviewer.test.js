@@ -98,4 +98,15 @@ test('exports RANKING_PERIODS, MAX_ITEMS, escapeXml and cdata helpers', async ()
   assert.ok(EH_IMAGE_PATH instanceof RegExp);
   assert.equal(escapeXml('<foo & bar>'), '&lt;foo &amp; bar&gt;');
   assert.equal(cdata('content'), '<![CDATA[content]]>');
+
+  const { MATCH_HOSTS, publicUrl, asDate } = await import('../src/adapters/ehviewer.js');
+  assert.ok(Array.isArray(MATCH_HOSTS));
+  assert.ok(MATCH_HOSTS.includes('e-hentai.org'));
+  assert.ok(MATCH_HOSTS.includes('ehgt.org'));
+
+  assert.equal(publicUrl('https://e-hentai.org/g/1/2', 'e-hentai.org'), 'https://e-hentai.org/g/1/2');
+  assert.equal(publicUrl('https://external.com/test', 'e-hentai.org'), '');
+
+  assert.equal(asDate('2026-08-08 12:00'), 'Sat, 08 Aug 2026 12:00:00 GMT');
+  assert.equal(asDate('invalid-date'), '');
 });
