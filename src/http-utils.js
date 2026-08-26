@@ -526,6 +526,18 @@ export async function isAuthenticationChallenge(response, url, callback) {
   }
 }
 
+export function durationCheckpoint(results = [], count = 0) {
+  const safeCount = Number.isInteger(count) ? count : 0;
+  if (!safeCount || !Array.isArray(results) || !results.length) return 0;
+  const samples = results
+    .map((result) => (typeof result === 'object' && result !== null ? Number(result.completedAt) : Number(result)))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  if (!samples.length) return 0;
+  const picked = samples.slice(0, safeCount);
+  return Math.max(...picked);
+}
+
 export function cdata(value) {
   return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
 }

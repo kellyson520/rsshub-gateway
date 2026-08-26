@@ -1,4 +1,4 @@
-import { mapWithConcurrency, nonNegativeInteger } from './http-utils.js';
+import { durationCheckpoint, mapWithConcurrency, nonNegativeInteger } from './http-utils.js';
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const MEDIA_CONCURRENCY = 8;
@@ -47,14 +47,6 @@ function mediaUrls(html, baseUrl) {
 
 function numericContentLength(response) {
   return nonNegativeInteger(response.headers.get('content-length'), 0);
-}
-
-function durationCheckpoint(results, count) {
-  if (!count) return 0;
-  return Math.max(...results
-    .map((result) => result.completedAt)
-    .sort((left, right) => left - right)
-    .slice(0, count));
 }
 
 function variantUrl(original, width = DEFAULT_BENCHMARK_VARIANT_WIDTH) {

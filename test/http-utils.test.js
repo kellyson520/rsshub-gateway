@@ -89,7 +89,8 @@ test('readLimited and readBinaryLimited read response bodies with limits', async
   await assert.rejects(() => readLimited(new Response('hello world'), 4), /too large/);
 });
 
-test('mapWithConcurrency runs all items bounded by concurrency', async () => {
+test('mapWithConcurrency and durationCheckpoint run bounded tasks and compute latency checkpoints', async () => {
+  const { durationCheckpoint } = await import('../src/http-utils.js');
   const seen = [];
   const results = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (value) => {
     seen.push(value);
@@ -97,6 +98,20 @@ test('mapWithConcurrency runs all items bounded by concurrency', async () => {
   });
   assert.deepEqual(results, [2, 4, 6, 8, 10]);
   assert.equal(seen.length, 5);
+
+  const samples = [
+    { completedAt: 120 },
+    { completedAt: 50 },
+    { completedAt: 300 },
+    { completedAt: 80 },
+  ];
+  assert.equal(durationCheckpoint(samples, 1), 50);
+  assert.equal(durationCheckpoint(samples, 2), 80);
+  assert.equal(durationCheckpoint(samples, 3), 120);
+  assert.equal(durationCheckpoint(samples, 4), 300);
+  assert.equal(durationCheckpoint(samples, 0), 0);
+  assert.equal(durationCheckpoint([], 2), 0);
+  assert.equal(durationCheckpoint(null, 2), 0);
 });
 
 test('writeJson writes status and json body', async () => {
