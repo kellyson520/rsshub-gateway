@@ -373,6 +373,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `sleep(ms)`: High-precision promise-based sleep delay helper with negative-value absorption.
   - `withDeadline(promise, timeoutMs, fallback)`: Generic promise execution bounded by a hard millisecond timeout.
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
+  - `normalizeHeaderMap(headers)`, `canonicalHeadersString(headers)`: Deterministic HTTP header/credential normalization and canonical serialization.
   - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`: High-performance cryptographic digest and HMAC serializers.
   - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.

@@ -333,6 +333,23 @@ test('dedupe removes duplicate items preserving order and supports key mapper', 
   assert.deepEqual(dedupe('single'), ['single']);
 });
 
+test('normalizeHeaderMap and canonicalHeadersString sort and sanitize headers deterministically', async () => {
+  const { normalizeHeaderMap, canonicalHeadersString } = await import('../src/http-utils.js');
+  
+  assert.deepEqual(normalizeHeaderMap({ 'Authorization': 'Bearer token', 'Cookie': 'sid=123' }), [
+    ['authorization', 'Bearer token'],
+    ['cookie', 'sid=123'],
+  ]);
+
+  assert.equal(
+    canonicalHeadersString({ 'B': '2', 'A': '1', 'Empty': '' }),
+    'a=1\nb=2',
+  );
+
+  assert.equal(canonicalHeadersString(null), '');
+  assert.equal(canonicalHeadersString(undefined), '');
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

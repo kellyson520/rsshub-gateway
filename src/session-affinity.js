@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { dedupe, hmacSha256, sha256Hex } from './http-utils.js';
+import { canonicalHeadersString, dedupe, hmacSha256, sha256Hex } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -15,15 +15,7 @@ function normalizedLaneIds(value) {
 }
 
 function normalizedCredentials(credentials = {}) {
-  const entries = credentials instanceof Headers
-    ? [...credentials.entries()]
-    : Object.entries(credentials || {});
-  return entries
-    .map(([name, value]) => [String(name || '').trim().toLowerCase(), String(value || '').trim()])
-    .filter(([name, value]) => name && value)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${name}=${value}`)
-    .join('\n');
+  return canonicalHeadersString(credentials);
 }
 
 function fingerprintFor(source, credentials, secret) {

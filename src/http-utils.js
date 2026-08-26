@@ -402,6 +402,22 @@ export function constantTimeEquals(left, right) {
   }
 }
 
+export function normalizeHeaderMap(headers = {}) {
+  const entries = headers instanceof Headers
+    ? [...headers.entries()]
+    : (Array.isArray(headers) ? headers : Object.entries(headers || {}));
+  return entries
+    .map(([name, value]) => [String(name || '').trim().toLowerCase(), String(value || '').trim()])
+    .filter(([name, value]) => name && value)
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
+export function canonicalHeadersString(headers = {}) {
+  return normalizeHeaderMap(headers)
+    .map(([name, value]) => `${name}=${value}`)
+    .join('\n');
+}
+
 export function safeEvent(onEvent, event) {
   try {
     onEvent?.(event);
