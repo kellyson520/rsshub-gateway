@@ -103,6 +103,23 @@ test('revokeExpired cleans up revoked and expired leases accurately', () => {
   assert.equal(store.stats().leases, 1);
 });
 
+test('isChunkSignatureValid verifies chunk token signature without throwing or decoding', async () => {
+  const { isChunkSignatureValid } = await import('../src/download-lease.js');
+  const secret = 'test-secret';
+  const token = createSignedChunk({
+    url: 'https://acheron.iwara.tv/video/abc.mp4',
+    start: 0,
+    end: 1000,
+    secret,
+  });
+  assert.equal(isChunkSignatureValid(token, secret), true);
+  assert.equal(isChunkSignatureValid(token, 'wrong-secret'), false);
+  assert.equal(isChunkSignatureValid(`${token}tamper`, secret), false);
+  assert.equal(isChunkSignatureValid('malformed.chunk', secret), false);
+  assert.equal(isChunkSignatureValid(null, secret), false);
+  assert.equal(isChunkSignatureValid(undefined, secret), false);
+});
+
 test('verify handles null, undefined and password length mismatch safely', () => {
   const store = createLeaseStore();
   const lease = store.createLease({ targetUrl: 'https://filesq.iwara.tv/1.mp4' });

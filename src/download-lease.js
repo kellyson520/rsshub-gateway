@@ -133,6 +133,18 @@ export function createSignedChunk({ url, start, end, secret, now: nowValue = Mat
 
 const CHUNK_METADATA_KEYS = new Set(['egressScope', 'source', 'sessionId', 'index']);
 
+export function isChunkSignatureValid(token, secret) {
+  const [payload, signature] = String(token || '').split('.');
+  if (!payload || !signature) return false;
+  try {
+    const expected = createHmac('sha256', secret).update(payload).digest();
+    const actual = Buffer.from(signature, 'base64url');
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
 export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1000)) {
   const [payload, signature] = String(token).split('.');
   if (!payload || !signature) throw new Error('malformed chunk token');
