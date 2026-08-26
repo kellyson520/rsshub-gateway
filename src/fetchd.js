@@ -1,10 +1,9 @@
 import { GatewayUpstreamError } from './upstream-errors.js';
 
-const DEFAULT_BASE_URL = process.env.IWARA_FETCHD_URL || 'http://127.0.0.1:7899';
-
-export {
-  DEFAULT_BASE_URL,
-};
+export const DEFAULT_BASE_URL = process.env.IWARA_FETCHD_URL || 'http://127.0.0.1:7899';
+export const DEFAULT_FETCHD_TIMEOUT_MS = 20_000;
+export const MAX_FETCHD_TIMEOUT_MS = 65_000;
+export const FETCHD_TIMEOUT_SLACK_MS = 5_000;
 
 export function createFetchdClient({
   baseUrl = DEFAULT_BASE_URL,
@@ -15,7 +14,7 @@ export function createFetchdClient({
     method = 'GET',
     headers = {},
     body,
-    timeout = 20_000,
+    timeout = DEFAULT_FETCHD_TIMEOUT_MS,
   } = {}) {
     let response;
     let payload;
@@ -24,7 +23,7 @@ export function createFetchdClient({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url, method, headers, body, timeout }),
-        signal: AbortSignal.timeout(Math.min(timeout + 5_000, 65_000)),
+        signal: AbortSignal.timeout(Math.min(timeout + FETCHD_TIMEOUT_SLACK_MS, MAX_FETCHD_TIMEOUT_MS)),
       });
       payload = await response.json();
     } catch (error) {

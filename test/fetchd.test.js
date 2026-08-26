@@ -115,7 +115,15 @@ test('createFetchdClient: handles empty body payload and defaults buffer to empt
   assert.equal(res.body.length, 0);
 });
 
-test('exports DEFAULT_BASE_URL constant', async () => {
-  const { DEFAULT_BASE_URL } = await import('../src/fetchd.js');
+test('exports DEFAULT_BASE_URL and fetchd timeout constants', async () => {
+  const {
+    DEFAULT_BASE_URL,
+    DEFAULT_FETCHD_TIMEOUT_MS,
+    MAX_FETCHD_TIMEOUT_MS,
+    FETCHD_TIMEOUT_SLACK_MS,
+  } = await import('../src/fetchd.js');
   assert.equal(typeof DEFAULT_BASE_URL, 'string');
+  assert.equal(DEFAULT_FETCHD_TIMEOUT_MS, 20_000);
+  assert.equal(MAX_FETCHD_TIMEOUT_MS, 65_000);
+  assert.equal(FETCHD_TIMEOUT_SLACK_MS, 5_000);
 });
