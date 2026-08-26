@@ -450,3 +450,35 @@ test('refererFor returns undefined for malformed URL or unconfigured hosts', asy
   await client.fetchExternal('https://e-hentai.org/g/1/2/');
   assert.equal(recordedHeaders[0].referer, undefined);
 });
+
+test('exports default upstream constants and authentication predicates', async () => {
+  const {
+    DEFAULT_PROXY,
+    DEFAULT_TIMEOUT,
+    DEFAULT_MAX_ATTEMPTS,
+    MAX_REDIRECTS_PER_ATTEMPT,
+    HOTLINK_REFERERS,
+    withoutCredentials,
+    isAuthenticationRedirect,
+    refererFor,
+  } = await import('../src/upstream.js');
+
+  assert.equal(DEFAULT_PROXY, 'http://127.0.0.1:7890');
+  assert.equal(DEFAULT_TIMEOUT, 30_000);
+  assert.equal(DEFAULT_MAX_ATTEMPTS, 3);
+  assert.equal(MAX_REDIRECTS_PER_ATTEMPT, 5);
+
+  assert.equal(typeof HOTLINK_REFERERS, 'object');
+  assert.equal(HOTLINK_REFERERS['javbus.com'], 'https://www.javbus.com/');
+
+  assert.equal(refererFor('https://javbus.com/item/1'), 'https://www.javbus.com/');
+  assert.equal(refererFor('invalid-url'), undefined);
+
+  assert.deepEqual(
+    withoutCredentials({ 'content-type': 'text/plain', cookie: 'secret=1', authorization: 'Bearer abc' }),
+    { 'content-type': 'text/plain' },
+  );
+
+  assert.equal(isAuthenticationRedirect(new Response(null, { status: 302, headers: { location: '/login' } })), true);
+  assert.equal(isAuthenticationRedirect(new Response(null, { status: 200, headers: { location: '/login' } })), false);
+});

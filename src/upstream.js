@@ -420,4 +420,15 @@ export function createUpstreamClient({
   };
 }
 
-export { sourceHeaders };
+export {
+  DEFAULT_PROXY,
+  DEFAULT_TIMEOUT,
+  DEFAULT_MAX_ATTEMPTS,
+  MAX_REDIRECTS_PER_ATTEMPT,
+  HOTLINK_REFERERS,
+  refererFor,
+  sourceHeaders,
+  withoutCredentials,
+  isAuthenticationRedirect,
+  isAuthenticationChallenge,
+};
