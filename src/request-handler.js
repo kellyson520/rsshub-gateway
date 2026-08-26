@@ -13,10 +13,12 @@ import { chunkSizeFor } from './media/chunks.js';
 import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
 import {
+  boundedInteger,
   fetchCachedDocument,
   isBearerAuthorized,
   isEhImagePageTarget,
   mediaFileName,
+  positiveInteger,
   publicBaseUrl,
   readJsonBody,
   readLimited,
@@ -559,8 +561,10 @@ export function createRequestHandler(deps) {
         writeText(res, 404, 'download session not found\n');
         return;
       }
-      const waitMs = Math.min(
-        Math.max(Number.parseInt(requestUrl.searchParams.get('timeout') || '', 10) || DEFAULT_PREFETCH_WAIT_MS, 0),
+      const waitMs = boundedInteger(
+        requestUrl.searchParams.get('timeout'),
+        DEFAULT_PREFETCH_WAIT_MS,
+        0,
         MAX_PREFETCH_WAIT_MS,
       );
       const deadline = Date.now() + waitMs;
@@ -583,13 +587,13 @@ export function createRequestHandler(deps) {
           writeText(res, 403, 'resource unavailable\n');
           return;
         }
-        const wanted = Number.parseInt(requestUrl.searchParams.get('chunks') || '', 10);
+        const wanted = positiveInteger(requestUrl.searchParams.get('chunks'), 1);
         const size = await mediaSizeFor(verified.url);
         if (!size) {
           writeText(res, 503, 'size unavailable\n');
           return;
         }
-        const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
+        const { count, size: chunkSize } = chunkSizeFor(size, wanted);
         const sessionId = randomUUID();
         const entries = [];
         for (let index = 0; index < count; index += 1) {
@@ -789,13 +793,13 @@ export function createRequestHandler(deps) {
       attribution.source = routeMetadata.source;
       const chunksParam = gatewayMatch[1] === 'media' ? requestUrl.searchParams.get('chunks') : null;
       if (chunksParam !== null && chunksParam !== '') {
-        const wanted = Number.parseInt(chunksParam, 10);
+        const wanted = positiveInteger(chunksParam, 1);
         const size = await mediaSizeFor(target);
         if (!size) {
           writeText(res, 503, 'size unavailable\n');
           return;
         }
-        const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
+        const { count, size: chunkSize } = chunkSizeFor(size, wanted);
         const urls = [];
         const chunks = [];
         for (let index = 0; index < count; index += 1) {
