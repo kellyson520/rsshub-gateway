@@ -47,3 +47,18 @@ test('isRetryableStatus: correctly identifies retryable and non-retryable HTTP s
   assert.equal(isRetryableStatus(undefined), false);
   assert.equal(isRetryableStatus('500'), false);
 });
+
+test('isClientAbortError: detects client disconnection, premature close, and stream aborts', async () => {
+  const { isClientAbortError } = await import('../src/upstream-errors.js');
+  assert.equal(isClientAbortError(new Error('client response closed')), true);
+  assert.equal(isClientAbortError(new Error('stream aborted')), true);
+  assert.equal(isClientAbortError({ code: 'ECONNRESET' }), true);
+  assert.equal(isClientAbortError({ code: 'ERR_STREAM_PREMATURE_CLOSE' }), true);
+  assert.equal(isClientAbortError({ code: 'ABORT_ERR' }), true);
+
+  // Non-abort errors
+  assert.equal(isClientAbortError(new Error('network timeout')), false);
+  assert.equal(isClientAbortError(new Error('unauthorized')), false);
+  assert.equal(isClientAbortError(null), false);
+  assert.equal(isClientAbortError(undefined), false);
+});
