@@ -92,11 +92,19 @@ export {
   sessionLaneId,
   sessionLaneGroup,
   listenerUrl,
+  boundedPositiveInteger,
+  toUrlList,
+  safeEvent,
   DEFAULT_CONTROLLER_URL,
   DEFAULT_LISTENER_BASE_URL,
   DEFAULT_LANE_COUNT,
   DEFAULT_SESSION_LANE_COUNT,
   DEFAULT_SESSION_LISTENER_BASE_PORT,
+  DEFAULT_PROBE_TIMEOUT_MS,
+  DEFAULT_PROBE_CACHE_MS,
+  PUBLIC_GROUP,
+  GROUP_TYPES,
+  RESERVED_NAMES,
 };
 
 export function createMihomoEgressAdapter({

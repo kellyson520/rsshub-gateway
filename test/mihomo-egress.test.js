@@ -572,7 +572,7 @@ test('filters English subscription metadata nodes as well', async () => {
   assert.equal(lanes[0].proxyName, 'node-us-01');
 });
 
-test('exports lane formatting and metadata detection helpers', async () => {
+test('exports lane formatting, probe defaults, and metadata detection helpers', async () => {
   const {
     isSubscriptionMetadataName,
     normalizeProbeTargets,
@@ -581,7 +581,17 @@ test('exports lane formatting and metadata detection helpers', async () => {
     sessionLaneId,
     sessionLaneGroup,
     listenerUrl,
+    boundedPositiveInteger,
+    toUrlList,
+    safeEvent,
     DEFAULT_LANE_COUNT,
+    DEFAULT_SESSION_LANE_COUNT,
+    DEFAULT_SESSION_LISTENER_BASE_PORT,
+    DEFAULT_PROBE_TIMEOUT_MS,
+    DEFAULT_PROBE_CACHE_MS,
+    PUBLIC_GROUP,
+    GROUP_TYPES,
+    RESERVED_NAMES,
   } = await import('../src/mihomo-egress.js');
 
   assert.equal(isSubscriptionMetadataName('剩余流量: 100G'), true);
@@ -603,4 +613,26 @@ test('exports lane formatting and metadata detection helpers', async () => {
   assert.deepEqual(normalizeProbeTargets(null, 'https://legacy.example/health').public, ['https://legacy.example/health']);
 
   assert.equal(DEFAULT_LANE_COUNT, 12);
+  assert.equal(DEFAULT_SESSION_LANE_COUNT, 12);
+  assert.equal(DEFAULT_SESSION_LISTENER_BASE_PORT, 7921);
+  assert.equal(DEFAULT_PROBE_TIMEOUT_MS, 5_000);
+  assert.equal(DEFAULT_PROBE_CACHE_MS, 5 * 60_000);
+  assert.equal(PUBLIC_GROUP, 'PUBLIC');
+  assert.ok(GROUP_TYPES instanceof Set);
+  assert.ok(GROUP_TYPES.has('LoadBalance'));
+  assert.ok(RESERVED_NAMES instanceof Set);
+  assert.ok(RESERVED_NAMES.has('DIRECT'));
+
+  assert.equal(boundedPositiveInteger('5', 1, 10), 5);
+  assert.equal(boundedPositiveInteger('50', 1, 10), 10);
+  assert.equal(boundedPositiveInteger('invalid', 1, 10), 1);
+
+  assert.deepEqual(toUrlList(['a', 'b']), ['a', 'b']);
+  assert.deepEqual(toUrlList('single'), ['single']);
+  assert.deepEqual(toUrlList(null), []);
+
+  let eventCaptured = null;
+  safeEvent((e) => { eventCaptured = e; }, { type: 'test' });
+  assert.deepEqual(eventCaptured, { type: 'test' });
+  assert.doesNotThrow(() => safeEvent(() => { throw new Error('fail'); }, {}));
 });
