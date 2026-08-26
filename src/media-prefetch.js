@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
-import { boundedInteger } from './http-utils.js';
+import { boundedInteger, safeEvent } from './http-utils.js';
+import { isRetryableStatus as retryableStatus, isSuccessfulStatus as successfulStatus } from './upstream-errors.js';
 
 const DEFAULT_CACHE_ROOT = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway';
 const DEFAULT_INITIAL_CONCURRENCY = 6;
@@ -22,22 +23,6 @@ function originFor(target) {
     return isAllowedTarget(parsed) ? parsed.host.toLowerCase() : '';
   } catch {
     return '';
-  }
-}
-
-function retryableStatus(status) {
-  return RETRYABLE_STATUSES.has(status) || (Number.isInteger(status) && status >= 500 && status <= 599);
-}
-
-function successfulStatus(status) {
-  return Number.isInteger(status) && status >= 200 && status <= 299;
-}
-
-function safeEvent(onEvent, event) {
-  try {
-    onEvent?.(event);
-  } catch {
-    // Diagnostics must never affect background preloading.
   }
 }
 

@@ -263,6 +263,14 @@ export function createConcurrencyLimiter(limit) {
   };
 }
 
+export function safeEvent(onEvent, event) {
+  try {
+    onEvent?.(event);
+  } catch {
+    // Diagnostics must never fail runtime logic.
+  }
+}
+
 export {
   CACHE_RESPONSE_HEADERS,
 };

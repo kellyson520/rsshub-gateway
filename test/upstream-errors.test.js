@@ -63,6 +63,20 @@ test('isClientAbortError: detects client disconnection, premature close, and str
   assert.equal(isClientAbortError(undefined), false);
 });
 
+test('isSuccessfulStatus: identifies 2xx HTTP success statuses correctly', async () => {
+  const { isSuccessfulStatus } = await import('../src/upstream-errors.js');
+  assert.equal(isSuccessfulStatus(200), true);
+  assert.equal(isSuccessfulStatus(204), true);
+  assert.equal(isSuccessfulStatus(206), true);
+  assert.equal(isSuccessfulStatus(299), true);
+  assert.equal(isSuccessfulStatus(199), false);
+  assert.equal(isSuccessfulStatus(300), false);
+  assert.equal(isSuccessfulStatus(404), false);
+  assert.equal(isSuccessfulStatus(500), false);
+  assert.equal(isSuccessfulStatus('200'), false);
+  assert.equal(isSuccessfulStatus(null), false);
+});
+
 test('exports default upstream error status and source constants', async () => {
   const { DEFAULT_UPSTREAM_ERROR_STATUS, DEFAULT_UPSTREAM_SOURCE } = await import('../src/upstream-errors.js');
   assert.equal(DEFAULT_UPSTREAM_ERROR_STATUS, 502);

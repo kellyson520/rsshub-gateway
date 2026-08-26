@@ -1,4 +1,6 @@
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
+import { safeEvent } from './http-utils.js';
+import { isRetryableStatus as isRetryable, isSuccessfulStatus as isSuccess } from './upstream-errors.js';
 
 const DEFAULT_MIN_CONCURRENCY_PER_LANE = 3;
 const DEFAULT_MAX_CONCURRENCY_PER_LANE = 6;
@@ -8,22 +10,6 @@ const DEFAULT_BACKGROUND_RESERVE_PER_LANE = 1;
 const EWMA_ALPHA = 0.2;
 const MAX_LATENCY_SAMPLE_MS = 10_000;
 const RETRYABLE_STATUSES = new Set([408, 425, 429]);
-
-function safeEvent(onEvent, event) {
-  try {
-    onEvent?.(event);
-  } catch {
-    // Diagnostics must never affect request scheduling.
-  }
-}
-
-function isSuccess(status) {
-  return Number.isInteger(status) && status >= 200 && status <= 299;
-}
-
-function isRetryable(status) {
-  return RETRYABLE_STATUSES.has(status) || (Number.isInteger(status) && status >= 500 && status <= 599);
-}
 
 function poolError(message, code) {
   return Object.assign(new Error(message), { code });

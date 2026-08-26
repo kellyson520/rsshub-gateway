@@ -1,4 +1,5 @@
 import { ProxyAgent } from 'undici';
+import { safeEvent } from './http-utils.js';
 
 const DEFAULT_CONTROLLER_URL = process.env.EGRESS_CONTROLLER_URL || 'http://127.0.0.1:9090';
 const DEFAULT_LISTENER_BASE_URL = process.env.EGRESS_PROXY_BASE_URL || 'http://127.0.0.1';
@@ -74,14 +75,6 @@ function listenerUrl(baseUrl, index, basePort = 7901) {
   const target = new URL(baseUrl);
   target.port = String(basePort + index);
   return target.toString().replace(/\/$/, '');
-}
-
-function safeEvent(onEvent, event) {
-  try {
-    onEvent?.(event);
-  } catch {
-    // Diagnostics must never affect egress refresh.
-  }
 }
 
 export {

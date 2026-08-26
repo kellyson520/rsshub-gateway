@@ -27,3 +27,7 @@ export function isClientAbortError(error) {
 export function isRetryableStatus(status) {
   return Number.isInteger(status) && (status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599));
 }
+
+export function isSuccessfulStatus(status) {
+  return Number.isInteger(status) && status >= 200 && status <= 299;
+}
