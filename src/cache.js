@@ -1,8 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
+import { sha256Hex } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = Object.freeze({
   rss: 300,
@@ -29,7 +30,7 @@ function normalizedNamespace(value) {
 }
 
 function keyFor(url, kind, namespace = 'public') {
-  return createHash('sha256').update(`${kind}\n${normalizedNamespace(namespace)}\n${canonicalUrl(url)}`).digest('hex');
+  return sha256Hex(`${kind}\n${normalizedNamespace(namespace)}\n${canonicalUrl(url)}`);
 }
 
 function normalizedHeaders(headers) {

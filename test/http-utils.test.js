@@ -213,6 +213,13 @@ test('decodeJwtPayload, jwtExpiryMs and asDate helpers format and parse correctl
   assert.equal(asDate(null), '');
 });
 
+test('sha256Hex produces deterministic lowercase hex digest', async () => {
+  const { sha256Hex } = await import('../src/http-utils.js');
+  assert.equal(sha256Hex('hello world'), 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9');
+  assert.equal(sha256Hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  assert.equal(sha256Hex(null), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

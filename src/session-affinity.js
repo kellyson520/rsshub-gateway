@@ -1,7 +1,8 @@
-import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
+import { sha256Hex } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -31,7 +32,7 @@ function fingerprintFor(source, credentials, secret) {
 }
 
 function proxyIdentityHash(value) {
-  return value ? createHash('sha256').update(String(value)).digest('hex') : '';
+  return value ? sha256Hex(value) : '';
 }
 
 function chooseLane(fingerprint, laneIds, unhealthyLanes) {
@@ -43,8 +44,8 @@ function chooseLane(fingerprint, laneIds, unhealthyLanes) {
   }
   return candidates.reduce((best, laneId) => {
     if (!best) return laneId;
-    const laneScore = createHash('sha256').update(`${fingerprint}\n${laneId}`).digest('hex');
-    const bestScore = createHash('sha256').update(`${fingerprint}\n${best}`).digest('hex');
+    const laneScore = sha256Hex(`${fingerprint}\n${laneId}`);
+    const bestScore = sha256Hex(`${fingerprint}\n${best}`);
     return laneScore > bestScore ? laneId : best;
   }, '');
 }

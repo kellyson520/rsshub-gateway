@@ -263,6 +263,12 @@ export function createConcurrencyLimiter(limit) {
   };
 }
 
+import { createHash } from 'node:crypto';
+
+export function sha256Hex(value) {
+  return createHash('sha256').update(String(value ?? '')).digest('hex');
+}
+
 export function safeEvent(onEvent, event) {
   try {
     onEvent?.(event);
