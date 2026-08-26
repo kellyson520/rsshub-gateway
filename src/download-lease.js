@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { decode, encode, isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
-import { constantTimeEquals, dedupe, hmacSha256, isSignatureMatch } from './http-utils.js';
+import { constantTimeEquals, dedupe, hmacSha256, isSignatureMatch, safeJsonParse } from './http-utils.js';
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
@@ -136,7 +136,7 @@ export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1
   if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
     throw new Error('invalid chunk signature');
   }
-  const data = JSON.parse(decode(payload));
+  const data = safeJsonParse(decode(payload), null);
   if (!data || typeof data !== 'object' || !Number.isInteger(data.exp) || data.exp <= now) {
     throw new Error('chunk expired or malformed');
   }

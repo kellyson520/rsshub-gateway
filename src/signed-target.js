@@ -1,5 +1,5 @@
 import net from 'node:net';
-import { hmacSha256, isHostOrSubdomain, isSignatureMatch, matchesHost } from './http-utils.js';
+import { boundedInteger, hmacSha256, isHostOrSubdomain, isSignatureMatch, matchesHost, safeJsonParse } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
@@ -209,7 +209,7 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
   if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
     throw new Error('invalid target signature');
   }
-  const data = JSON.parse(decode(payload));
+  const data = safeJsonParse(decode(payload), null);
   if (!data || typeof data !== 'object'
     || Object.keys(data).some((key) => !['url', 'exp', 'egressScope', 'source'].includes(key))
     || !Number.isInteger(data.exp) || data.exp <= now || !isAllowedTarget(data.url)) {

@@ -4,9 +4,26 @@ import path from 'node:path';
 import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 
+export function safeJsonParse(value, fallback = null) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object' && !Buffer.isBuffer(value)) return value;
+  try {
+    const text = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+
 export function readSecret() {
   const file = process.env.GATEWAY_SECRET_FILE;
-  if (file) return fs.readFileSync(file, 'utf8').trim();
+  if (file) {
+    try {
+      return fs.readFileSync(file, 'utf8').trim();
+    } catch {
+      // Fall through to env or default.
+    }
+  }
   if (process.env.GATEWAY_SECRET) return process.env.GATEWAY_SECRET;
   return 'development-only-secret';
 }
@@ -15,7 +32,8 @@ export function readSources() {
   const file = process.env.SOURCE_CONFIG_FILE;
   if (!file) return {};
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    const content = fs.readFileSync(file, 'utf8');
+    return safeJsonParse(content, {});
   } catch {
     return {};
   }
@@ -85,17 +103,6 @@ export function matchesHost(hostname, hosts) {
   if (!h) return false;
   const list = Array.isArray(hosts) ? hosts : (hosts ? [hosts] : []);
   return list.some((base) => isHostOrSubdomain(h, base));
-}
-
-export function safeJsonParse(value, fallback = null) {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === 'object' && !Buffer.isBuffer(value)) return value;
-  try {
-    const text = Buffer.isBuffer(value) ? value.toString('utf8') : String(value);
-    return JSON.parse(text);
-  } catch {
-    return fallback;
-  }
 }
 
 export function parseHostList(value) {
