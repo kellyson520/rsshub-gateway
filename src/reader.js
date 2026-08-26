@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
+import { escapeHtml } from './feed-transform.js';
 
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
@@ -395,10 +396,6 @@ export function renderUnavailablePage({ url, title, message, baseUrl, secret, si
   const sourceUrl = localUrl(baseUrl, 'item', url, secret, signedTargetMetadata);
   const content = `<main class="reader"><p>${escapeHtml(message)}</p><p><a href="${escapeHtml(sourceUrl)}">原始来源</a></p></main>`;
   return renderDocument(title || url, content);
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
 
 export {

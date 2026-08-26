@@ -197,6 +197,9 @@ test('exports helper methods for direct XML entity and code point manipulations'
     decodeTextEntities,
     normalizeNumericEntities,
     isValidXmlCodePoint,
+    escapeHtml,
+    escapeXml,
+    cdata,
   } = await import('../src/feed-transform.js');
   assert.equal(NAMED_ENTITIES.amp, '&');
   assert.equal(decodeEntity('&amp;'), '&');
@@ -205,4 +208,8 @@ test('exports helper methods for direct XML entity and code point manipulations'
   assert.equal(normalizeNumericEntities('&#x4f60;&#x597d;'), '你好');
   assert.equal(isValidXmlCodePoint(0x20), true);
   assert.equal(isValidXmlCodePoint(0x0), false);
+  assert.equal(escapeHtml('foo & <bar> "baz" \'qux\''), 'foo &amp; &lt;bar&gt; &quot;baz&quot; &#39;qux&#39;');
+  assert.equal(escapeXml('foo & <bar> "baz" \'qux\''), 'foo &amp; &lt;bar&gt; &quot;baz&quot; &apos;qux&apos;');
+  assert.equal(cdata('hello <world> & "foo"'), '<![CDATA[hello <world> & "foo"]]>');
+  assert.equal(cdata('nested ]]> sequence'), '<![CDATA[nested ]]]]><![CDATA[> sequence]]>');
 });

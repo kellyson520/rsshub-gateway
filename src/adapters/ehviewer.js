@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { cdata, escapeXml } from '../feed-transform.js';
 
 const RANKING_PERIODS = Object.freeze({
   day: { query: '15', label: '昨日热度' },
@@ -152,20 +153,6 @@ export function parseRankingHtml(html, { period = 'day' } = {}) {
     items.push({ title, link, author, date, categories, thumbnail, rank, pageCount });
   });
   return { period, items };
-}
-
-function escapeXml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&apos;',
-  }[character]));
-}
-
-function cdata(value) {
-  return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
 }
 
 export function renderRankingFeed({ period = 'day', items = [] } = {}) {

@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from '../signed-target.js';
+import { escapeHtml } from '../feed-transform.js';
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;
@@ -70,16 +71,6 @@ function localUrl(baseUrl, kind, target, secret, metadata = { egressScope: 'publ
     ? createMediaSignedTarget(target, secret, undefined, metadata)
     : createSignedTarget(target, secret, undefined, undefined, metadata);
   return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[c]));
 }
 
 function rewriteCookedHtml(html, { baseUrl, secret }) {

@@ -1,4 +1,5 @@
 import { createMediaSignedTarget } from '../signed-target.js';
+import { cdata, escapeXml } from '../feed-transform.js';
 
 export {
   API_BASE,
@@ -78,20 +79,6 @@ export function selectIwaraVariant(variants = []) {
   const best = numeric[0]?.variant || variants[0];
   const source = best?.src?.view || best?.src?.download;
   return source ? { url: source.startsWith('//') ? `https:${source}` : source } : null;
-}
-
-function escapeXml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&apos;',
-  }[character]));
-}
-
-function cdata(value) {
-  return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
 }
 
 export function renderIwaraFeed({ username = '', kind = 'video', videos = [], selfUrl = '' } = {}) {

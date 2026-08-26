@@ -40,9 +40,32 @@ function normalizeNumericEntities(xml) {
   });
 }
 
+export function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character]));
+}
+
+export function escapeXml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;',
+  }[character]));
+}
+
+export function cdata(value) {
+  return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
+}
+
 function setCdata($, element, content) {
-  const sections = String(content).replaceAll(']]>', ']]]]><![CDATA[>');
-  $(element).html(`<![CDATA[${sections}]]>`);
+  $(element).html(cdata(content));
 }
 
 function localUrl(baseUrl, kind, target, options) {
