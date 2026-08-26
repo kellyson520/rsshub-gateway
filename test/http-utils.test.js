@@ -20,12 +20,24 @@ import {
   writeText,
 } from '../src/http-utils.js';
 
-test('clamp and boundedInteger restrict numbers within bounds', () => {
+test('clamp, positiveInteger, nonNegativeInteger and boundedInteger restrict numbers within bounds', async () => {
+  const { nonNegativeInteger, positiveInteger } = await import('../src/http-utils.js');
+
   assert.equal(clamp(5, 1, 10), 5);
   assert.equal(clamp(50, 1, 10), 10);
   assert.equal(clamp(-5, 0, 10), 0);
   assert.equal(clamp(NaN, 0, 10), 0);
   assert.equal(clamp('invalid', 0, 10), 0);
+
+  assert.equal(positiveInteger('5', 1), 5);
+  assert.equal(positiveInteger('0', 1), 1);
+  assert.equal(positiveInteger('-5', 1), 1);
+  assert.equal(positiveInteger('abc', 1), 1);
+
+  assert.equal(nonNegativeInteger('5', 0), 5);
+  assert.equal(nonNegativeInteger('0', 10), 0);
+  assert.equal(nonNegativeInteger('-5', 0), 0);
+  assert.equal(nonNegativeInteger('abc', 0), 0);
 
   assert.equal(boundedInteger('5', 3, 1, 10), 5);
   assert.equal(boundedInteger('50', 3, 1, 10), 10);

@@ -226,6 +226,11 @@ export function positiveInteger(value, fallback) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function nonNegativeInteger(value, fallback = 0) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 export function boundedInteger(value, fallback, minimum, maximum) {
   return clamp(positiveInteger(value, fallback), minimum, maximum);
 }

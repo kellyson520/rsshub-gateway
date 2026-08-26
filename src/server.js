@@ -20,6 +20,7 @@ import {
   fetchCachedDocument,
   imageVariantCacheUrl,
   mapWithConcurrency,
+  nonNegativeInteger,
   parseByteRange,
   readBinaryLimited,
   readLimited,
@@ -71,11 +72,10 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
   const result = await cache.getOrLoad(target, 'media', async () => {
     const remote = await fetcher(target, requestOptions);
     const contentType = remote.headers.get('content-type') || '';
-    const contentLength = Number.parseInt(remote.headers.get('content-length') || '', 10);
+    const contentLength = nonNegativeInteger(remote.headers.get('content-length'), null);
     const cacheable = remote.ok
       && contentType.toLowerCase().startsWith('image/')
-      && Number.isSafeInteger(contentLength)
-      && contentLength >= 0
+      && contentLength !== null
       && contentLength <= maxBytes;
     if (!cacheable) {
       return { passthrough: remote, cacheable: false };

@@ -368,7 +368,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `routeBucket(pathname)`: Fast prefix-based route category bucket parser for Prometheus and logging segregation.
   - `initialEhGalleryManifest(opts)`: Pure cold-start gallery preview manifest constructor.
   - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.
-  - `clamp(value, min, max)`, `positiveInteger(value, fallback)`, `boundedInteger(value, fallback, min, max)`: Pure numeric bounds clampers and safe integer parsers.
+  - `clamp(value, min, max)`, `positiveInteger(value, fallback)`, `nonNegativeInteger(value, fallback)`, `boundedInteger(value, fallback, min, max)`: Pure numeric bounds clampers and safe integer parsers.
   - `dedupe(items, keyMapper)`: Pure array/collection deduplication preserving original sequence order.
   - `sleep(ms)`: High-precision promise-based sleep delay helper with negative-value absorption.
   - `withDeadline(promise, timeoutMs, fallback)`: Generic promise execution bounded by a hard millisecond timeout.

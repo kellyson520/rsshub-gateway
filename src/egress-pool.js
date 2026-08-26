@@ -1,5 +1,5 @@
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
-import { clamp, safeEvent } from './http-utils.js';
+import { boundedInteger, clamp, nonNegativeInteger, positiveInteger, safeEvent } from './http-utils.js';
 import {
   DEFAULT_BLOCKED_STATUSES,
   isRetryableStatus as isRetryable,
@@ -36,15 +36,15 @@ export {
 };
 
 export function createEgressPool(options = {}) {
-  const minConcurrencyPerLane = Math.max(1, Number.parseInt(options.minConcurrencyPerLane, 10) || DEFAULT_MIN_CONCURRENCY_PER_LANE);
-  const maxConcurrencyPerLane = Math.max(minConcurrencyPerLane, Number.parseInt(options.maxConcurrencyPerLane, 10) || DEFAULT_MAX_CONCURRENCY_PER_LANE);
-  const successRampAfter = Math.max(1, Number.parseInt(options.successRampAfter, 10) || DEFAULT_SUCCESS_RAMP_AFTER);
-  const cooldownMs = Math.max(0, Number.parseInt(options.cooldownMs, 10) || DEFAULT_COOLDOWN_MS);
-  const backgroundReservePerLane = Math.max(0, Number.parseInt(options.backgroundReservePerLane, 10) || DEFAULT_BACKGROUND_RESERVE_PER_LANE);
+  const minConcurrencyPerLane = positiveInteger(options.minConcurrencyPerLane, DEFAULT_MIN_CONCURRENCY_PER_LANE);
+  const maxConcurrencyPerLane = boundedInteger(options.maxConcurrencyPerLane, DEFAULT_MAX_CONCURRENCY_PER_LANE, minConcurrencyPerLane, 128);
+  const successRampAfter = positiveInteger(options.successRampAfter, DEFAULT_SUCCESS_RAMP_AFTER);
+  const cooldownMs = nonNegativeInteger(options.cooldownMs, DEFAULT_COOLDOWN_MS);
+  const backgroundReservePerLane = nonNegativeInteger(options.backgroundReservePerLane, DEFAULT_BACKGROUND_RESERVE_PER_LANE);
   const blockedStatuses = new Set([...(options.blockedStatuses || DEFAULT_BLOCKED_STATUSES)].map(Number));
-  const siteFailureThreshold = Math.max(1, Number.parseInt(options.siteFailureThreshold, 10) || 3);
-  const siteFailureWindowMs = Math.max(1_000, Number.parseInt(options.siteFailureWindowMs, 10) || 60_000);
-  const siteBlockCooldownMs = Math.max(0, Number.parseInt(options.siteBlockCooldownMs, 10) || 60_000);
+  const siteFailureThreshold = positiveInteger(options.siteFailureThreshold, 3);
+  const siteFailureWindowMs = Math.max(1_000, positiveInteger(options.siteFailureWindowMs, 60_000));
+  const siteBlockCooldownMs = nonNegativeInteger(options.siteBlockCooldownMs, 60_000);
   const scopeOverrides = options.scopeOverrides && typeof options.scopeOverrides === 'object' ? options.scopeOverrides : {};
   const now = options.now || (() => Date.now());
   const onEvent = options.onEvent;
