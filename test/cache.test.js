@@ -385,3 +385,50 @@ test('exports cache helpers and default constants for external consumers', async
   assert.equal(DEFAULT_MAX_BYTES, 5 * 1024 ** 3);
   assert.equal(DEFAULT_EVICTION_PRIORITY.rss, 0);
 });
+
+test('exports normalizeBody, positiveNumber, resultFromEntry and SAFE_HEADERS', async () => {
+  const {
+    normalizeBody,
+    positiveNumber,
+    resultFromEntry,
+    SAFE_HEADERS,
+  } = await import('../src/cache.js');
+
+  assert.ok(SAFE_HEADERS instanceof Set);
+  assert.ok(SAFE_HEADERS.has('content-type'));
+  assert.ok(SAFE_HEADERS.has('etag'));
+
+  assert.equal(positiveNumber(100, 50), 100);
+  assert.equal(positiveNumber(-5, 50), 50);
+  assert.equal(positiveNumber(NaN, 50), 50);
+
+  const stringBody = normalizeBody('hello');
+  assert.equal(stringBody.type, 'string');
+  assert.equal(stringBody.value, 'hello');
+  assert.ok(Buffer.isBuffer(stringBody.buffer));
+
+  const buf = Buffer.from('bytes');
+  const bufferBody = normalizeBody(buf);
+  assert.equal(bufferBody.type, 'buffer');
+  assert.deepEqual(bufferBody.value, buf);
+
+  assert.equal(normalizeBody(null), null);
+
+  const entryString = { status: 200, headers: { 'content-type': 'text/plain' }, bodyType: 'string' };
+  const resString = resultFromEntry(entryString, Buffer.from('hello'), 'HIT');
+  assert.deepEqual(resString, {
+    state: 'HIT',
+    status: 200,
+    headers: { 'content-type': 'text/plain' },
+    body: 'hello',
+  });
+
+  const entryBuf = { status: 200, headers: { 'content-type': 'image/jpeg' }, bodyType: 'buffer' };
+  const resBuf = resultFromEntry(entryBuf, Buffer.from('bin'), 'MISS');
+  assert.deepEqual(resBuf, {
+    state: 'MISS',
+    status: 200,
+    headers: { 'content-type': 'image/jpeg' },
+    body: Buffer.from('bin'),
+  });
+});
