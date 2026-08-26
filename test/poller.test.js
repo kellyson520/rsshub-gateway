@@ -94,3 +94,20 @@ test('poller stop is idempotent and clears active timers cleanly', () => {
   poller.stop();
   assert.equal(poller.stats().running, false);
 });
+
+test('unregister removes task and stops poller if no tasks remain', () => {
+  const poller = createPoller({ intervalMs: 100 });
+  poller.register('task-a', () => {});
+  poller.register('task-b', () => {});
+  poller.start();
+  assert.equal(poller.stats().tasks.length, 2);
+
+  assert.equal(poller.unregister('task-a'), true);
+  assert.equal(poller.unregister('non-existent'), false);
+  assert.equal(poller.stats().tasks.length, 1);
+  assert.equal(poller.stats().running, true);
+
+  assert.equal(poller.unregister('task-b'), true);
+  assert.equal(poller.stats().tasks.length, 0);
+  assert.equal(poller.stats().running, false);
+});

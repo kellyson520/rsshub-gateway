@@ -102,6 +102,14 @@ export function createPoller({
     }
   }
 
+  function unregister(name) {
+    const deleted = tasks.delete(String(name));
+    if (!tasks.size && running) {
+      stop();
+    }
+    return deleted;
+  }
+
   function stats() {
     return {
       running,
@@ -116,5 +124,5 @@ export function createPoller({
     };
   }
 
-  return { register, start, stop, tick, stats };
+  return { register, unregister, start, stop, tick, stats };
 }
