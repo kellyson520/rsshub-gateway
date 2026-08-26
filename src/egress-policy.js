@@ -1,4 +1,4 @@
-import { isHostOrSubdomain, matchesHost, safeHost } from './http-utils.js';
+import { dedupe, isHostOrSubdomain, matchesHost, parseHostList, safeHost } from './http-utils.js';
 
 const DEFAULT_PUBLIC_HOSTS = Object.freeze([
   'e-hentai.org',
@@ -103,29 +103,17 @@ export function egressPolicyForRequest(value, { scope = 'auto' } = {}) {
   return egressPolicyForUrl(value);
 }
 
-export function parseHostList(value) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.map(String).map((host) => host.trim().toLowerCase()).filter(Boolean);
-    }
-  } catch {
-    // Fall through to comma-separated parsing.
-  }
-  return String(value).split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
-}
+export { parseHostList };
 
-const PUBLIC_HOSTS = Object.freeze([
-  ...new Set([...DEFAULT_PUBLIC_HOSTS, ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS)]),
-]);
+const PUBLIC_HOSTS = Object.freeze(dedupe([
+  ...DEFAULT_PUBLIC_HOSTS,
+  ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS),
+]));
 
-const PUBLIC_REQUEST_HOSTS = Object.freeze([
-  ...new Set([
-    ...DEFAULT_PUBLIC_REQUEST_HOSTS,
-    ...parseHostList(process.env.EGRESS_PUBLIC_REQUEST_HOSTS),
-    ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS),
-  ]),
-]);
+const PUBLIC_REQUEST_HOSTS = Object.freeze(dedupe([
+  ...DEFAULT_PUBLIC_REQUEST_HOSTS,
+  ...parseHostList(process.env.EGRESS_PUBLIC_REQUEST_HOSTS),
+  ...parseHostList(process.env.EGRESS_PUBLIC_HOSTS),
+]));
 
 export { PUBLIC_HOSTS, PUBLIC_REQUEST_HOSTS };

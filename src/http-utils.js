@@ -84,6 +84,19 @@ export function matchesHost(hostname, hosts) {
   return list.some((base) => isHostOrSubdomain(h, base));
 }
 
+export function parseHostList(value) {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (Array.isArray(parsed)) {
+      return dedupe(parsed.map(String).map((host) => host.trim().toLowerCase()).filter(Boolean));
+    }
+  } catch {
+    // Fall through to comma-separated string parsing.
+  }
+  return dedupe(String(value).split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
+}
+
 export function mediaFileName(target, contentType) {
   try {
     const pathname = new URL(target).pathname;

@@ -277,8 +277,8 @@ test('readJsonBody parses stream payload into JSON object', async () => {
   await assert.rejects(() => readJsonBody(invalidStream), /JSON/);
 });
 
-test('safeHost, isHostOrSubdomain and matchesHost handle hostnames and subdomains safely', async () => {
-  const { safeHost, isHostOrSubdomain, matchesHost } = await import('../src/http-utils.js');
+test('safeHost, isHostOrSubdomain, matchesHost and parseHostList handle hostnames safely', async () => {
+  const { safeHost, isHostOrSubdomain, matchesHost, parseHostList } = await import('../src/http-utils.js');
 
   assert.equal(safeHost('https://JavBus.COM/path'), 'javbus.com');
   assert.equal(safeHost('https://sub.domain.org:8080/v/1'), 'sub.domain.org');
@@ -296,6 +296,11 @@ test('safeHost, isHostOrSubdomain and matchesHost handle hostnames and subdomain
   assert.equal(matchesHost('x.com', ['iwara.tv', 'x.com']), true);
   assert.equal(matchesHost('notallowed.com', ['iwara.tv', 'x.com']), false);
   assert.equal(matchesHost('', ['iwara.tv']), false);
+
+  assert.deepEqual(parseHostList('e-hentai.org, EHGT.ORG, e-hentai.org'), ['e-hentai.org', 'ehgt.org']);
+  assert.deepEqual(parseHostList('["example.com", "API.EXAMPLE.COM", "example.com"]'), ['example.com', 'api.example.com']);
+  assert.deepEqual(parseHostList(null), []);
+  assert.deepEqual(parseHostList(''), []);
 });
 
 test('sleep resolves after specified delay', async () => {
