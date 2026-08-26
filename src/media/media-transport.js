@@ -1,7 +1,13 @@
 import { Readable } from 'node:stream';
+import {
+  CACHE_RESPONSE_HEADERS,
+  IMAGE_VARIANT_CACHE_VERSION,
+  imageVariantCacheUrl,
+  parseByteRange,
+  responseFromCachedDocument,
+  responseHeaders,
+} from '../http-utils.js';
 
-const CACHE_RESPONSE_HEADERS = ['content-type', 'content-length', 'etag', 'last-modified', 'cache-control'];
-const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 const SLICE_ALIGN = 64 * 1024;
 const DEFAULT_SLICE_SIZE = 4 * 1024 * 1024;
 const DEFAULT_SLICE_LOOKAHEAD_BYTES = 16 * 1024 * 1024;
@@ -24,6 +30,10 @@ export {
   DEFAULT_KNOWN_SIZE_TTL_MS,
   DEFAULT_KNOWN_SIZE_CAP,
   DEFAULT_PREFETCH_STATES_CAP,
+  responseHeaders,
+  responseFromCachedDocument,
+  imageVariantCacheUrl,
+  parseByteRange,
 };
 
 export function sliceRanges(start, end, size, {
@@ -45,43 +55,6 @@ export function sliceRanges(start, end, size, {
     ranges.push({ start: index * slice, end: Math.min(size - 1, index * slice + slice - 1), index });
   }
   return { slice, ranges };
-}
-
-export function responseHeaders(response) {
-  const headers = {};
-  for (const name of CACHE_RESPONSE_HEADERS) {
-    const value = response.headers.get(name);
-    if (value) headers[name] = value;
-  }
-  return headers;
-}
-
-export function responseFromCachedDocument(result) {
-  return new Response(result.body, { status: result.status, headers: result.headers });
-}
-
-export function imageVariantCacheUrl(target, width) {
-  const cacheUrl = new URL(target);
-  cacheUrl.hash = `rsshub-gateway-${IMAGE_VARIANT_CACHE_VERSION}-w${width}`;
-  return cacheUrl.toString();
-}
-
-export function parseByteRange(value, size) {
-  const match = String(value || '').trim().match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return null;
-  const [, startText, endText] = match;
-  if (startText === '' && endText === '') return null;
-  if (startText === '') {
-    const suffix = Number.parseInt(endText, 10);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0) return { unsatisfiable: true };
-    const start = Math.max(0, size - suffix);
-    return start >= size ? { unsatisfiable: true } : { start, end: size - 1 };
-  }
-  const start = Number.parseInt(startText, 10);
-  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return { unsatisfiable: true };
-  const end = endText === '' ? size - 1 : Math.min(Number.parseInt(endText, 10), size - 1);
-  if (end < start) return { unsatisfiable: true };
-  return { start, end };
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   fetchCachedDocument,
   imageVariantCacheUrl,
   mapWithConcurrency,
+  parseByteRange,
   readBinaryLimited,
   readLimited,
   responseFromCachedDocument,
@@ -119,25 +120,6 @@ async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, reques
 async function fetchCachedMedia(options) {
   return (await loadCachedMedia(options)).response;
 }
-
-function parseByteRange(value, size) {
-  const match = String(value || '').trim().match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return null;
-  const [, startText, endText] = match;
-  if (startText === '' && endText === '') return null;
-  if (startText === '') {
-    const suffix = Number.parseInt(endText, 10);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0) return { unsatisfiable: true };
-    const start = Math.max(0, size - suffix);
-    return start >= size ? { unsatisfiable: true } : { start, end: size - 1 };
-  }
-  const start = Number.parseInt(startText, 10);
-  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return { unsatisfiable: true };
-  const end = endText === '' ? size - 1 : Math.min(Number.parseInt(endText, 10), size - 1);
-  if (end < start) return { unsatisfiable: true };
-  return { start, end };
-}
-
 
 async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
   const targets = [...new Set(pages.map((page) => page.mediaTarget).filter(Boolean))].slice(0, count);

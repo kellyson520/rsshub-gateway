@@ -216,36 +216,22 @@ export function isEhImagePageTarget(value) {
   }
 }
 
-export function parseByteRange(rangeHeader, totalBytes) {
-  if (!rangeHeader || typeof rangeHeader !== 'string' || !rangeHeader.startsWith('bytes=')) {
-    return null;
+export function parseByteRange(value, size) {
+  const match = String(value || '').trim().match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+  const [, startText, endText] = match;
+  if (startText === '' && endText === '') return null;
+  if (startText === '') {
+    const suffix = Number.parseInt(endText, 10);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return { unsatisfiable: true };
+    const start = Math.max(0, size - suffix);
+    return start >= size ? { unsatisfiable: true } : { start, end: size - 1 };
   }
-  const spec = rangeHeader.slice(6).trim();
-  if (!spec || spec.includes(',')) return null; // Only single range supported
-  const parts = spec.split('-');
-  if (parts.length !== 2) return null;
-  const [startStr, endStr] = parts;
-  let start;
-  let end;
-  if (startStr === '') {
-    // Suffix byte range: bytes=-500 (last 500 bytes)
-    const suffix = Number.parseInt(endStr, 10);
-    if (!Number.isInteger(suffix) || suffix <= 0) return null;
-    start = Math.max(0, totalBytes - suffix);
-    end = totalBytes - 1;
-  } else {
-    start = Number.parseInt(startStr, 10);
-    if (!Number.isInteger(start) || start < 0) return null;
-    if (endStr === '') {
-      end = totalBytes - 1;
-    } else {
-      end = Number.parseInt(endStr, 10);
-      if (!Number.isInteger(end) || end < start) return null;
-    }
-  }
-  if (start >= totalBytes) return { unsatisfiable: true };
-  end = Math.min(end, totalBytes - 1);
-  return { start, end, size: end - start + 1, total: totalBytes };
+  const start = Number.parseInt(startText, 10);
+  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return { unsatisfiable: true };
+  const end = endText === '' ? size - 1 : Math.min(Number.parseInt(endText, 10), size - 1);
+  if (end < start) return { unsatisfiable: true };
+  return { start, end };
 }
 
 export async function mapWithConcurrency(items, concurrency, worker) {
