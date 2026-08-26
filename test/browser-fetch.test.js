@@ -162,8 +162,19 @@ test('browser fetch client handles close when no child process was ever spawned'
   assert.doesNotThrow(() => client.close());
 });
 
-test('exports lineError, requestTimeoutMs and DEFAULT_WORKER_PATH helpers', async () => {
-  const { lineError, requestTimeoutMs, DEFAULT_WORKER_PATH } = await import('../src/browser-fetch.js');
+test('exports lineError, requestTimeoutMs, messageToResponse and browser-fetch constants', async () => {
+  const {
+    lineError,
+    requestTimeoutMs,
+    DEFAULT_WORKER_PATH,
+    DEFAULT_PYTHON_BIN,
+    DEFAULT_IMPERSONATE,
+    DEFAULT_MAX_BODY,
+    DEFAULT_REQUEST_TIMEOUT_MS,
+    MAX_REQUEST_TIMEOUT_MS,
+    REQUEST_TIMEOUT_SLACK_MS,
+    messageToResponse,
+  } = await import('../src/browser-fetch.js');
 
   const err = lineError('worker timed out', { code: 'CUSTOM_TIMEOUT', status: 504 });
   assert.equal(err.name, 'GatewayUpstreamError');
@@ -176,4 +187,19 @@ test('exports lineError, requestTimeoutMs and DEFAULT_WORKER_PATH helpers', asyn
   assert.equal(requestTimeoutMs(100_000), 65_000);
 
   assert.ok(typeof DEFAULT_WORKER_PATH === 'string' && DEFAULT_WORKER_PATH.includes('fetch-worker.py'));
+  assert.equal(DEFAULT_PYTHON_BIN, 'python3');
+  assert.equal(DEFAULT_IMPERSONATE, 'chrome131');
+  assert.equal(DEFAULT_MAX_BODY, 4 * 1024 * 1024);
+  assert.equal(DEFAULT_REQUEST_TIMEOUT_MS, 20_000);
+  assert.equal(MAX_REQUEST_TIMEOUT_MS, 65_000);
+  assert.equal(REQUEST_TIMEOUT_SLACK_MS, 5_000);
+
+  const res = messageToResponse({
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    body: Buffer.from('{"test":true}').toString('base64'),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.ok, true);
+  assert.deepEqual(await res.json(), { test: true });
 });

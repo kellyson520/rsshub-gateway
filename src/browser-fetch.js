@@ -4,13 +4,31 @@ import { createFetchdClient, fetchdJson } from './fetchd.js';
 import { GatewayUpstreamError } from './upstream-errors.js';
 
 const DEFAULT_WORKER_PATH = new URL('./fetch-worker.py', import.meta.url).pathname;
+export const DEFAULT_PYTHON_BIN = 'python3';
+export const DEFAULT_IMPERSONATE = 'chrome131';
+export const DEFAULT_MAX_BODY = 4 * 1024 * 1024;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+export const MAX_REQUEST_TIMEOUT_MS = 65_000;
+export const REQUEST_TIMEOUT_SLACK_MS = 5_000;
 
 function lineError(message, { code = 'FETCHD_UNAVAILABLE', status = 502 } = {}) {
   return new GatewayUpstreamError(message, { code, source: 'fetchd', status, attempts: 1 });
 }
 
 function requestTimeoutMs(timeout) {
-  return Math.min(Number.isFinite(timeout) ? timeout + 5_000 : 25_000, 65_000);
+  return Math.min(Number.isFinite(timeout) ? timeout + REQUEST_TIMEOUT_SLACK_MS : DEFAULT_REQUEST_TIMEOUT_MS + REQUEST_TIMEOUT_SLACK_MS, MAX_REQUEST_TIMEOUT_MS);
+}
+
+export function messageToResponse(message) {
+  const body = message?.body ? Buffer.from(message.body, 'base64') : Buffer.alloc(0);
+  return {
+    status: Number(message?.status) || 502,
+    headers: new Headers(message?.headers || {}),
+    body,
+    ok: Number(message?.status) >= 200 && Number(message?.status) < 300,
+    json: async () => JSON.parse(body.toString('utf8')),
+    text: async () => body.toString('utf8'),
+  };
 }
 
 /**
@@ -29,10 +47,10 @@ export {
 
 export function createBrowserFetchClient({
   workerPath = process.env.BROWSER_FETCH_WORKER_PATH || DEFAULT_WORKER_PATH,
-  pythonBin = process.env.BROWSER_FETCH_PYTHON || 'python3',
+  pythonBin = process.env.BROWSER_FETCH_PYTHON || DEFAULT_PYTHON_BIN,
   httpFallbackUrl = process.env.IWARA_FETCHD_URL || '',
-  impersonate = process.env.FETCHD_IMPERSONATE || 'chrome131',
-  maxBody = Number.parseInt(process.env.FETCHD_MAX_BODY || '', 10) || 4 * 1024 * 1024,
+  impersonate = process.env.FETCHD_IMPERSONATE || DEFAULT_IMPERSONATE,
+  maxBody = Number.parseInt(process.env.FETCHD_MAX_BODY || '', 10) || DEFAULT_MAX_BODY,
   spawnImpl = nodeSpawn,
   canSpawn = () => true,
 } = {}) {
@@ -203,18 +221,6 @@ export function createBrowserFetchClient({
       }
       throw error;
     }
-  }
-
-  function messageToResponse(message) {
-    const body = message.body ? Buffer.from(message.body, 'base64') : Buffer.alloc(0);
-    return {
-      status: Number(message.status) || 502,
-      headers: new Headers(message.headers || {}),
-      body,
-      ok: Number(message.status) >= 200 && Number(message.status) < 300,
-      json: async () => JSON.parse(body.toString('utf8')),
-      text: async () => body.toString('utf8'),
-    };
   }
 
   function health() {
