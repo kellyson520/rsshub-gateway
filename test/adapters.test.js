@@ -165,6 +165,22 @@ test('exports linuxdo adapter helpers and SITE_BASE constant', async () => {
   assert.ok(rewritten.includes('Simple text'));
 });
 
+test('exports adapters array and defaultAdapter object', async () => {
+  const { adapters, defaultAdapter } = await import('../src/adapters/index.js');
+  assert.ok(Array.isArray(adapters));
+  assert.equal(adapters.length, 8);
+  assert.equal(defaultAdapter.name, 'unknown');
+  assert.equal(defaultAdapter.publiclyReadable, false);
+  assert.deepEqual(defaultAdapter.headers(), {});
+  assert.equal(defaultAdapter.isAuthenticationChallenge(), false);
+  assert.equal(defaultAdapter.readerTarget('https://test.com'), 'https://test.com');
+  assert.equal(defaultAdapter.isGalleryUrl(), false);
+  assert.deepEqual(defaultAdapter.galleryPageUrls(), []);
+  assert.deepEqual(defaultAdapter.imagePageUrls(), []);
+  assert.equal(defaultAdapter.firstImagePageUrl(), '');
+  assert.ok(defaultAdapter.unavailableMessage().includes('暂时无法读取'));
+});
+
 test('exports adult-media adapter constants and domain array', async () => {
   const {
     ADULT_DOMAINS,

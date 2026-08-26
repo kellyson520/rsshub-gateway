@@ -7,9 +7,9 @@ import * as pixiv from './pixiv.js';
 import * as linuxdo from './linuxdo.js';
 import * as adultMedia from './adult-media.js';
 
-const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
+export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
 
-const defaultAdapter = {
+export const defaultAdapter = {
   name: 'unknown',
   publiclyReadable: false,
   headers: () => ({}),
