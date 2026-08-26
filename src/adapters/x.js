@@ -3,8 +3,10 @@ import * as cheerio from 'cheerio';
 export const name = 'x';
 export const publiclyReadable = true;
 
+export const MATCH_HOSTS = ['x.com', 'twitter.com', 'twimg.com'];
+
 export function matches(hostname) {
-  return hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com') || hostname.endsWith('.twimg.com');
+  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {

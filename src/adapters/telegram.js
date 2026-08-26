@@ -5,6 +5,16 @@ export function matches(hostname) {
   return hostname === 't.me' || hostname.endsWith('.t.me');
 }
 
+export function isTelegramChannelPostUrl(value) {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split('/').filter(Boolean);
+    return (url.hostname === 't.me' || url.hostname.endsWith('.t.me')) && parts.length === 2 && /^\d+$/.test(parts[1]);
+  } catch {
+    return false;
+  }
+}
+
 export function headers(_config = {}, _options = {}) {
   return {};
 }
@@ -12,8 +22,7 @@ export function headers(_config = {}, _options = {}) {
 export function readerTarget(value) {
   try {
     const url = new URL(value);
-    const parts = url.pathname.split('/').filter(Boolean);
-    if (url.hostname === 't.me' && parts.length === 2 && /^\d+$/.test(parts[1])) {
+    if (isTelegramChannelPostUrl(url)) {
       url.searchParams.set('embed', '1');
     }
     return url.toString();

@@ -1,3 +1,4 @@
+export const DEFAULT_REFERER = 'https://www.pixiv.net/';
 export const name = 'pixiv';
 export const publiclyReadable = true;
 
@@ -9,7 +10,7 @@ export function matches(hostname) {
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {
-  const result = { referer: config?.referer || 'https://www.pixiv.net/' };
+  const result = { referer: config?.referer || DEFAULT_REFERER };
   if (includeCredentials && config?.cookie) result.cookie = config.cookie;
   return result;
 }

@@ -3,8 +3,10 @@ import * as cheerio from 'cheerio';
 export const name = 'instagram';
 export const publiclyReadable = true;
 
+export const MATCH_HOSTS = ['instagram.com', 'cdninstagram.com', 'fbcdn.net'];
+
 export function matches(hostname) {
-  return hostname === 'instagram.com' || hostname.endsWith('.instagram.com') || hostname.endsWith('.cdninstagram.com') || hostname.endsWith('.fbcdn.net');
+  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {

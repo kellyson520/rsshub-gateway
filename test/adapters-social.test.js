@@ -122,3 +122,19 @@ test('iwaraAdapter: matches domains and exports configuration constants', () => 
   assert.equal(iwaraAdapter.escapeXml('<foo & bar>'), '&lt;foo &amp; bar&gt;');
   assert.equal(iwaraAdapter.cdata('test'), '<![CDATA[test]]>');
 });
+
+test('exports configuration constants and domain match arrays across social adapters', () => {
+  assert.ok(Array.isArray(xAdapter.MATCH_HOSTS));
+  assert.ok(xAdapter.MATCH_HOSTS.includes('x.com'));
+  assert.ok(xAdapter.MATCH_HOSTS.includes('twimg.com'));
+
+  assert.ok(Array.isArray(instagramAdapter.MATCH_HOSTS));
+  assert.ok(instagramAdapter.MATCH_HOSTS.includes('instagram.com'));
+  assert.ok(instagramAdapter.MATCH_HOSTS.includes('fbcdn.net'));
+
+  assert.equal(pixivAdapter.DEFAULT_REFERER, 'https://www.pixiv.net/');
+
+  assert.equal(telegramAdapter.isTelegramChannelPostUrl('https://t.me/durov/123'), true);
+  assert.equal(telegramAdapter.isTelegramChannelPostUrl('https://t.me/s/durov'), false);
+  assert.equal(telegramAdapter.isTelegramChannelPostUrl('https://not-t.me/123'), false);
+});
