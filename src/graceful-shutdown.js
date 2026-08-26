@@ -1,5 +1,7 @@
+import { createLogger } from './infrastructure/logger.js';
+
 export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
-export const DEFAULT_SIGNALS = ['SIGTERM', 'SIGINT'];
+export const DEFAULT_SIGNALS = Object.freeze(['SIGTERM', 'SIGINT']);
 
 export function stopAcceptingServers(servers = []) {
   for (const server of servers) {
@@ -29,7 +31,7 @@ export function installGracefulShutdown({
   servers = [],
   timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   signals = DEFAULT_SIGNALS,
-  logger,
+  logger = createLogger(),
   exitImpl = (code) => process.exit(code),
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
