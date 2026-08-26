@@ -309,26 +309,39 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `isCompressibleContentType(type)`: Safe MIME format text compression predicate.
   - `withVary(headers)`: Idempotent `Vary: Accept-Encoding` response header builder.
   - `COMPRESSIBLE_CONTENT_TYPES`, `DEFAULT_HTML_BROTLI_MIN_BYTES`, `DEFAULT_HTML_BROTLI_QUALITY`: Compression tuning standards.
-- **Adaptive Media Transport, Resumable Range & Chunks (`src/media/media-transport.js`, `src/media/resumable-range.js`, `src/media/chunks.js`)**:
-  - `sliceRanges(start, end, size, opts)`: 64KiB sector-aligned media slice range planner with lookahead.
-  - `adaptiveChunkSize(totalBytes, opts)`, `chunkSizeFor(totalBytes, chunks, opts)`, `planChunks(totalBytes, opts)`: Adaptive byte-range partitioning.
-  - `pipeAttempt(stream, res, onBytes, onAbort)`: Resilient single stream pump with backpressure (`drain` event pause/resume) and client abort tracking.
-  - `isResumableStatus(status)`: HTTP 200/206 status check for range streams.
-  - `SLICE_ALIGN`, `MIN_CHUNK_SIZE`, `MAX_CHUNK_SIZE`, `MAX_CHUNKS`: Shared 64KiB alignment and file slicing bounds.
-- **Background Tasks & Infrastructure Schedulers (`src/infrastructure/poller.js`, `src/graceful-shutdown.js`, `src/lease-backfill.js`)**:
-  - `createPoller(opts)`: Periodic background task execution with jitter to prevent thundering herds.
-  - `installGracefulShutdown(opts)`: Connection draining and signal trapping for zero-downtime restarts.
-  - `createLeaseBackfillQueue(opts)`: Background slice cache warmer for video download leases.
-  - `DEFAULT_POLLER_INTERVAL_MS`, `DEFAULT_POLLER_JITTER_RATIO`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_MAX_CONCURRENCY`: Infrastructure operational defaults.
-- **Content Sources & Adapters (`src/adapters/linuxdo.js`, `src/adapters/ehviewer.js`, `src/adapters/iwara.js`, `src/adapters/adult-media.js`, `src/fetchd.js`, `src/reader.js`)**:
+- **Content Sources, Adapters & Multi-Source Reader Engine (`src/adapters/index.js`, `src/adapters/linuxdo.js`, `src/adapters/ehviewer.js`, `src/adapters/iwara.js`, `src/adapters/pixiv.js`, `src/adapters/telegram.js`, `src/adapters/adult-media.js`, `src/fetchd.js`, `src/reader.js`)**:
+  - `adapters`, `defaultAdapter`: Pluggable source adapter registry list and comprehensive fallback strategy object.
+  - `MATCH_HOSTS`: Domain array matching standard for each content platform (X, Instagram, Pixiv, Telegram, Iwara, EhViewer).
   - `escapeHtml(value)`: Universal XSS-safe HTML entity escaper.
   - `escapeXml(value)`, `cdata(value)`: Safe XML serializer and CDATA container wrappers.
   - `rewriteCookedHtml(html, opts)`: Discourse topic HTML sanitizer and media gateway link rewriter.
   - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`: Pure topic route identification and ID extractor.
+  - `isTelegramChannelPostUrl(url)`: Telegram post embedding detector (`?embed=1`).
+  - `jwtExpiryMs(token, opts)`: Zero-dependency JWT expiry timestamp parser with millisecond TTL calculation.
+  - `publicUrl(val, host)`, `asDate(val)`: Safe public URL canonicalizer and UTC ISO date parser.
   - `RANKING_PERIODS`, `MAX_ITEMS`: E-Hentai/EhViewer toplist query configurations and ceiling bounds.
-  - `DEFAULT_BASE_URL` (Fetchd Sidecar), `SITE_BASE` (LINUX DO / Iwara), `API_BASE` (Iwara REST): Direct upstream integration bases.
+  - `DEFAULT_BASE_URL` (Fetchd Sidecar), `SITE_BASE` (LINUX DO / Iwara), `API_BASE` (Iwara REST), `DEFAULT_REFERER` (Pixiv): Direct upstream integration bases.
   - `ADULT_DOMAINS`, `DEFAULT_USER_AGENT`, `DEFAULT_ACCEPT_LANGUAGE`: Adult media content routing and default header profiles.
   - `EH_GALLERY_PATH`, `EH_IMAGE_PATH`, `READER_CSS`, `IMAGE_VARIANT_WIDTHS`: Universal reading engine styles and responsive breakpoints.
+  - `isEhentaiPage(url, pattern)`, `extractEhGalleryTitle(opts)`, `extractEhImagePage(opts)`: Pure gallery/image AST parsers.
+  - `renderEhGalleryPage(opts)`, `renderEhImagePage(opts)`, `renderGenericReaderPage(opts)`: Responsive reading views.
+- **Adaptive Media Transport, Resumable Range & Chunks (`src/media/media-transport.js`, `src/media/resumable-range.js`, `src/media/chunks.js`, `src/image-variants.js`)**:
+  - `sliceRanges(start, end, size, opts)`: 64KiB sector-aligned media slice range planner with lookahead.
+  - `adaptiveChunkSize(totalBytes, opts)`, `chunkSizeFor(totalBytes, chunks, opts)`, `planChunks(totalBytes, opts)`: Adaptive byte-range partitioning.
+  - `pipeAttempt(stream, res, onBytes, onAbort)`: Resilient single stream pump with backpressure (`drain` event pause/resume) and client abort tracking.
+  - `isResumableStatus(status)`: HTTP 200/206 status check for range streams.
+  - `DEFAULT_RESUMABLE_MAX_ATTEMPTS`, `DEFAULT_RESUMABLE_BACKOFF_MS`: Range streaming error recovery constants.
+  - `SLICE_ALIGN`, `MIN_CHUNK_SIZE`, `MAX_CHUNK_SIZE`, `MAX_CHUNKS`: Shared 64KiB alignment and file slicing bounds.
+  - `isSupportedImageVariantType(type)`, `isValidImageVariantWidth(w)`, `createImageVariant(opts)`: Lossless Sharp WebP image resizing.
+- **Background Tasks, Logging & Infrastructure Schedulers (`src/infrastructure/logger.js`, `src/infrastructure/poller.js`, `src/graceful-shutdown.js`, `src/lease-backfill.js`, `src/infrastructure/site-failure-tracker.js`)**:
+  - `createLogger(opts)`, `createNoopLogger()`: Unified structured JSON logger with child context inheritance and zero-breakage error absorption.
+  - `redactValue(key, val)`, `redactFields(fields)`: Sensitive field automatic redaction (passwords, tokens, cookies, auth headers).
+  - `LOG_LEVELS`, `DEFAULT_LOG_LEVEL`: Standard log level threshold dictionary (`debug` to `error`).
+  - `createPoller(opts)`: Periodic background task execution with jitter to prevent thundering herds.
+  - `createSiteFailureTracker(opts)`, `failureKey(laneId, host)`: Sliding-window per-host failure detection and circuit trip coordinator.
+  - `installGracefulShutdown(opts)`: Connection draining and signal trapping for zero-downtime restarts.
+  - `createLeaseBackfillQueue(opts)`: Background slice cache warmer for video download leases.
+  - `DEFAULT_POLLER_INTERVAL_MS`, `DEFAULT_POLLER_JITTER_RATIO`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_MAX_CONCURRENCY`: Infrastructure operational defaults.
 - **Resilient Request Pipeline, Upstream & Circuit Breakers (`src/upstream.js`, `src/circuit-breaker.js`, `src/signed-target.js`, `src/infrastructure/request-service.js`)**:
   - `CIRCUIT_STATE_CLOSED`, `CIRCUIT_STATE_OPEN`, `CIRCUIT_STATE_HALF_OPEN`: Standard tri-state circuit breaker identifiers.
   - `DEFAULT_FAILURE_THRESHOLD`, `DEFAULT_COOLDOWN_MS`: Circuit breaker tripping thresholds and cooldown windows.
