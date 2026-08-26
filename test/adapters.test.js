@@ -186,6 +186,9 @@ test('exports adult-media adapter constants and domain array', async () => {
     ADULT_DOMAINS,
     DEFAULT_USER_AGENT,
     DEFAULT_ACCEPT_LANGUAGE,
+    DEFAULT_UNAVAILABLE_MESSAGE,
+    CHALLENGE_SUBSTRINGS,
+    isAuthenticationChallenge,
   } = await import('../src/adapters/adult-media.js');
 
   assert.ok(Array.isArray(ADULT_DOMAINS));
@@ -193,4 +196,11 @@ test('exports adult-media adapter constants and domain array', async () => {
   assert.ok(ADULT_DOMAINS.includes('javbus.com'));
   assert.ok(DEFAULT_USER_AGENT.includes('Mozilla'));
   assert.ok(DEFAULT_ACCEPT_LANGUAGE.includes('zh-CN'));
+  assert.equal(typeof DEFAULT_UNAVAILABLE_MESSAGE, 'string');
+  assert.ok(Array.isArray(CHALLENGE_SUBSTRINGS));
+  assert.ok(CHALLENGE_SUBSTRINGS.includes('Just a moment...'));
+
+  assert.equal(isAuthenticationChallenge({ status: 403 }), true);
+  assert.equal(isAuthenticationChallenge({ status: 200, body: '<html>cf-challenge active</html>' }), true);
+  assert.equal(isAuthenticationChallenge({ status: 200, body: '<html>normal page</html>' }), false);
 });

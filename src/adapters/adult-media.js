@@ -45,16 +45,23 @@ export function headers() {
   };
 }
 
+export const DEFAULT_UNAVAILABLE_MESSAGE = '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';
+export const CHALLENGE_SUBSTRINGS = [
+  'Just a moment...',
+  'cf-challenge',
+  'ddos-guard',
+];
+
 export function readerTarget(url) {
   return String(url);
 }
 
 export function unavailableMessage() {
-  return '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';
+  return DEFAULT_UNAVAILABLE_MESSAGE;
 }
 
 export function isAuthenticationChallenge({ status, headers, body } = {}) {
   if (status === 401 || status === 403) return true;
   if (status < 200 || status >= 300 || typeof body !== 'string') return false;
-  return body.includes('Just a moment...') || body.includes('cf-challenge') || body.includes('ddos-guard');
+  return CHALLENGE_SUBSTRINGS.some((substr) => body.includes(substr));
 }
