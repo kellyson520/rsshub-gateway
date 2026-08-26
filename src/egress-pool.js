@@ -29,6 +29,17 @@ function poolError(message, code) {
   return Object.assign(new Error(message), { code });
 }
 
+export {
+  isSuccess,
+  isRetryable,
+  poolError,
+  DEFAULT_MIN_CONCURRENCY_PER_LANE,
+  DEFAULT_MAX_CONCURRENCY_PER_LANE,
+  DEFAULT_SUCCESS_RAMP_AFTER,
+  DEFAULT_COOLDOWN_MS,
+  DEFAULT_BACKGROUND_RESERVE_PER_LANE,
+};
+
 export function createEgressPool(options = {}) {
   const minConcurrencyPerLane = Math.max(1, Number.parseInt(options.minConcurrencyPerLane, 10) || DEFAULT_MIN_CONCURRENCY_PER_LANE);
   const maxConcurrencyPerLane = Math.max(minConcurrencyPerLane, Number.parseInt(options.maxConcurrencyPerLane, 10) || DEFAULT_MAX_CONCURRENCY_PER_LANE);

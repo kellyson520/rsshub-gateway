@@ -263,3 +263,35 @@ test('smooths latency samples with an exponential moving average', async () => {
   lease.release({ status: 200 });
   assert.equal(pool.stats().lanes[0].ewmaMs, 160);
 });
+
+test('exports pool predicate functions and concurrency constants', async () => {
+  const {
+    isSuccess,
+    isRetryable,
+    poolError,
+    DEFAULT_MIN_CONCURRENCY_PER_LANE,
+    DEFAULT_MAX_CONCURRENCY_PER_LANE,
+    DEFAULT_SUCCESS_RAMP_AFTER,
+    DEFAULT_COOLDOWN_MS,
+    DEFAULT_BACKGROUND_RESERVE_PER_LANE,
+  } = await import('../src/egress-pool.js');
+
+  assert.equal(isSuccess(200), true);
+  assert.equal(isSuccess(204), true);
+  assert.equal(isSuccess(404), false);
+  assert.equal(isSuccess(null), false);
+
+  assert.equal(isRetryable(429), true);
+  assert.equal(isRetryable(502), true);
+  assert.equal(isRetryable(404), false);
+
+  const err = poolError('pool exhausted', 'EGRESS_POOL_EXHAUSTED');
+  assert.equal(err.message, 'pool exhausted');
+  assert.equal(err.code, 'EGRESS_POOL_EXHAUSTED');
+
+  assert.equal(DEFAULT_MIN_CONCURRENCY_PER_LANE, 3);
+  assert.equal(DEFAULT_MAX_CONCURRENCY_PER_LANE, 6);
+  assert.equal(DEFAULT_SUCCESS_RAMP_AFTER, 6);
+  assert.equal(DEFAULT_COOLDOWN_MS, 500);
+  assert.equal(DEFAULT_BACKGROUND_RESERVE_PER_LANE, 1);
+});
