@@ -501,6 +501,31 @@ export function escapeXml(value) {
   }[character]));
 }
 
+export function withoutCredentials(headers = {}) {
+  return Object.fromEntries(Object.entries(headers || {})
+    .filter(([name]) => !/^(cookie|authorization)$/i.test(name)));
+}
+
+export function isAuthenticationRedirect(response) {
+  if (!response || typeof response !== 'object') return false;
+  const status = Number(response.status);
+  if (status < 300 || status >= 400) return false;
+  const location = typeof response.headers?.get === 'function'
+    ? (response.headers.get('location') || '')
+    : (response.headers?.location || '');
+  return /(?:\/login|\/signin|\/i\/flow\/login|accounts\/login)(?:[/?#]|$)/i.test(location);
+}
+
+export async function isAuthenticationChallenge(response, url, callback) {
+  if (response?.status === 401 || isAuthenticationRedirect(response)) return true;
+  if (typeof callback !== 'function') return false;
+  try {
+    return Boolean(await callback({ response, url }));
+  } catch {
+    return false;
+  }
+}
+
 export function cdata(value) {
   return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
 }

@@ -285,6 +285,34 @@ test('isBearerAuthorized validates authorization header in constant time', async
   assert.equal(isBearerAuthorized(`Bearer ${token}`, null), false);
 });
 
+test('withoutCredentials, isAuthenticationRedirect and isAuthenticationChallenge handle security challenges properly', async () => {
+  const { withoutCredentials, isAuthenticationRedirect, isAuthenticationChallenge } = await import('../src/http-utils.js');
+
+  const headers = {
+    'cookie': 'session=xyz',
+    'authorization': 'Bearer secret',
+    'accept': 'text/html',
+    'user-agent': 'custom-agent',
+  };
+  assert.deepEqual(withoutCredentials(headers), {
+    'accept': 'text/html',
+    'user-agent': 'custom-agent',
+  });
+  assert.deepEqual(withoutCredentials(null), {});
+
+  assert.equal(isAuthenticationRedirect({ status: 302, headers: { location: 'https://example.com/login' } }), true);
+  assert.equal(isAuthenticationRedirect({ status: 301, headers: { get: () => '/accounts/login' } }), true);
+  assert.equal(isAuthenticationRedirect({ status: 200, headers: { location: '/login' } }), false);
+  assert.equal(isAuthenticationRedirect({ status: 302, headers: { location: 'https://example.com/item/123' } }), false);
+  assert.equal(isAuthenticationRedirect(null), false);
+
+  assert.equal(await isAuthenticationChallenge({ status: 401 }), true);
+  assert.equal(await isAuthenticationChallenge({ status: 302, headers: { location: '/login' } }), true);
+  assert.equal(await isAuthenticationChallenge({ status: 200 }, 'https://example.com', () => true), true);
+  assert.equal(await isAuthenticationChallenge({ status: 200 }, 'https://example.com', () => false), false);
+  assert.equal(await isAuthenticationChallenge({ status: 200 }, 'https://example.com', () => { throw new Error('fail'); }), false);
+});
+
 test('safeJsonParse parses valid json safely and returns fallback for corrupt payloads', async () => {
   const { safeJsonParse } = await import('../src/http-utils.js');
 

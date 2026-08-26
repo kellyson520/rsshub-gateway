@@ -4,7 +4,13 @@ import { adapterForUrl } from './adapters/index.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { GatewayUpstreamError, isRetryableStatus } from './upstream-errors.js';
 import { egressPolicyForRequest } from './egress-policy.js';
-import { clamp, sleep as defaultSleep } from './http-utils.js';
+import {
+  clamp,
+  isAuthenticationChallenge,
+  isAuthenticationRedirect,
+  sleep as defaultSleep,
+  withoutCredentials,
+} from './http-utils.js';
 
 const DEFAULT_PROXY = 'http://127.0.0.1:7890';
 const DEFAULT_TIMEOUT = 30_000;
@@ -46,27 +52,6 @@ function sourceHeaders(url, sources = {}, { includeCredentials = false, credenti
     ...(referer ? { referer } : {}),
     ...adapter.headers(credentials ?? sources[adapter.name], { includeCredentials }),
   };
-}
-
-function withoutCredentials(headers = {}) {
-  return Object.fromEntries(Object.entries(headers)
-    .filter(([name]) => !/^(cookie|authorization)$/i.test(name)));
-}
-
-function isAuthenticationRedirect(response) {
-  if (response.status < 300 || response.status >= 400) return false;
-  const location = response.headers.get('location') || '';
-  return /(?:\/login|\/signin|\/i\/flow\/login|accounts\/login)(?:[/?#]|$)/i.test(location);
-}
-
-async function isAuthenticationChallenge(response, url, callback) {
-  if (response.status === 401 || isAuthenticationRedirect(response)) return true;
-  if (typeof callback !== 'function') return false;
-  try {
-    return Boolean(await callback({ response, url }));
-  } catch {
-    return false;
-  }
 }
 
 function responseWithLease(response, lease) {
