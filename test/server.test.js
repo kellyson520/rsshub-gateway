@@ -2804,8 +2804,13 @@ test('exports request-handler helper utilities and default constants', async () 
   assert.deepEqual(viewWithPrefetch.prefetch, { progress: 50 });
 });
 
-test('exports server low-level utilities parseByteRange and failureMessage', async () => {
-  const { parseByteRange, failureMessage } = await import('../src/server.js');
+test('exports server low-level utilities parseByteRange, failureMessage, routeBucket and initialEhGalleryManifest', async () => {
+  const {
+    parseByteRange,
+    failureMessage,
+    routeBucket,
+    initialEhGalleryManifest,
+  } = await import('../src/server.js');
 
   assert.equal(failureMessage('gallery', 2), '画廊分页 2 暂时无法读取');
   assert.equal(failureMessage('image', 5), '第 5 页暂时无法读取');
@@ -2817,4 +2822,30 @@ test('exports server low-level utilities parseByteRange and failureMessage', asy
   assert.deepEqual(parseByteRange('bytes=500-200', 1000), { unsatisfiable: true });
   assert.equal(parseByteRange('invalid', 1000), null);
   assert.equal(parseByteRange('bytes=-', 1000), null);
+
+  assert.equal(routeBucket('/healthz'), 'healthz');
+  assert.equal(routeBucket('/readyz'), 'readyz');
+  assert.equal(routeBucket('/_gateway/item/123'), 'item');
+  assert.equal(routeBucket('/_gateway/media/456'), 'media');
+  assert.equal(routeBucket('/_gateway/lease/create'), 'lease');
+  assert.equal(routeBucket('/_gateway/chunk/abc'), 'chunk');
+  assert.equal(routeBucket('/_gateway/infra/stats'), 'infra');
+  assert.equal(routeBucket('/_gateway/prefetch/list'), 'prefetch');
+  assert.equal(routeBucket('/_gateway/metrics'), 'metrics');
+  assert.equal(routeBucket('/ehviewer/ranking'), 'ehviewer');
+  assert.equal(routeBucket('/custom/rss/feed'), 'feed');
+
+  const fakeAdapter = {
+    imagePageUrls: () => ['https://e-hentai.org/s/1/2'],
+    galleryPageUrls: () => ['https://e-hentai.org/g/1/2'],
+  };
+  const manifest = initialEhGalleryManifest({
+    adapter: fakeAdapter,
+    target: 'https://e-hentai.org/g/1/2',
+    initialHtml: '<html><h1 id="gn">Sample Gallery</h1></html>',
+    maxPages: 10,
+  });
+  assert.equal(manifest.title, 'Sample Gallery');
+  assert.deepEqual(manifest.imageUrls, ['https://e-hentai.org/s/1/2']);
+  assert.equal(manifest.totalPages, 1);
 });

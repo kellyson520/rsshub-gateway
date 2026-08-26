@@ -54,6 +54,8 @@ export {
   warmEhMedia,
   failureMessage,
   discoverEhGallery,
+  initialEhGalleryManifest,
+  routeBucket,
 };
 
 async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, request }) {
