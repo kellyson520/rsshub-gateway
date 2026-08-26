@@ -279,11 +279,11 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `matchSegments(compiled, pathname)`: AST segment extraction and parameter mapping.
   - `normalizeRoute(rawRoute)`: Strict schema normalization for sidecar configurations.
   - `sidecarUrl(baseUrl, routePath)`: Safe sidecar reverse-proxy target resolution.
-- **Cache Normalization & Cryptographic Keys (`src/cache.js`)**:
+- **Cache Normalization & Cryptographic Keys (`src/cache.js`, `src/options.js`)**:
   - `canonicalUrl(url)`: Deterministic query param sorting and fragment removal.
   - `keyFor(namespace, host, kind, rawUrl)`: SHA-256 stable cache keying.
   - `normalizedNamespace(scope, fingerprint)`: Public vs session scope segregation.
-  - `DEFAULT_EVICTION_PRIORITY`: Weighted tiering for HTML, media, and reader assets.
+  - `DEFAULT_CACHE_ROOT`, `DEFAULT_EVICTION_PRIORITY`: Standardized `/var/cache/rsshub-gateway` base and weighted tiering for HTML, media, and reader assets.
 - **Download Lifecycle & Lease Proxies (`src/download-session.js`, `src/download-lease.js`, `src/lease-proxy.js`)**:
   - `validChunk(chunk)`, `validSession(session, now)`: Strict lifecycle validation predicates.
   - `isChunkSignatureValid(token, secret)`, `isTargetSignatureValid(token, secret)`: Zero-decode HMAC SHA-256 integrity checks.
@@ -322,7 +322,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `rewriteCookedHtml(html, opts)`: Discourse topic HTML sanitizer and media gateway link rewriter.
   - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`: Pure topic route identification and ID extractor.
   - `isTelegramChannelPostUrl(url)`: Telegram post embedding detector (`?embed=1`).
-  - `jwtExpiryMs(token, opts)`: Zero-dependency JWT expiry timestamp parser with millisecond TTL calculation.
+  - `decodeJwtPayload(token)`, `jwtExpiryMs(token, opts)`: Zero-dependency JWT expiry timestamp parser with millisecond TTL calculation.
   - `publicUrl(val, host)`, `asDate(val)`: Safe public URL canonicalizer and UTC ISO date parser.
   - `RANKING_PERIODS`, `MAX_ITEMS`: E-Hentai/EhViewer toplist query configurations and ceiling bounds.
   - `DEFAULT_BASE_URL` (Fetchd Sidecar), `DEFAULT_FETCHD_TIMEOUT_MS`, `MAX_FETCHD_TIMEOUT_MS`, `FETCHD_TIMEOUT_SLACK_MS`, `SITE_BASE` (LINUX DO / Iwara), `API_BASE` (Iwara REST), `DEFAULT_REFERER` (Pixiv): Direct upstream integration bases and browser-fetch timeouts.
