@@ -91,3 +91,15 @@ test('circuit breaker re-opens immediately when half-open probe fails', () => {
   assert.equal(breaker.state('flaky.com'), 'open');
   assert.equal(breaker.canRequest('flaky.com'), false);
 });
+
+test('clearAll resets all open and half-open circuit breakers', () => {
+  const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 10_000 });
+  breaker.recordFailure('site-1.com');
+  breaker.recordFailure('site-2.com');
+  assert.equal(breaker.openKeys().length, 2);
+
+  breaker.clearAll();
+  assert.equal(breaker.openKeys().length, 0);
+  assert.equal(breaker.state('site-1.com'), 'closed');
+  assert.equal(breaker.canRequest('site-1.com'), true);
+});
