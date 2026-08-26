@@ -906,7 +906,7 @@ export function createGatewayServer(options = {}) {
     : { enqueue: () => {} };
 
   const leaseStore = options.leaseStore || createLeaseStore();
-  const downloadSessions = createDownloadSessionStore({
+  const downloadSessions = options.downloadSessions || createDownloadSessionStore({
     file: downloadSessionFile || path.join(sessionAffinityRoot, 'download-sessions.json'),
   });
   const leaseBackfillQueue = leaseBackfillEnabled ? createLeaseBackfillQueue({

@@ -166,7 +166,7 @@ export function createRequestHandler(deps) {
     const downloadCreate = req.method === 'POST'
       && /^\/_gateway\/download\/[^/]+$/.test(String(req.url || '').split('?')[0]);
     const controlPath = String(req.url || '').split('?')[0];
-    const controlWrite = (controlPath === '/_gateway/dispatcher/routes' || controlPath === '/_gateway/prefetch')
+    const controlWrite = (controlPath === '/_gateway/dispatcher/routes' || controlPath === '/_gateway/prefetch' || controlPath === '/_gateway/revoke-session')
       && (req.method === 'POST' || req.method === 'DELETE');
     if (req.method !== 'GET' && req.method !== 'HEAD' && !downloadCreate && !controlWrite) {
       writeText(res, 405, 'method not allowed\n');
@@ -427,8 +427,46 @@ export function createRequestHandler(deps) {
           writeJson(res, 400, { error: 'path is required' });
           return;
         }
+        if (body.action === 'toggle' || typeof body.paused === 'boolean') {
+          const isPaused = feedPrefetchQueue.togglePause(body.path.trim(), body.paused);
+          writeJson(res, 200, { path: body.path.trim(), paused: isPaused });
+          return;
+        }
         const result = feedPrefetchQueue.enqueue(body.path.trim(), { force: true });
         writeJson(res, 200, { ...result, queueLength: feedPrefetchQueue.stats().queueLength });
+        return;
+      }
+      writeText(res, 405, 'method not allowed\n');
+      return;
+    }
+    if (requestUrl.pathname === '/_gateway/revoke-session') {
+      if (!dispatcherRegistrationToken || !downloadSessions) {
+        writeText(res, 404, 'not found\n');
+        return;
+      }
+      const auth = String(req.headers.authorization || '');
+      const expected = `Bearer ${dispatcherRegistrationToken}`;
+      const provided = auth.trim();
+      if (!provided || provided.length !== expected.length
+        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+        writeText(res, 401, 'unauthorized\n');
+        return;
+      }
+      if (req.method === 'POST') {
+        let body;
+        try {
+          body = JSON.parse(await readRequestBody(req));
+        } catch {
+          writeJson(res, 400, { error: 'invalid json body' });
+          return;
+        }
+        const query = body?.sessionId || body?.targetUrl || body?.query;
+        if (!query || typeof query !== 'string' || !query.trim()) {
+          writeJson(res, 400, { error: 'sessionId or targetUrl is required' });
+          return;
+        }
+        const result = await downloadSessions.revoke(query.trim());
+        writeJson(res, 200, { ok: true, query: query.trim(), ...result });
         return;
       }
       writeText(res, 405, 'method not allowed\n');

@@ -2710,3 +2710,59 @@ test('metrics exports prefetch queue and per-lane egress series', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('supports prefetch togglePause and revoke-session endpoints', async () => {
+  const server = createGatewayServer({
+    secret: 'secret',
+    dispatcherRegistrationToken: 'test-token',
+    feedPrefetchPaths: ['/test/feed'],
+    downloadSessions: {
+      revoke: async (query) => ({ revoked: query === 'valid-session' ? 1 : 0 }),
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  try {
+    // 1. Toggle prefetch pause
+    const toggleRes = await fetch(`http://127.0.0.1:${port}/_gateway/prefetch`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ path: '/test/feed', action: 'toggle' }),
+    });
+    assert.equal(toggleRes.status, 200);
+    const toggleJson = await toggleRes.json();
+    assert.equal(toggleJson.path, '/test/feed');
+    assert.equal(toggleJson.paused, true);
+
+    // 2. Revoke session
+    const revokeRes = await fetch(`http://127.0.0.1:${port}/_gateway/revoke-session`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId: 'valid-session' }),
+    });
+    assert.equal(revokeRes.status, 200);
+    const revokeJson = await revokeRes.json();
+    assert.equal(revokeJson.ok, true);
+    assert.equal(revokeJson.revoked, 1);
+
+    // 3. Unauthorized request
+    const unauthRes = await fetch(`http://127.0.0.1:${port}/_gateway/revoke-session`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer wrong-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId: 'valid-session' }),
+    });
+    assert.equal(unauthRes.status, 401);
+  } finally {
+    server.feedPrefetchQueue?.stop();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
