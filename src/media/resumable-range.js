@@ -76,6 +76,9 @@ function pipeAttempt(stream, res, onBytes, onAbort) {
   });
 }
 
+export const DEFAULT_RESUMABLE_MAX_ATTEMPTS = 3;
+export const DEFAULT_RESUMABLE_BACKOFF_MS = 100;
+
 export {
   sleep,
   pipeAttempt,
@@ -91,8 +94,8 @@ export async function pumpResumableRange({
   res,
   start,
   end,
-  maxAttempts = 3,
-  backoffMs = 100,
+  maxAttempts = DEFAULT_RESUMABLE_MAX_ATTEMPTS,
+  backoffMs = DEFAULT_RESUMABLE_BACKOFF_MS,
   onBytes,
   onResume,
   onComplete,
