@@ -3,7 +3,7 @@ import { createUpstreamClient } from '../upstream.js';
 import { createBrowserFetchClient } from '../browser-fetch.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
-import { matchesHost, safeHost } from '../http-utils.js';
+import { matchesHost, parseHostList, safeHost } from '../http-utils.js';
 
 export { safeHost };
 
@@ -34,15 +34,8 @@ export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
 
 export function parseBrowserFetchHosts(envValue, fallback = DEFAULT_BROWSER_FETCH_HOSTS) {
   if (!envValue) return [...fallback];
-  try {
-    const parsed = JSON.parse(envValue);
-    if (Array.isArray(parsed)) {
-      return parsed.map((h) => String(h).trim().toLowerCase()).filter(Boolean);
-    }
-  } catch {
-    // Comma-separated fallback
-  }
-  return String(envValue).split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+  const list = parseHostList(envValue);
+  return list.length > 0 ? list : [...fallback];
 }
 
 // 站点 WAF 只放行浏览器 TLS 指纹（javbus/javdb 页面无 Referer/UA 也 403，
