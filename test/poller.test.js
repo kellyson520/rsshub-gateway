@@ -111,3 +111,17 @@ test('unregister removes task and stops poller if no tasks remain', () => {
   assert.equal(poller.stats().tasks.length, 0);
   assert.equal(poller.stats().running, false);
 });
+
+test('exports default poller timing and jitter configuration constants', async () => {
+  const {
+    DEFAULT_POLLER_INTERVAL_MS,
+    DEFAULT_POLLER_JITTER_RATIO,
+    MIN_TASK_INTERVAL_MS,
+    MAX_JITTER_RATIO,
+  } = await import('../src/infrastructure/poller.js');
+
+  assert.equal(DEFAULT_POLLER_INTERVAL_MS, 60_000);
+  assert.equal(DEFAULT_POLLER_JITTER_RATIO, 0.2);
+  assert.equal(MIN_TASK_INTERVAL_MS, 10);
+  assert.equal(MAX_JITTER_RATIO, 0.5);
+});

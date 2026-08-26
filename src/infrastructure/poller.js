@@ -1,3 +1,8 @@
+export const DEFAULT_POLLER_INTERVAL_MS = 60_000;
+export const DEFAULT_POLLER_JITTER_RATIO = 0.2;
+export const MIN_TASK_INTERVAL_MS = 10;
+export const MAX_JITTER_RATIO = 0.5;
+
 /**
  * Unified background polling service.
  *
@@ -6,8 +11,8 @@
  * error handling and observability stay in one place.
  */
 export function createPoller({
-  intervalMs = 60_000,
-  jitterRatio = 0.2,
+  intervalMs = DEFAULT_POLLER_INTERVAL_MS,
+  jitterRatio = DEFAULT_POLLER_JITTER_RATIO,
   now = () => Date.now(),
   logger = { debug() {}, info() {}, warn() {}, error() {} },
 } = {}) {
@@ -20,8 +25,8 @@ export function createPoller({
     const task = {
       name: String(name),
       fn,
-      intervalMs: Math.max(10, Number(taskIntervalMs) || intervalMs),
-      jitterRatio: Math.min(0.5, Math.max(0, Number(jitterRatio) || 0)),
+      intervalMs: Math.max(MIN_TASK_INTERVAL_MS, Number(taskIntervalMs) || intervalMs),
+      jitterRatio: Math.min(MAX_JITTER_RATIO, Math.max(0, Number(jitterRatio) || 0)),
       runImmediately: Boolean(runImmediately),
       lastRunAt: 0,
       lastDurationMs: 0,
