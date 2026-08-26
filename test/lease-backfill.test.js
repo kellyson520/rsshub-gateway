@@ -228,11 +228,13 @@ test('exports DEFAULT_MAX_CONCURRENCY and DEFAULT_EVICTION_BUDGET constants', as
   const {
     DEFAULT_MAX_CONCURRENCY,
     DEFAULT_EVICTION_BUDGET,
+    DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
     boundedInteger,
   } = await import('../src/lease-backfill.js');
 
   assert.equal(DEFAULT_MAX_CONCURRENCY, 2);
   assert.equal(DEFAULT_EVICTION_BUDGET, 128 * 1024 ** 2);
+  assert.equal(DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES, 256 * 1024 ** 2);
   assert.equal(boundedInteger('5', 2, 1, 10), 5);
   assert.equal(boundedInteger('invalid', 2, 1, 10), 2);
 });

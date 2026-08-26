@@ -142,8 +142,20 @@ test('serverCount reports number of valid active servers registered', () => {
   shutdown.dispose();
 });
 
-test('exports DEFAULT_SHUTDOWN_TIMEOUT_MS and DEFAULT_SIGNALS constants', async () => {
-  const { DEFAULT_SHUTDOWN_TIMEOUT_MS, DEFAULT_SIGNALS } = await import('../src/graceful-shutdown.js');
+test('exports DEFAULT_SHUTDOWN_TIMEOUT_MS, DEFAULT_SIGNALS, stopAcceptingServers and drainServers', async () => {
+  const {
+    DEFAULT_SHUTDOWN_TIMEOUT_MS,
+    DEFAULT_SIGNALS,
+    stopAcceptingServers,
+    drainServers,
+  } = await import('../src/graceful-shutdown.js');
   assert.equal(DEFAULT_SHUTDOWN_TIMEOUT_MS, 10_000);
   assert.deepEqual(DEFAULT_SIGNALS, ['SIGTERM', 'SIGINT']);
+
+  const idleCalls = [];
+  const server = fakeServer({ idleCalls });
+  stopAcceptingServers([server, null]);
+  assert.equal(idleCalls.length, 1);
+
+  await drainServers([server, null, fakeServer({ listening: false })]);
 });

@@ -1,5 +1,6 @@
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_EVICTION_BUDGET = 128 * 1024 ** 2;
+const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
 
 function boundedInteger(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(value, 10);
@@ -10,6 +11,7 @@ function boundedInteger(value, fallback, minimum, maximum) {
 export {
   DEFAULT_MAX_CONCURRENCY,
   DEFAULT_EVICTION_BUDGET,
+  DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
   boundedInteger,
 };
 
@@ -33,7 +35,7 @@ export function createLeaseBackfillQueue({
   probeSize,
   maxConcurrency = DEFAULT_MAX_CONCURRENCY,
   evictionBudget = DEFAULT_EVICTION_BUDGET,
-  videoCacheMaxFileBytes = 256 * 1024 ** 2,
+  videoCacheMaxFileBytes = DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
   logger = { info() {}, warn() {}, error() {} },
 } = {}) {
   const limit = boundedInteger(maxConcurrency, DEFAULT_MAX_CONCURRENCY, 0, 8);
