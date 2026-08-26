@@ -320,12 +320,33 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `installGracefulShutdown(opts)`: Connection draining and signal trapping for zero-downtime restarts.
   - `createLeaseBackfillQueue(opts)`: Background slice cache warmer for video download leases.
   - `DEFAULT_POLLER_INTERVAL_MS`, `DEFAULT_POLLER_JITTER_RATIO`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_MAX_CONCURRENCY`: Infrastructure operational defaults.
-- **Content Sources & Adapters (`src/adapters/linuxdo.js`, `src/fetchd.js`, `src/reader.js`)**:
+- **Content Sources & Adapters (`src/adapters/linuxdo.js`, `src/adapters/ehviewer.js`, `src/adapters/iwara.js`, `src/adapters/adult-media.js`, `src/fetchd.js`, `src/reader.js`)**:
   - `escapeHtml(value)`: Universal XSS-safe HTML entity escaper.
+  - `escapeXml(value)`, `cdata(value)`: Safe XML serializer and CDATA container wrappers.
   - `rewriteCookedHtml(html, opts)`: Discourse topic HTML sanitizer and media gateway link rewriter.
   - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`: Pure topic route identification and ID extractor.
-  - `DEFAULT_BASE_URL` (Fetchd Sidecar), `SITE_BASE` (LINUX DO): Direct upstream integration bases.
+  - `RANKING_PERIODS`, `MAX_ITEMS`: E-Hentai/EhViewer toplist query configurations and ceiling bounds.
+  - `DEFAULT_BASE_URL` (Fetchd Sidecar), `SITE_BASE` (LINUX DO / Iwara), `API_BASE` (Iwara REST): Direct upstream integration bases.
+  - `ADULT_DOMAINS`, `DEFAULT_USER_AGENT`, `DEFAULT_ACCEPT_LANGUAGE`: Adult media content routing and default header profiles.
   - `EH_GALLERY_PATH`, `EH_IMAGE_PATH`, `READER_CSS`, `IMAGE_VARIANT_WIDTHS`: Universal reading engine styles and responsive breakpoints.
+- **Resilient Request Pipeline, Upstream & Circuit Breakers (`src/upstream.js`, `src/circuit-breaker.js`, `src/signed-target.js`, `src/infrastructure/request-service.js`)**:
+  - `CIRCUIT_STATE_CLOSED`, `CIRCUIT_STATE_OPEN`, `CIRCUIT_STATE_HALF_OPEN`: Standard tri-state circuit breaker identifiers.
+  - `DEFAULT_FAILURE_THRESHOLD`, `DEFAULT_COOLDOWN_MS`: Circuit breaker tripping thresholds and cooldown windows.
+  - `encode(value)`, `decode(value)`: High-performance Base64URL string serializers.
+  - `routeMetadata(metadata)`: Route scope and source validation parser.
+  - `DEFAULT_PROXY`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_ATTEMPTS`, `MAX_REDIRECTS_PER_ATTEMPT`: Upstream proxy and timeout foundations.
+  - `HOTLINK_REFERERS`, `refererFor(url)`: Anti-hotlinking CDN source referer resolution table.
+  - `withoutCredentials(headers)`, `isAuthenticationRedirect(res)`, `isAuthenticationChallenge(res, url, cb)`: Security boundary credentials stripping and challenge detection.
+  - `safeHost(url)`, `browserFetchHost(url)`: Safe URL host normalizer and TLS browser fingerprint route classifier.
+- **Dynamic Microservice Frameworks, Gateways & Server Utilities (`src/fetcher-server.js`, `src/server.js`, `src/request-handler.js`, `src/gallery-benchmark.js`)**:
+  - `DEFAULT_FETCHER_PORT`, `DEFAULT_FETCHER_HOST`: Sidecar standalone server defaults (`8000` / `0.0.0.0`).
+  - `registerDispatcherRoutes(opts)`, `unregisterDispatcherRoutes(opts)`: Sidecar lifecycle self-registration and teardown with backoff.
+  - `HttpError`, `readRequestBody(req)`: Standard HTTP status error wrapper and raw payload buffer reader.
+  - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
+  - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.
+  - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
+  - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
+  - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
 
 ## Rollback
 
