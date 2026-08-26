@@ -1,5 +1,8 @@
+export const DEFAULT_FAILURE_THRESHOLD = 3;
+export const DEFAULT_COOLDOWN_MS = 30_000;
+
 export class CircuitBreaker {
-  constructor({ failureThreshold = 3, cooldownMs = 30_000, now = () => Date.now() } = {}) {
+  constructor({ failureThreshold = DEFAULT_FAILURE_THRESHOLD, cooldownMs = DEFAULT_COOLDOWN_MS, now = () => Date.now() } = {}) {
     this.failureThreshold = failureThreshold;
     this.cooldownMs = cooldownMs;
     this.now = now;

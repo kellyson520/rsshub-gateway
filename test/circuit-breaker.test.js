@@ -103,3 +103,9 @@ test('clearAll resets all open and half-open circuit breakers', () => {
   assert.equal(breaker.state('site-1.com'), 'closed');
   assert.equal(breaker.canRequest('site-1.com'), true);
 });
+
+test('exports DEFAULT_FAILURE_THRESHOLD and DEFAULT_COOLDOWN_MS constants', async () => {
+  const { DEFAULT_FAILURE_THRESHOLD, DEFAULT_COOLDOWN_MS } = await import('../src/circuit-breaker.js');
+  assert.equal(DEFAULT_FAILURE_THRESHOLD, 3);
+  assert.equal(DEFAULT_COOLDOWN_MS, 30_000);
+});
