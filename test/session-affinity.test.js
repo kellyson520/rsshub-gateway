@@ -115,3 +115,17 @@ test('session-affinity throws typed SESSION_LANE_UNAVAILABLE when all lanes are 
     );
   });
 });
+
+test('exports helper functions for deterministic hashing and lane selection', async () => {
+  const { fingerprintFor, normalizedLaneIds, normalizedCredentials, chooseLane } = await import('../src/session-affinity.js');
+  const fp1 = fingerprintFor('x', { authToken: 'token-a', ct0: 'csrf-a' }, 'secret');
+  const fp2 = fingerprintFor('x', { ct0: 'csrf-a', authToken: 'token-a' }, 'secret');
+  assert.equal(fp1, fp2);
+  assert.match(fp1, /^[a-f0-9]{64}$/);
+
+  assert.deepEqual(normalizedLaneIds(['lane-2', 'lane-1', 'lane-1']), ['lane-1', 'lane-2']);
+  assert.equal(normalizedCredentials({ b: '2', a: '1' }), 'a=1\nb=2');
+
+  const selected = chooseLane(fp1, ['lane-1', 'lane-2'], new Set());
+  assert.ok(['lane-1', 'lane-2'].includes(selected));
+});

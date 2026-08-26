@@ -62,6 +62,13 @@ function validRecord(record, now, maxAgeMs) {
     && now - record.updatedAt <= maxAgeMs;
 }
 
+export {
+  fingerprintFor,
+  normalizedLaneIds,
+  normalizedCredentials,
+  chooseLane,
+};
+
 export function createSessionAffinity({
   root = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
   file = process.env.SESSION_AFFINITY_FILE,
