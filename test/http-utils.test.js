@@ -156,3 +156,15 @@ test('readSecret and readSources handle default and fallback states', async () =
   assert.equal(writtenHeaders['retry-after'], '10');
   assert.equal(writtenBody, 'upstream unavailable\n');
 });
+
+test('parseByteRange parses single, suffix, open-ended and unsatisfiable ranges', async () => {
+  const { parseByteRange } = await import('../src/http-utils.js');
+  assert.deepEqual(parseByteRange('bytes=0-499', 1000), { start: 0, end: 499, size: 500, total: 1000 });
+  assert.deepEqual(parseByteRange('bytes=500-', 1000), { start: 500, end: 999, size: 500, total: 1000 });
+  assert.deepEqual(parseByteRange('bytes=-200', 1000), { start: 800, end: 999, size: 200, total: 1000 });
+  assert.deepEqual(parseByteRange('bytes=1000-1200', 1000), { unsatisfiable: true });
+  assert.deepEqual(parseByteRange('bytes=0-2000', 1000), { start: 0, end: 999, size: 1000, total: 1000 });
+  assert.equal(parseByteRange(null, 1000), null);
+  assert.equal(parseByteRange('invalid', 1000), null);
+  assert.equal(parseByteRange('bytes=0-100,200-300', 1000), null);
+});
