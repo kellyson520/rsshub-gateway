@@ -1,5 +1,7 @@
 export const DEFAULT_UPSTREAM_ERROR_STATUS = 502;
 export const DEFAULT_UPSTREAM_SOURCE = 'unknown';
+export const RETRYABLE_STATUSES = new Set([408, 425, 429]);
+export const DEFAULT_BLOCKED_STATUSES = new Set([401, 403, 407, 429]);
 
 export class GatewayUpstreamError extends Error {
   constructor(message, { code, source = DEFAULT_UPSTREAM_SOURCE, status = DEFAULT_UPSTREAM_ERROR_STATUS, attempts = 0, retryAfter } = {}) {
@@ -25,7 +27,7 @@ export function isClientAbortError(error) {
 }
 
 export function isRetryableStatus(status) {
-  return Number.isInteger(status) && (status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599));
+  return Number.isInteger(status) && (RETRYABLE_STATUSES.has(status) || (status >= 500 && status <= 599));
 }
 
 export function isSuccessfulStatus(status) {

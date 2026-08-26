@@ -1,6 +1,11 @@
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
 import { safeEvent } from './http-utils.js';
-import { isRetryableStatus as isRetryable, isSuccessfulStatus as isSuccess } from './upstream-errors.js';
+import {
+  DEFAULT_BLOCKED_STATUSES,
+  isRetryableStatus as isRetryable,
+  isSuccessfulStatus as isSuccess,
+  RETRYABLE_STATUSES,
+} from './upstream-errors.js';
 
 const DEFAULT_MIN_CONCURRENCY_PER_LANE = 3;
 const DEFAULT_MAX_CONCURRENCY_PER_LANE = 6;
@@ -9,7 +14,6 @@ const DEFAULT_COOLDOWN_MS = 500;
 const DEFAULT_BACKGROUND_RESERVE_PER_LANE = 1;
 const EWMA_ALPHA = 0.2;
 const MAX_LATENCY_SAMPLE_MS = 10_000;
-const RETRYABLE_STATUSES = new Set([408, 425, 429]);
 
 function poolError(message, code) {
   return Object.assign(new Error(message), { code });
@@ -25,6 +29,7 @@ export {
   DEFAULT_SUCCESS_RAMP_AFTER,
   DEFAULT_COOLDOWN_MS,
   DEFAULT_BACKGROUND_RESERVE_PER_LANE,
+  DEFAULT_BLOCKED_STATUSES,
   EWMA_ALPHA,
   MAX_LATENCY_SAMPLE_MS,
   RETRYABLE_STATUSES,
@@ -36,7 +41,7 @@ export function createEgressPool(options = {}) {
   const successRampAfter = Math.max(1, Number.parseInt(options.successRampAfter, 10) || DEFAULT_SUCCESS_RAMP_AFTER);
   const cooldownMs = Math.max(0, Number.parseInt(options.cooldownMs, 10) || DEFAULT_COOLDOWN_MS);
   const backgroundReservePerLane = Math.max(0, Number.parseInt(options.backgroundReservePerLane, 10) || DEFAULT_BACKGROUND_RESERVE_PER_LANE);
-  const blockedStatuses = new Set([...(options.blockedStatuses || [401, 403, 407, 429])].map(Number));
+  const blockedStatuses = new Set([...(options.blockedStatuses || DEFAULT_BLOCKED_STATUSES)].map(Number));
   const siteFailureThreshold = Math.max(1, Number.parseInt(options.siteFailureThreshold, 10) || 3);
   const siteFailureWindowMs = Math.max(1_000, Number.parseInt(options.siteFailureWindowMs, 10) || 60_000);
   const siteBlockCooldownMs = Math.max(0, Number.parseInt(options.siteBlockCooldownMs, 10) || 60_000);

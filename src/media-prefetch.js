@@ -3,7 +3,11 @@ import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
 import { boundedInteger, clamp, safeEvent, sleep as defaultSleep } from './http-utils.js';
-import { isRetryableStatus as retryableStatus, isSuccessfulStatus as successfulStatus } from './upstream-errors.js';
+import {
+  isRetryableStatus as retryableStatus,
+  isSuccessfulStatus as successfulStatus,
+  RETRYABLE_STATUSES,
+} from './upstream-errors.js';
 import { DEFAULT_CACHE_ROOT } from './options.js';
 
 const DEFAULT_INITIAL_CONCURRENCY = 6;
@@ -15,7 +19,6 @@ const DEFAULT_SUCCESS_RAMP_AFTER = 6;
 const DEFAULT_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_QUEUE_ITEMS = 2_000;
 const MAX_PER_ORIGIN_CONCURRENCY = 48;
-const RETRYABLE_STATUSES = new Set([408, 425, 429]);
 
 function originFor(target) {
   try {

@@ -77,8 +77,24 @@ test('isSuccessfulStatus: identifies 2xx HTTP success statuses correctly', async
   assert.equal(isSuccessfulStatus(null), false);
 });
 
-test('exports default upstream error status and source constants', async () => {
-  const { DEFAULT_UPSTREAM_ERROR_STATUS, DEFAULT_UPSTREAM_SOURCE } = await import('../src/upstream-errors.js');
+test('exports default upstream error status, source, retryable and blocked status constants', async () => {
+  const {
+    DEFAULT_UPSTREAM_ERROR_STATUS,
+    DEFAULT_UPSTREAM_SOURCE,
+    RETRYABLE_STATUSES,
+    DEFAULT_BLOCKED_STATUSES,
+  } = await import('../src/upstream-errors.js');
   assert.equal(DEFAULT_UPSTREAM_ERROR_STATUS, 502);
   assert.equal(DEFAULT_UPSTREAM_SOURCE, 'unknown');
+
+  assert.ok(RETRYABLE_STATUSES instanceof Set);
+  assert.ok(RETRYABLE_STATUSES.has(408));
+  assert.ok(RETRYABLE_STATUSES.has(425));
+  assert.ok(RETRYABLE_STATUSES.has(429));
+
+  assert.ok(DEFAULT_BLOCKED_STATUSES instanceof Set);
+  assert.ok(DEFAULT_BLOCKED_STATUSES.has(401));
+  assert.ok(DEFAULT_BLOCKED_STATUSES.has(403));
+  assert.ok(DEFAULT_BLOCKED_STATUSES.has(407));
+  assert.ok(DEFAULT_BLOCKED_STATUSES.has(429));
 });

@@ -351,6 +351,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `CIRCUIT_STATE_CLOSED`, `CIRCUIT_STATE_OPEN`, `CIRCUIT_STATE_HALF_OPEN`: Standard tri-state circuit breaker identifiers.
   - `DEFAULT_FAILURE_THRESHOLD`, `DEFAULT_COOLDOWN_MS`: Circuit breaker tripping thresholds and cooldown windows.
   - `isRetryableStatus(status)`, `isSuccessfulStatus(status)`, `isClientAbortError(err)`: Standard HTTP status classifiers and client disconnect predicates.
+  - `RETRYABLE_STATUSES`, `DEFAULT_BLOCKED_STATUSES`: Unified set definitions for transient retryable codes (408/425/429) and egress blocking codes.
   - `GatewayUpstreamError`: Structured error class capturing retry attempts, source name, status code and `retryAfter` payload.
   - `encode(value)`, `decode(value)`: High-performance Base64URL string serializers.
   - `routeMetadata(metadata)`: Route scope and source validation parser.
