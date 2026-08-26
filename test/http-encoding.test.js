@@ -81,3 +81,17 @@ test('handles q=0 quality parameter by ignoring rejected encoding', () => {
   assert.deepEqual(gunzipSync(result.body), largeBody);
 });
 
+test('isCompressibleContentType identifies text, xml, json and ignores binary media', async () => {
+  const { isCompressibleContentType } = await import('../src/http-encoding.js');
+  assert.equal(isCompressibleContentType('text/html; charset=utf-8'), true);
+  assert.equal(isCompressibleContentType('application/rss+xml'), true);
+  assert.equal(isCompressibleContentType('application/json'), true);
+  assert.equal(isCompressibleContentType('application/atom+xml'), true);
+  assert.equal(isCompressibleContentType('image/svg+xml'), true);
+  assert.equal(isCompressibleContentType('image/png'), false);
+  assert.equal(isCompressibleContentType('video/mp4'), false);
+  assert.equal(isCompressibleContentType('application/octet-stream'), false);
+  assert.equal(isCompressibleContentType(null), false);
+  assert.equal(isCompressibleContentType(undefined), false);
+});
+

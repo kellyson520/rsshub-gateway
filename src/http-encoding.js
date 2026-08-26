@@ -18,7 +18,7 @@ const COMPRESSIBLE_CONTENT_TYPES = [
   'image/svg+xml',
 ];
 
-function isCompressibleContentType(contentType) {
+export function isCompressibleContentType(contentType) {
   const value = String(contentType || '').toLowerCase();
   return COMPRESSIBLE_CONTENT_TYPES.some((prefix) => value.includes(prefix));
 }
