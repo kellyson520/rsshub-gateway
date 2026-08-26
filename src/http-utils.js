@@ -199,13 +199,19 @@ export async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl
   return responseFromCachedDocument(result);
 }
 
+export function clamp(value, minimum, maximum) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return minimum;
+  return Math.min(Math.max(n, minimum), maximum);
+}
+
 export function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function boundedInteger(value, fallback, minimum, maximum) {
-  return Math.min(Math.max(positiveInteger(value, fallback), minimum), maximum);
+  return clamp(positiveInteger(value, fallback), minimum, maximum);
 }
 
 export function parseProbeTargets(value, legacyProbeUrl) {

@@ -4,6 +4,7 @@ import http from 'node:http';
 import { once } from 'node:events';
 import {
   boundedInteger,
+  clamp,
   documentCacheKind,
   imageVariantCacheUrl,
   isEhImagePageTarget,
@@ -19,7 +20,13 @@ import {
   writeText,
 } from '../src/http-utils.js';
 
-test('boundedInteger clamps and falls back', () => {
+test('clamp and boundedInteger restrict numbers within bounds', () => {
+  assert.equal(clamp(5, 1, 10), 5);
+  assert.equal(clamp(50, 1, 10), 10);
+  assert.equal(clamp(-5, 0, 10), 0);
+  assert.equal(clamp(NaN, 0, 10), 0);
+  assert.equal(clamp('invalid', 0, 10), 0);
+
   assert.equal(boundedInteger('5', 3, 1, 10), 5);
   assert.equal(boundedInteger('50', 3, 1, 10), 10);
   assert.equal(boundedInteger('abc', 3, 1, 10), 3);

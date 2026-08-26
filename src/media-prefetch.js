@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
-import { boundedInteger, safeEvent } from './http-utils.js';
+import { boundedInteger, clamp, safeEvent } from './http-utils.js';
 import { isRetryableStatus as retryableStatus, isSuccessfulStatus as successfulStatus } from './upstream-errors.js';
 import { DEFAULT_CACHE_ROOT } from './options.js';
 
@@ -65,7 +65,7 @@ export function createMediaPrefetchQueue(options = {}) {
   const capacityProvider = options.capacityProvider;
   const persistEnabled = options.persist !== false;
 
-  let currentConcurrency = Math.min(Math.max(initialConcurrency, minConcurrency), maxConcurrency);
+  let currentConcurrency = clamp(initialConcurrency, minConcurrency, maxConcurrency);
   let active = 0;
   let delayed = 0;
   let successStreak = 0;
@@ -234,7 +234,7 @@ export function createMediaPrefetchQueue(options = {}) {
     const dynamicMinimum = Math.max(minConcurrency, providerValue(minimumConcurrencyProvider, 0));
     const dynamicCapacity = Math.max(dynamicMinimum, providerValue(capacityProvider, maxConcurrency));
     const effectiveMaximum = Math.min(maxConcurrency, dynamicCapacity);
-    currentConcurrency = Math.min(Math.max(currentConcurrency, dynamicMinimum), effectiveMaximum);
+    currentConcurrency = clamp(currentConcurrency, dynamicMinimum, effectiveMaximum);
     while (active < currentConcurrency) {
       const index = nextTargetIndex();
       if (index < 0) break;

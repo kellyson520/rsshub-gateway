@@ -1,3 +1,5 @@
+import { clamp } from '../http-utils.js';
+
 export const DEFAULT_POLLER_INTERVAL_MS = 60_000;
 export const DEFAULT_POLLER_JITTER_RATIO = 0.2;
 export const MIN_TASK_INTERVAL_MS = 10;
@@ -26,7 +28,7 @@ export function createPoller({
       name: String(name),
       fn,
       intervalMs: Math.max(MIN_TASK_INTERVAL_MS, Number(taskIntervalMs) || intervalMs),
-      jitterRatio: Math.min(MAX_JITTER_RATIO, Math.max(0, Number(jitterRatio) || 0)),
+      jitterRatio: clamp(Number(jitterRatio) || 0, 0, MAX_JITTER_RATIO),
       runImmediately: Boolean(runImmediately),
       lastRunAt: 0,
       lastDurationMs: 0,
