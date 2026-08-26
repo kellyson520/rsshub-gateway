@@ -109,7 +109,9 @@ test('createLogger: handles null or undefined fields without throwing', () => {
 });
 
 test('createNoopLogger: returns a silent noop logger instance', async () => {
-  const { createNoopLogger } = await import('../src/infrastructure/logger.js');
+  const { createNoopLogger, LOG_LEVELS, DEFAULT_LOG_LEVEL } = await import('../src/infrastructure/logger.js');
+  assert.equal(DEFAULT_LOG_LEVEL, 'info');
+  assert.deepEqual(LOG_LEVELS, { debug: 10, info: 20, warn: 30, error: 40 });
   const noop = createNoopLogger();
   assert.doesNotThrow(() => {
     noop.debug('test');

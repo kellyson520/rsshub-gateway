@@ -39,6 +39,9 @@ function redactFields(fields) {
   return output;
 }
 
+export const LOG_LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40 });
+export const DEFAULT_LOG_LEVEL = 'info';
+
 export function createNoopLogger() {
   const noop = () => {};
   return {
@@ -53,12 +56,12 @@ export function createNoopLogger() {
 }
 
 export function createLogger({
-  level = process.env.GATEWAY_LOG_LEVEL || 'info',
+  level = process.env.GATEWAY_LOG_LEVEL || DEFAULT_LOG_LEVEL,
   sink = (line) => process.stdout.write(`${line}\n`),
   redact = true,
   now = () => Date.now(),
 } = {}) {
-  const levels = { debug: 10, info: 20, warn: 30, error: 40 };
+  const levels = LOG_LEVELS;
   const threshold = levels[level] ?? levels.info;
 
   function write(event, fields = {}, levelName = 'info') {
