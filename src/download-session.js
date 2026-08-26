@@ -8,7 +8,8 @@ const DEFAULT_MAX_SESSIONS = 64;
 const CHUNK_STATUSES = new Set(['pending', 'done']);
 
 function validChunk(chunk) {
-  return chunk
+  return Boolean(
+    chunk
     && typeof chunk === 'object'
     && Number.isInteger(chunk.index)
     && chunk.index >= 0
@@ -17,11 +18,13 @@ function validChunk(chunk) {
     && Number.isFinite(chunk.size)
     && typeof chunk.url === 'string'
     && CHUNK_STATUSES.has(chunk.status)
-    && Number.isFinite(chunk.updatedAt);
+    && Number.isFinite(chunk.updatedAt),
+  );
 }
 
 function validSession(session, now) {
-  return session
+  return Boolean(
+    session
     && typeof session === 'object'
     && typeof session.id === 'string'
     && session.id
@@ -34,8 +37,16 @@ function validSession(session, now) {
     && session.expiresAt > now
     && Array.isArray(session.chunks)
     && session.chunks.length > 0
-    && session.chunks.every(validChunk);
+    && session.chunks.every(validChunk),
+  );
 }
+
+export {
+  validChunk,
+  validSession,
+  DEFAULT_TTL_MS,
+  DEFAULT_MAX_SESSIONS,
+};
 
 export function createDownloadSessionStore({
   now = Date.now,

@@ -151,3 +151,41 @@ test('revoke deletes sessions by id or targetUrl idempotently', async () => {
   assert.deepEqual(await store.revoke('non-existent'), { revoked: 0 });
   assert.deepEqual(await store.revoke(''), { revoked: 0 });
 });
+
+test('exports session and chunk validation predicates and constants', async () => {
+  const {
+    validChunk,
+    validSession,
+    DEFAULT_TTL_MS,
+    DEFAULT_MAX_SESSIONS,
+  } = await import('../src/download-session.js');
+
+  const chunk = {
+    index: 0,
+    start: 0,
+    end: 999,
+    size: 1000,
+    url: 'https://example.com/c1',
+    status: 'pending',
+    updatedAt: 1000,
+  };
+  assert.equal(validChunk(chunk), true);
+  assert.equal(validChunk(null), false);
+  assert.equal(validChunk({ ...chunk, status: 'invalid-status' }), false);
+
+  const session = {
+    id: 's-1',
+    target: 'https://example.com/v.mp4',
+    size: 1000,
+    chunkSize: 1000,
+    createdAt: 1000,
+    expiresAt: 5000,
+    chunks: [chunk],
+  };
+  assert.equal(validSession(session, 2000), true);
+  assert.equal(validSession(session, 6000), false); // Expired
+  assert.equal(validSession(null, 2000), false);
+
+  assert.equal(DEFAULT_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(DEFAULT_MAX_SESSIONS, 64);
+});
