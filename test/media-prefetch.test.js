@@ -267,10 +267,19 @@ test('exports helper functions and constants for media prefetch scheduling', asy
     originFor,
     retryableStatus,
     successfulStatus,
+    boundedInteger,
+    safeEvent,
+    DEFAULT_CACHE_ROOT,
     DEFAULT_INITIAL_CONCURRENCY,
     DEFAULT_MIN_CONCURRENCY,
     DEFAULT_MAX_CONCURRENCY,
     DEFAULT_PER_ORIGIN_CONCURRENCY,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_SUCCESS_RAMP_AFTER,
+    DEFAULT_QUEUE_TTL_MS,
+    MAX_QUEUE_ITEMS,
+    MAX_PER_ORIGIN_CONCURRENCY,
+    RETRYABLE_STATUSES,
   } = await import('../src/media-prefetch.js');
 
   assert.equal(originFor('https://page.example.hath.network/h/1.jpg'), 'page.example.hath.network');
@@ -289,4 +298,19 @@ test('exports helper functions and constants for media prefetch scheduling', asy
   assert.equal(DEFAULT_MIN_CONCURRENCY, 3);
   assert.equal(DEFAULT_MAX_CONCURRENCY, 12);
   assert.equal(DEFAULT_PER_ORIGIN_CONCURRENCY, 2);
+  assert.equal(DEFAULT_MAX_RETRIES, 2);
+  assert.equal(DEFAULT_SUCCESS_RAMP_AFTER, 6);
+  assert.equal(DEFAULT_QUEUE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(MAX_QUEUE_ITEMS, 2000);
+  assert.equal(MAX_PER_ORIGIN_CONCURRENCY, 48);
+  assert.ok(RETRYABLE_STATUSES.has(429));
+  assert.ok(DEFAULT_CACHE_ROOT.length > 0);
+
+  assert.equal(boundedInteger('10', 5, 1, 20), 10);
+  assert.equal(boundedInteger('invalid', 5, 1, 20), 5);
+
+  let captured = null;
+  safeEvent((e) => { captured = e; }, { type: 'test' });
+  assert.deepEqual(captured, { type: 'test' });
+  assert.doesNotThrow(() => safeEvent(() => { throw new Error('err'); }, {}));
 });

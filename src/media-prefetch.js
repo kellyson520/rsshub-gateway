@@ -50,10 +50,19 @@ export {
   originFor,
   retryableStatus,
   successfulStatus,
+  boundedInteger,
+  safeEvent,
+  DEFAULT_CACHE_ROOT,
   DEFAULT_INITIAL_CONCURRENCY,
   DEFAULT_MIN_CONCURRENCY,
   DEFAULT_MAX_CONCURRENCY,
   DEFAULT_PER_ORIGIN_CONCURRENCY,
+  DEFAULT_MAX_RETRIES,
+  DEFAULT_SUCCESS_RAMP_AFTER,
+  DEFAULT_QUEUE_TTL_MS,
+  MAX_QUEUE_ITEMS,
+  MAX_PER_ORIGIN_CONCURRENCY,
+  RETRYABLE_STATUSES,
 };
 
 export function createMediaPrefetchQueue(options = {}) {
