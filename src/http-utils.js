@@ -271,6 +271,28 @@ export function safeEvent(onEvent, event) {
   }
 }
 
+export function decodeJwtPayload(value) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
+    return payload && typeof payload === 'object' ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+export function jwtExpiryMs(value, { now = Date.now } = {}) {
+  const payload = decodeJwtPayload(value);
+  const exp = Number(payload?.exp);
+  if (Number.isFinite(exp)) return Math.max(0, exp * 1000 - now());
+  return null;
+}
+
+export function asDate(value) {
+  const normalized = String(value || '').trim().replace(' ', 'T');
+  const date = normalized ? new Date(`${normalized}Z`) : null;
+  return date && Number.isNaN(date.getTime()) ? '' : date?.toUTCString() || '';
+}
+
 export {
   CACHE_RESPONSE_HEADERS,
 };

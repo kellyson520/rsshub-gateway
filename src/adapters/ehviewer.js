@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { cdata, escapeXml } from '../feed-transform.js';
+import { asDate } from '../http-utils.js';
 
 const RANKING_PERIODS = Object.freeze({
   day: { query: '15', label: '昨日热度' },
@@ -118,12 +119,6 @@ function publicUrl(value, host) {
   } catch {
     return '';
   }
-}
-
-function asDate(value) {
-  const normalized = String(value || '').trim().replace(' ', 'T');
-  const date = normalized ? new Date(`${normalized}Z`) : null;
-  return date && Number.isNaN(date.getTime()) ? '' : date?.toUTCString() || '';
 }
 
 export function parseRankingHtml(html, { period = 'day' } = {}) {

@@ -192,6 +192,27 @@ test('createConcurrencyLimiter bounds active concurrent tasks', async () => {
   assert.deepEqual(results, [0, 10, 20, 30, 40, 50]);
 });
 
+test('decodeJwtPayload, jwtExpiryMs and asDate helpers format and parse correctly', async () => {
+  const { decodeJwtPayload, jwtExpiryMs, asDate } = await import('../src/http-utils.js');
+  
+  // JWT
+  const now = 1_700_000_000_000;
+  const validExp = Math.floor(now / 1000) + 3600;
+  const payloadStr = Buffer.from(JSON.stringify({ sub: 'user123', exp: validExp, type: 'access_token' })).toString('base64url');
+  const dummyJwt = `header.${payloadStr}.signature`;
+
+  assert.deepEqual(decodeJwtPayload(dummyJwt), { sub: 'user123', exp: validExp, type: 'access_token' });
+  assert.equal(jwtExpiryMs(dummyJwt, { now: () => now }), 3600 * 1000);
+  assert.equal(decodeJwtPayload('invalid.token'), null);
+  assert.equal(jwtExpiryMs('invalid.token'), null);
+
+  // asDate
+  assert.equal(asDate('2026-08-26 12:00:00'), new Date('2026-08-26T12:00:00Z').toUTCString());
+  assert.equal(asDate('invalid-date'), '');
+  assert.equal(asDate(''), '');
+  assert.equal(asDate(null), '');
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

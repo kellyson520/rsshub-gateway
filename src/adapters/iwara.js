@@ -1,5 +1,6 @@
 import { createMediaSignedTarget } from '../signed-target.js';
 import { cdata, escapeXml } from '../feed-transform.js';
+import { jwtExpiryMs } from '../http-utils.js';
 
 export {
   API_BASE,
@@ -165,17 +166,6 @@ export async function fetchIwaraVideoDetail(fetchJson, videoId, { token } = {}) 
   return fetchJson(`${API_BASE}/video/${encodeURIComponent(videoId)}`, {
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
-}
-
-function jwtExpiryMs(value, { now = Date.now } = {}) {
-  try {
-    const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
-    const exp = Number(payload?.exp);
-    if (Number.isFinite(exp)) return Math.max(0, exp * 1000 - now());
-  } catch {
-    // not a JWT; caller falls back to explicit expires or the default TTL
-  }
-  return null;
 }
 
 export async function refreshIwaraAccessToken(fetchJson, refreshToken, { now = Date.now } = {}) {

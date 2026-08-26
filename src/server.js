@@ -14,6 +14,7 @@ import { createSessionAffinity } from './session-affinity.js';
 import { IMAGE_VARIANT_WIDTHS, createImageVariant } from './image-variants.js';
 import {
   cacheStateLog,
+  decodeJwtPayload,
   documentCacheKind,
   fetchCachedDocument,
   imageVariantCacheUrl,
@@ -526,15 +527,6 @@ export function createGatewayServer(options = {}) {
   const iwaraResolutionCache = new Map();
   const IWARA_ACCESS_DEFAULT_TTL_MS = 60 * 60 * 1000;
   const IWARA_REFRESH_RETRY_MS = 15 * 60 * 1000;
-
-  function decodeJwtPayload(value) {
-    try {
-      const payload = JSON.parse(Buffer.from(String(value).split('.')[1] || '', 'base64url').toString('utf8'));
-      return payload && typeof payload === 'object' ? payload : null;
-    } catch {
-      return null;
-    }
-  }
 
   async function iwaraToken() {
     const credentials = sourceConfig.iwara;
