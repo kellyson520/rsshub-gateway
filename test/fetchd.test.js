@@ -114,3 +114,8 @@ test('createFetchdClient: handles empty body payload and defaults buffer to empt
   assert.equal(await res.text(), '');
   assert.equal(res.body.length, 0);
 });
+
+test('exports DEFAULT_BASE_URL constant', async () => {
+  const { DEFAULT_BASE_URL } = await import('../src/fetchd.js');
+  assert.equal(typeof DEFAULT_BASE_URL, 'string');
+});

@@ -2,6 +2,10 @@ import { GatewayUpstreamError } from './upstream-errors.js';
 
 const DEFAULT_BASE_URL = process.env.IWARA_FETCHD_URL || 'http://127.0.0.1:7899';
 
+export {
+  DEFAULT_BASE_URL,
+};
+
 export function createFetchdClient({
   baseUrl = DEFAULT_BASE_URL,
   fetchImpl = fetch,
