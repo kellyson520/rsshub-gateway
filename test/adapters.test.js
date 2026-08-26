@@ -144,3 +144,23 @@ test('getSupportedSourceNames and isKnownSourceUrl provide direct ecosystem quer
   assert.equal(isKnownSourceUrl('https://unknown-domain-999.xyz/test'), false);
   assert.equal(isKnownSourceUrl(null), false);
 });
+
+test('exports linuxdo adapter helpers and SITE_BASE constant', async () => {
+  const {
+    SITE_BASE,
+    escapeHtml,
+    rewriteCookedHtml,
+    isLinuxdoTopicTarget,
+    linuxdoTopicId,
+  } = await import('../src/adapters/linuxdo.js');
+
+  assert.equal(SITE_BASE, 'https://linux.do');
+  assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
+
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/t/topic/12345'), true);
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/c/all'), false);
+  assert.equal(linuxdoTopicId('https://linux.do/t/topic/12345'), '12345');
+
+  const rewritten = rewriteCookedHtml('<p>Simple text</p>', { baseUrl: 'http://127.0.0.1:1300', secret: 'test-secret' });
+  assert.ok(rewritten.includes('Simple text'));
+});

@@ -384,3 +384,9 @@ export function renderLinuxdoReaderPage({ topic = {}, baseUrl = '', secret }) {
 </body>
 </html>`;
 }
+
+export {
+  SITE_BASE,
+  escapeHtml,
+  rewriteCookedHtml,
+};
