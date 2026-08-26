@@ -58,5 +58,7 @@
 
 - **网关健康状态探针**：`curl -s http://127.0.0.1:81/healthz` 与 `curl -s http://127.0.0.1:81/readyz`
 - **Prometheus 监控数据**：`curl -s http://127.0.0.1:81/_gateway/metrics`
-- **网关综合统计 (JSON)**：`curl -s http://127.0.0.1:81/_gateway/stats`
+- **网关底层基础设施信息 (JSON)**：`curl -s http://127.0.0.1:81/_gateway/infra`
+- **下载会话安全作废 (Revoke Session)**：`curl -s -X POST http://127.0.0.1:81/_gateway/revoke-session -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d '{"sessionId":"..."}'`
+- **Feed 预取任务动态暂停与恢复**：`curl -s -X POST http://127.0.0.1:81/_gateway/prefetch -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d '{"path":"/target/feed","action":"toggle"}'`
 - **Chromium 僵尸进程一键清理**：`pkill -f 'chromium|chrome'`
