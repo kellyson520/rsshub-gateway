@@ -1,10 +1,13 @@
 import {
   boundedInteger,
   createConcurrencyLimiter,
+  dedupe,
+  parseHostList,
   parseProbeTargets,
   readSecret,
   readSources,
 } from './http-utils.js';
+import { DEFAULT_BLOCKED_STATUSES } from './upstream-errors.js';
 import { DEFAULT_HTML_BROTLI_MIN_BYTES, DEFAULT_HTML_BROTLI_QUALITY } from './http-encoding.js';
 import { DEFAULT_FIRST_DETAIL_BUDGET_MS } from './reader-manifest.js';
 import { createLogger } from './infrastructure/logger.js';
@@ -175,9 +178,14 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     0,
     24 * 60 * 60_000,
   );
-  const egressBlockedStatuses = new Set(String(
-    options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES ?? '401,403,407,429',
-  ).split(',').map((value) => Number.parseInt(value, 10)).filter(Number.isInteger));
+  const egressBlockedStatuses = new Set(
+    (options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES) !== undefined
+      ? String(options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES)
+          .split(',')
+          .map((value) => Number.parseInt(value, 10))
+          .filter(Number.isInteger)
+      : DEFAULT_BLOCKED_STATUSES,
+  );
   const controllerUrl = options.egressControllerUrl || env.EGRESS_CONTROLLER_URL;
   const ehMediaPrefetchConcurrency = boundedInteger(
     options.ehMediaPrefetchConcurrency ?? env.EH_MEDIA_PREFETCH_CONCURRENCY,
@@ -326,10 +334,14 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     1,
     8,
   );
-  const feedPrefetchPaths = Array.isArray(options.feedPrefetchPaths)
-    ? options.feedPrefetchPaths.map(String).filter(Boolean)
-    : String(options.feedPrefetchPaths ?? env.GATEWAY_FEED_PREFETCH_PATHS ?? '')
-      .split(',').map((value) => value.trim()).filter(Boolean);
+  const feedPrefetchPaths = dedupe(
+    Array.isArray(options.feedPrefetchPaths)
+      ? options.feedPrefetchPaths.map(String).filter(Boolean)
+      : String(options.feedPrefetchPaths ?? env.GATEWAY_FEED_PREFETCH_PATHS ?? '')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean),
+  );
   const feedPrefetchIntervalMs = boundedInteger(
     options.feedPrefetchIntervalMs ?? env.GATEWAY_FEED_PREFETCH_INTERVAL_MS,
     DEFAULT_FEED_PREFETCH_INTERVAL_MS,
