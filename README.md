@@ -142,6 +142,20 @@ The gateway can keep configured feed paths warm in the shared RSS cache by re-re
 
 The control endpoint `/_gateway/prefetch` (guarded by the same `DISPATCHER_REGISTRATION_TOKEN` as route registration; 404 when unset) reports queue stats with `GET` and enqueues an on-demand prefetch with `POST {"path": "/..."}`.
 
+## Feed filtering and rules engine
+
+The gateway supports non-intrusive XML feed filtering and content cleaning at the gateway level (`src/feed-transform.js`), allowing subscription sanitization without touching upstream RSSHub instances:
+
+- **Keyword Blacklists (`keywordBlacklist`)**: Strips articles whose title or summary contains configured spam or unwanted keywords.
+- **Author Filtering (`authorBlacklist`)**: Automatically excludes posts by specified authors or bots.
+- **Custom Rule Injection**: Seamlessly integrates into `transformFeed(xml, { filters: { keywordBlacklist, authorBlacklist } })`.
+
+## Feed and session safety enhancements
+
+- **Adaptive Backoff Scheduling (`src/feed-prefetch.js`)**: Prefetch tasks automatically apply exponential backoff (up to 4 hours) upon receiving HTTP `429` or `5xx` rate-limits/errors, avoiding upstream IP bans. Successful fetches reset the backoff multiplier.
+- **Session Revocation (`src/download-session.js`)**: Exposes `revoke(idOrTarget)` and `POST /_gateway/revoke-session` to immediately invalidate leaked or expired download sessions, instantly terminating unauthorized media streams.
+- **Dynamic Task Toggling**: Supports `togglePause(path, paused)` for fine-grained per-feed prefetch execution management.
+
 ## Verification
 
 
