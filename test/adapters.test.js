@@ -128,3 +128,19 @@ test('adapterForUrl handles malformed URLs, null, or empty string gracefully', (
   assert.equal(adapterForUrl(undefined).name, 'unknown');
   assert.equal(adapterForUrl('https://unsupported.site.example/').name, 'unknown');
 });
+
+test('getSupportedSourceNames and isKnownSourceUrl provide direct ecosystem queries', async () => {
+  const { getSupportedSourceNames, isKnownSourceUrl } = await import('../src/adapters/index.js');
+  const sources = getSupportedSourceNames();
+  assert.ok(Array.isArray(sources));
+  assert.ok(sources.includes('iwara'));
+  assert.ok(sources.includes('x'));
+  assert.ok(sources.includes('pixiv'));
+  assert.ok(sources.includes('adult-media'));
+
+  assert.equal(isKnownSourceUrl('https://x.com/status/1'), true);
+  assert.equal(isKnownSourceUrl('https://jable.tv/video/123'), true);
+  assert.equal(isKnownSourceUrl('https://linux.do/t/topic/1'), true);
+  assert.equal(isKnownSourceUrl('https://unknown-domain-999.xyz/test'), false);
+  assert.equal(isKnownSourceUrl(null), false);
+});

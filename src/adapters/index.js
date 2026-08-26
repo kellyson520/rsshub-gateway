@@ -32,6 +32,15 @@ export function adapterForUrl(url) {
   return { ...defaultAdapter, ...adapters.find((adapter) => adapter.matches(hostname)) };
 }
 
+export function getSupportedSourceNames() {
+  return adapters.map((adapter) => adapter.name).filter(Boolean);
+}
+
+export function isKnownSourceUrl(url) {
+  const adapter = adapterForUrl(url);
+  return adapter && adapter.name !== 'unknown';
+}
+
 export function resolveMode(source, config = {}) {
   if (source === 'iwara') return config.cookie ? 'authenticated' : 'public';
   if (source === 'x') return config.authToken ? 'authenticated' : 'public';
