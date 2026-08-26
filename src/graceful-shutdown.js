@@ -1,7 +1,10 @@
+export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
+export const DEFAULT_SIGNALS = ['SIGTERM', 'SIGINT'];
+
 export function installGracefulShutdown({
   servers = [],
-  timeoutMs = 10_000,
-  signals = ['SIGTERM', 'SIGINT'],
+  timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  signals = DEFAULT_SIGNALS,
   logger,
   exitImpl = (code) => process.exit(code),
   setTimeoutImpl = setTimeout,
