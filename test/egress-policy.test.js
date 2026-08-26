@@ -125,3 +125,24 @@ test('hostnameFor handles URL objects and non-standard inputs correctly', () => 
   assert.equal(isPublicEgressTarget(urlObj), true);
   assert.equal(egressPolicyForUrl(urlObj), EGRESS_POLICIES.PUBLIC);
 });
+
+test('exports DEFAULT_PUBLIC_HOSTS, hostnameFor and isHostOrSubdomain helpers', async () => {
+  const {
+    DEFAULT_PUBLIC_HOSTS,
+    DEFAULT_PUBLIC_REQUEST_HOSTS,
+    hostnameFor,
+    isHostOrSubdomain,
+  } = await import('../src/egress-policy.js');
+
+  assert.ok(Array.isArray(DEFAULT_PUBLIC_HOSTS));
+  assert.ok(DEFAULT_PUBLIC_HOSTS.includes('e-hentai.org'));
+  assert.ok(DEFAULT_PUBLIC_REQUEST_HOSTS.includes('x.com'));
+
+  assert.equal(hostnameFor('https://Sub.Domain.Com:8080/path'), 'sub.domain.com');
+  assert.equal(hostnameFor('invalid-url'), '');
+  assert.equal(hostnameFor(null), '');
+
+  assert.equal(isHostOrSubdomain('sub.example.com', 'example.com'), true);
+  assert.equal(isHostOrSubdomain('example.com', 'example.com'), true);
+  assert.equal(isHostOrSubdomain('notexample.com', 'example.com'), false);
+});

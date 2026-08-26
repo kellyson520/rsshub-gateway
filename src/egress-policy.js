@@ -65,6 +65,13 @@ const DEFAULT_PUBLIC_REQUEST_HOSTS = Object.freeze([
   'pximg.net',
 ]);
 
+export {
+  DEFAULT_PUBLIC_HOSTS,
+  DEFAULT_PUBLIC_REQUEST_HOSTS,
+  hostnameFor,
+  isHostOrSubdomain,
+};
+
 export const EGRESS_POLICIES = Object.freeze({
   PUBLIC: 'public',
   STICKY: 'sticky',
