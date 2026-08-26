@@ -72,3 +72,19 @@ test('returns original when content type is unsupported, empty, or encoder throw
   assert.equal(nonBuffer.usedVariant, false);
   assert.equal(nonBuffer.body, 'not a buffer');
 });
+
+test('isSupportedImageVariantType and isValidImageVariantWidth predicates work correctly', async () => {
+  const { isSupportedImageVariantType, isValidImageVariantWidth } = await import('../src/image-variants.js');
+  assert.equal(isSupportedImageVariantType('image/jpeg'), true);
+  assert.equal(isSupportedImageVariantType('image/png; charset=utf-8'), true);
+  assert.equal(isSupportedImageVariantType('image/webp'), true);
+  assert.equal(isSupportedImageVariantType('image/gif'), false);
+  assert.equal(isSupportedImageVariantType('video/mp4'), false);
+  assert.equal(isSupportedImageVariantType(null), false);
+
+  assert.equal(isValidImageVariantWidth(1280), true);
+  assert.equal(isValidImageVariantWidth('1920'), true);
+  assert.equal(isValidImageVariantWidth(2560), true);
+  assert.equal(isValidImageVariantWidth(1600), false);
+  assert.equal(isValidImageVariantWidth(null), false);
+});

@@ -39,6 +39,14 @@ async function encodeWebp({ body, width, options }) {
     .toBuffer();
 }
 
+export function isSupportedImageVariantType(contentType) {
+  return SUPPORTED_TYPES.has(normalizedType(contentType));
+}
+
+export function isValidImageVariantWidth(width) {
+  return IMAGE_VARIANT_WIDTHS.includes(Number(width));
+}
+
 export async function createImageVariant({ body, contentType, width, encoder = encodeWebp }) {
   const normalizedContentType = normalizedType(contentType);
   if (!IMAGE_VARIANT_WIDTHS.includes(Number(width))) throw unsupportedWidthError();
