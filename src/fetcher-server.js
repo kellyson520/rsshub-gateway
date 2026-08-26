@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { readRequestBody, writeJson } from './http-utils.js';
 
 export const DEFAULT_FETCHER_PORT = 8000;
 export const DEFAULT_FETCHER_HOST = '0.0.0.0';
@@ -17,16 +18,8 @@ export class HttpError extends Error {
 export function createFetcherServer({ fetcher, health = () => ({ ok: true }), name = 'fetcher' }) {
   return createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
-    const respondJson = (status, payload) => {
-      const body = JSON.stringify(payload);
-      res.writeHead(status, {
-        'content-type': 'application/json; charset=utf-8',
-        'content-length': Buffer.byteLength(body),
-      });
-      res.end(body);
-    };
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      respondJson(200, { ok: true, ...health() });
+      writeJson(res, 200, { ok: true, ...health() });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/fetch') {
@@ -34,19 +27,19 @@ export function createFetcherServer({ fetcher, health = () => ({ ok: true }), na
       try {
         body = JSON.parse(await readRequestBody(req));
       } catch {
-        respondJson(400, { error: 'invalid json body' });
+        writeJson(res, 400, { error: 'invalid json body' });
         return;
       }
       try {
         const result = await fetcher.handleFetch(body);
-        respondJson(200, result);
+        writeJson(res, 200, result);
       } catch (error) {
         const status = error instanceof HttpError ? error.status : 502;
-        respondJson(status, { error: error.message });
+        writeJson(res, status, { error: error.message });
       }
       return;
     }
-    respondJson(404, { error: 'not found' });
+    writeJson(res, 404, { error: 'not found' });
   });
 }
 
@@ -129,11 +122,6 @@ export async function unregisterDispatcherRoutes({
   }
 }
 
-export function readRequestBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
+export {
+  readRequestBody,
+};

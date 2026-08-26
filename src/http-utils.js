@@ -38,6 +38,15 @@ export function writeJson(res, status, payload) {
   writeText(res, status, JSON.stringify(payload), 'application/json; charset=utf-8');
 }
 
+export function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 export function mediaFileName(target, contentType) {
   try {
     const pathname = new URL(target).pathname;
