@@ -319,6 +319,15 @@ test('withDeadline resolves value or times out gracefully', async () => {
   assert.deepEqual(failing, { value: null, timedOut: false });
 });
 
+test('dedupe removes duplicate items preserving order and supports key mapper', async () => {
+  const { dedupe } = await import('../src/http-utils.js');
+  assert.deepEqual(dedupe(['a', 'b', 'a', 'c', 'b']), ['a', 'b', 'c']);
+  assert.deepEqual(dedupe([{ id: 1 }, { id: 2 }, { id: 1 }], (x) => x.id), [{ id: 1 }, { id: 2 }]);
+  assert.deepEqual(dedupe(null), []);
+  assert.deepEqual(dedupe(undefined), []);
+  assert.deepEqual(dedupe('single'), ['single']);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

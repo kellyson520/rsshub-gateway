@@ -242,6 +242,21 @@ export function withDeadline(promise, timeoutMs, fallback = undefined) {
   });
 }
 
+export function dedupe(items, mapper = (x) => x) {
+  if (!items) return [];
+  const list = Array.isArray(items) || items instanceof Set ? items : [items];
+  const seen = new Set();
+  const result = [];
+  for (const item of list) {
+    const key = mapper(item);
+    if (key !== undefined && key !== null && !seen.has(key)) {
+      seen.add(key);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 export function parseProbeTargets(value, legacyProbeUrl) {
   if (value && typeof value === 'string') {
     try {

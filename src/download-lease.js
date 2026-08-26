@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { decode, encode, isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
-import { constantTimeEquals, hmacSha256, isSignatureMatch } from './http-utils.js';
+import { constantTimeEquals, dedupe, hmacSha256, isSignatureMatch } from './http-utils.js';
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
@@ -33,7 +33,7 @@ export function createLeaseStore({ now = Date.now } = {}) {
       password: randomBytes(18).toString('base64url'),
       targetUrl: String(targetUrl),
       resolvedUrl: String(resolvedUrl || targetUrl),
-      allowHosts: [...new Set((allowHosts || []).map((host) => String(host).toLowerCase()))],
+      allowHosts: dedupe((allowHosts || []).map((host) => String(host).toLowerCase())),
       createdAt,
       expiresAt: createdAt + ttlMs,
       maxBytes: Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : DEFAULT_MAX_BYTES,

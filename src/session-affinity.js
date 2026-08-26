@@ -2,15 +2,16 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { hmacSha256, sha256Hex } from './http-utils.js';
+import { dedupe, hmacSha256, sha256Hex } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
 function normalizedLaneIds(value) {
-  return [...new Set((Array.isArray(value) ? value : [])
+  const items = (Array.isArray(value) ? value : [])
     .map((laneId) => String(laneId || '').trim())
-    .filter(Boolean))].sort();
+    .filter(Boolean);
+  return dedupe(items).sort();
 }
 
 function normalizedCredentials(credentials = {}) {

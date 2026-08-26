@@ -1,4 +1,4 @@
-import { sleep as defaultSleep } from './http-utils.js';
+import { dedupe, sleep as defaultSleep } from './http-utils.js';
 
 export const DEFAULT_FEED_PREFETCH_INTERVAL_MS = 900_000;
 export const DEFAULT_FEED_PREFETCH_CONCURRENCY = 2;
@@ -36,7 +36,7 @@ export function createFeedPrefetchQueue({
   const limit = Math.min(MAX_FEED_PREFETCH_CONCURRENCY, Math.max(1, Math.floor(Number(concurrency) || DEFAULT_FEED_PREFETCH_CONCURRENCY)));
   const retries = Math.min(MAX_FEED_PREFETCH_RETRIES, Math.max(0, Math.floor(Number(maxRetries) || 0)));
   const interval = Math.max(1_000, Number(intervalMs) || DEFAULT_FEED_PREFETCH_INTERVAL_MS);
-  const configured = [...new Set(paths.map(String).filter(Boolean))];
+  const configured = dedupe(paths.map(String).filter(Boolean));
   const pending = new Map();
   const pathStats = new Map();
   const pausedPaths = new Set();

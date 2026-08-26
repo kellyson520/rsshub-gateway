@@ -15,6 +15,7 @@ import { IMAGE_VARIANT_WIDTHS, createImageVariant } from './image-variants.js';
 import {
   cacheStateLog,
   decodeJwtPayload,
+  dedupe,
   documentCacheKind,
   fetchCachedDocument,
   imageVariantCacheUrl,
@@ -124,7 +125,7 @@ async function fetchCachedMedia(options) {
 }
 
 async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
-  const targets = [...new Set(pages.map((page) => page.mediaTarget).filter(Boolean))].slice(0, count);
+  const targets = dedupe(pages.map((page) => page.mediaTarget).filter(Boolean)).slice(0, count);
   if (!cache || !targets.length) return { targets, failedTargets: [] };
   const results = await mapWithConcurrency(targets, concurrency, async (target) => {
     try {
