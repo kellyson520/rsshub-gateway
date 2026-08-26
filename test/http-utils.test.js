@@ -297,8 +297,8 @@ test('readJsonBody parses stream payload into JSON object', async () => {
   await assert.rejects(() => readJsonBody(invalidStream), /JSON/);
 });
 
-test('safeHost, isHostOrSubdomain, matchesHost and parseHostList handle hostnames safely', async () => {
-  const { safeHost, isHostOrSubdomain, matchesHost, parseHostList } = await import('../src/http-utils.js');
+test('safeHost, isHostOrSubdomain, matchesHost, parseHostList and parseStatusList handle hosts and HTTP status codes safely', async () => {
+  const { safeHost, isHostOrSubdomain, matchesHost, parseHostList, parseStatusList } = await import('../src/http-utils.js');
 
   assert.equal(safeHost('https://JavBus.COM/path'), 'javbus.com');
   assert.equal(safeHost('https://sub.domain.org:8080/v/1'), 'sub.domain.org');
@@ -321,6 +321,12 @@ test('safeHost, isHostOrSubdomain, matchesHost and parseHostList handle hostname
   assert.deepEqual(parseHostList('["example.com", "API.EXAMPLE.COM", "example.com"]'), ['example.com', 'api.example.com']);
   assert.deepEqual(parseHostList(null), []);
   assert.deepEqual(parseHostList(''), []);
+
+  assert.deepEqual(parseStatusList('401, 403, 429, 403'), [401, 403, 429]);
+  assert.deepEqual(parseStatusList([408, 429, 503]), [408, 429, 503]);
+  assert.deepEqual(parseStatusList(new Set([403, 404, 403])), [403, 404]);
+  assert.deepEqual(parseStatusList('invalid, 99, 600, 502'), [502]);
+  assert.deepEqual(parseStatusList(null, [403, 429]), [403, 429]);
 });
 
 test('sleep resolves after specified delay', async () => {

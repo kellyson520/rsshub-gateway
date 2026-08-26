@@ -4,6 +4,7 @@ import {
   dedupe,
   parseHostList,
   parseProbeTargets,
+  parseStatusList,
   readSecret,
   readSources,
 } from './http-utils.js';
@@ -179,12 +180,7 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     24 * 60 * 60_000,
   );
   const egressBlockedStatuses = new Set(
-    (options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES) !== undefined
-      ? String(options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES)
-          .split(',')
-          .map((value) => Number.parseInt(value, 10))
-          .filter(Number.isInteger)
-      : DEFAULT_BLOCKED_STATUSES,
+    parseStatusList(options.egressBlockedStatuses ?? env.EGRESS_BLOCKED_STATUSES, DEFAULT_BLOCKED_STATUSES),
   );
   const controllerUrl = options.egressControllerUrl || env.EGRESS_CONTROLLER_URL;
   const ehMediaPrefetchConcurrency = boundedInteger(

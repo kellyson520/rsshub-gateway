@@ -278,6 +278,18 @@ export function dedupe(items, mapper = (x) => x) {
   return result;
 }
 
+export function parseStatusList(value, fallback = []) {
+  if (value === null || value === undefined) {
+    return Array.isArray(fallback) ? [...fallback] : (fallback instanceof Set ? [...fallback] : []);
+  }
+  const items = Array.isArray(value) || value instanceof Set
+    ? [...value]
+    : String(value).split(',');
+  return dedupe(items
+    .map((item) => Number.parseInt(String(item).trim(), 10))
+    .filter((status) => Number.isInteger(status) && status >= 100 && status <= 599));
+}
+
 export function parseProbeTargets(value, legacyProbeUrl) {
   if (value && typeof value === 'string') {
     try {
