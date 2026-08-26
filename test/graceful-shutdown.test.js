@@ -131,3 +131,13 @@ test('handles null or undefined elements in servers array without throwing', asy
   assert.deepEqual(exits, [0]);
   shutdown.dispose();
 });
+
+test('serverCount reports number of valid active servers registered', () => {
+  const shutdown = installGracefulShutdown({
+    servers: [fakeServer(), null, fakeServer()],
+    exitImpl: () => {},
+    logger: null,
+  });
+  assert.equal(shutdown.serverCount(), 2);
+  shutdown.dispose();
+});

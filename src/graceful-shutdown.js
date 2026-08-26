@@ -60,6 +60,7 @@ export function installGracefulShutdown({
 
   return {
     isDraining: () => draining,
+    serverCount: () => servers.filter(Boolean).length,
     shutdown,
     dispose: () => {
       for (const [signal, handler] of handlers) {
