@@ -264,6 +264,45 @@ The paths map to yesterday, past month, past year, and all-time rankings respect
 
 Ranking item links render one ordered continuous reader page through the signed gateway. The first response uses the cold-start path above, so Flare receives a direct first-image media route without waiting for every pagination, detail page, or media warmup. Detail HTML and media bytes continue to prefetch in the background and are cached for later requests. Failed upstream pages are retained by the background pipeline, and large galleries are bounded by the gateway prefetch limit. Append `?view=gallery` to a signed item URL when a browser thumbnail overview is needed; RSS subscription links do not require this option.
 
+## Low-Level Behavioral Foundations & Reusable Interfaces
+
+All core gateway subsystems export pure functions, type predicates, serialization helpers, and domain constants so upstream callers, sidecars, and external integrations can build upon the low-level behavior without duplicating logic:
+
+- **Egress Routing & Dynamic Selection (`src/egress-policy.js`, `src/mihomo-egress.js`)**:
+  - `isPublicEgressTarget(url)`, `isPublicRequestTarget(url)`: Pure predicates for domain-level traffic segregation.
+  - `egressPolicyForUrl(url)`, `egressPolicyForRequest(url, opts)`: Declarative policy resolution (`public` vs `sticky`).
+  - `isSubscriptionMetadataName(name)`: Subscription node garbage filtering for proxy pool discovery.
+  - `laneId(index)`, `laneGroup(index)`, `sessionLaneId(index)`, `sessionLaneGroup(index)`, `listenerUrl(baseUrl, index, port)`: Predictable naming and endpoint formation.
+- **Sidecar Routing & Pattern AST Engine (`src/dispatcher.js`)**:
+  - `compilePattern(pattern)`: Compiles `/path/:param` into regex with tokenized keys.
+  - `matchSegments(compiled, pathname)`: AST segment extraction and parameter mapping.
+  - `normalizeRoute(rawRoute)`: Strict schema normalization for sidecar configurations.
+  - `sidecarUrl(baseUrl, routePath)`: Safe sidecar reverse-proxy target resolution.
+- **Cache Normalization & Cryptographic Keys (`src/cache.js`)**:
+  - `canonicalUrl(url)`: Deterministic query param sorting and fragment removal.
+  - `keyFor(namespace, host, kind, rawUrl)`: SHA-256 stable cache keying.
+  - `normalizedNamespace(scope, fingerprint)`: Public vs session scope segregation.
+  - `DEFAULT_EVICTION_PRIORITY`: Weighted tiering for HTML, media, and reader assets.
+- **Download Lifecycle & Lease Proxies (`src/download-session.js`, `src/download-lease.js`, `src/lease-proxy.js`)**:
+  - `validChunk(chunk)`, `validSession(session, now)`: Strict lifecycle validation predicates.
+  - `isChunkSignatureValid(token, secret)`, `isTargetSignatureValid(token, secret)`: Zero-decode HMAC SHA-256 integrity checks.
+  - `parseProxyAuth(header)`: Safe Basic Auth decoding.
+  - `parseAuthority(value)`: Strict `hostname:port` parsing for HTTP CONNECT tunneling.
+- **Browser TLS Workers & Rendering Pipeline (`src/browser-fetch.js`, `src/browser-render.js`)**:
+  - `lineError(message, options)`: Typed upstream failure instantiation.
+  - `requestTimeoutMs(timeout)`: Adaptive IPC timeout bounds `[25s, 65s]`.
+  - `DEFAULT_WORKER_PATH`, `DEFAULT_RENDER_URL`: Zero-config defaults.
+- **Resilient Media & Feed Prefetchers (`src/media-prefetch.js`, `src/feed-prefetch.js`)**:
+  - `originFor(target)`: Whitelist-backed media origin resolution.
+  - `retryableStatus(status)`, `successfulStatus(status)`: HTTP status classifiers.
+  - `DEFAULT_INITIAL_CONCURRENCY`, `DEFAULT_MAX_CONCURRENCY`, `DEFAULT_PER_ORIGIN_CONCURRENCY`: Tuned concurrency bounds.
+- **Session Affinity & Credential Hashing (`src/session-affinity.js`)**:
+  - `fingerprintFor(credentials, secret)`: Deterministic SHA-256 hashing preserving zero plaintext.
+  - `chooseLane(fingerprint, laneIds)`: Consistent hash-ring candidate selection.
+- **HTML Transformation & Enclosure Extractors (`src/feed-transform.js`)**:
+  - `decodeTextEntities(str)`, `normalizeNumericEntities(str)`, `isValidXmlCodePoint(cp)`: Robust XML/HTML sanitization.
+  - `rewriteHtml(html, transformUrl)`: High-performance streaming image tag rewriter.
+
 ## Rollback
 
 Change the OpenResty upstream in `root.conf` from `http://127.0.0.1:1300` back to `http://127.0.0.1:1200`, test with `openresty -t`, and reload OpenResty. The old Mihomo configuration is retained under `/opt/1panel/apps/mihomo` for recovery.

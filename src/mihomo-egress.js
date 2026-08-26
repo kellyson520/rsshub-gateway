@@ -84,6 +84,21 @@ function safeEvent(onEvent, event) {
   }
 }
 
+export {
+  isSubscriptionMetadataName,
+  normalizeProbeTargets,
+  laneId,
+  laneGroup,
+  sessionLaneId,
+  sessionLaneGroup,
+  listenerUrl,
+  DEFAULT_CONTROLLER_URL,
+  DEFAULT_LISTENER_BASE_URL,
+  DEFAULT_LANE_COUNT,
+  DEFAULT_SESSION_LANE_COUNT,
+  DEFAULT_SESSION_LISTENER_BASE_PORT,
+};
+
 export function createMihomoEgressAdapter({
   controllerUrl = DEFAULT_CONTROLLER_URL,
   listenerBaseUrl = DEFAULT_LISTENER_BASE_URL,

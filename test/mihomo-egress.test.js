@@ -571,3 +571,36 @@ test('filters English subscription metadata nodes as well', async () => {
   assert.equal(lanes.length, 1);
   assert.equal(lanes[0].proxyName, 'node-us-01');
 });
+
+test('exports lane formatting and metadata detection helpers', async () => {
+  const {
+    isSubscriptionMetadataName,
+    normalizeProbeTargets,
+    laneId,
+    laneGroup,
+    sessionLaneId,
+    sessionLaneGroup,
+    listenerUrl,
+    DEFAULT_LANE_COUNT,
+  } = await import('../src/mihomo-egress.js');
+
+  assert.equal(isSubscriptionMetadataName('剩余流量: 100G'), true);
+  assert.equal(isSubscriptionMetadataName('Subscription Expires: 2026'), true);
+  assert.equal(isSubscriptionMetadataName('Hong Kong 01'), false);
+  assert.equal(isSubscriptionMetadataName(null), false);
+
+  assert.equal(laneId(0), 'lane-01');
+  assert.equal(laneId(9), 'lane-10');
+  assert.equal(laneGroup(0), 'EGRESS_LANE_01');
+
+  assert.equal(sessionLaneId(0), 'session-lane-01');
+  assert.equal(sessionLaneGroup(0), 'SESSION_LANE_01');
+
+  assert.equal(listenerUrl('http://127.0.0.1', 0, 7901), 'http://127.0.0.1:7901');
+
+  const normalized = normalizeProbeTargets('https://example.com/health', null);
+  assert.deepEqual(normalized.public, []);
+  assert.deepEqual(normalizeProbeTargets(null, 'https://legacy.example/health').public, ['https://legacy.example/health']);
+
+  assert.equal(DEFAULT_LANE_COUNT, 12);
+});
