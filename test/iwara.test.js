@@ -430,3 +430,22 @@ test('serves an iwara video reader page for signed item targets', async () => {
   assert.match(body, /<video[^>]+controls/);
   assert.match(body, /_gateway\/media\//);
 });
+
+test('exports iwara MATCH_HOSTS, API_BASE, SITE_BASE and jwtExpiryMs helper', async () => {
+  const {
+    MATCH_HOSTS,
+    API_BASE,
+    SITE_BASE,
+    jwtExpiryMs,
+  } = await import('../src/adapters/iwara.js');
+
+  assert.ok(Array.isArray(MATCH_HOSTS));
+  assert.ok(MATCH_HOSTS.includes('iwara.tv'));
+  assert.equal(API_BASE, 'https://api.iwara.tv');
+  assert.equal(SITE_BASE, 'https://iwara.tv');
+
+  const now = 1000000;
+  const token = makeJwt({ exp: 2000 });
+  assert.equal(jwtExpiryMs(token, { now: () => now }), 2000000 - now);
+  assert.equal(jwtExpiryMs('not-a-jwt'), null);
+});

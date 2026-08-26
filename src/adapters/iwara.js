@@ -3,6 +3,8 @@ import { createMediaSignedTarget } from '../signed-target.js';
 export {
   API_BASE,
   SITE_BASE,
+  MATCH_HOSTS,
+  jwtExpiryMs,
   escapeXml,
   cdata,
 };
@@ -12,9 +14,10 @@ export const publiclyReadable = true;
 
 const API_BASE = 'https://api.iwara.tv';
 const SITE_BASE = 'https://iwara.tv';
+const MATCH_HOSTS = ['iwara.tv'];
 
 export function matches(hostname) {
-  return hostname === 'iwara.tv' || hostname.endsWith('.iwara.tv');
+  return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {
