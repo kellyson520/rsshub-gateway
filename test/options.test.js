@@ -125,3 +125,16 @@ test('resolveGatewayOptions parses slowSourceThresholdMs bounds fallback', () =>
   const defaultThreshold = resolveGatewayOptions({ secret: 'secret' }, { GATEWAY_SLOW_SOURCE_MS: '-1' });
   assert.equal(defaultThreshold.slowSourceThresholdMs, 5000);
 });
+
+test('options exports default constants for external callers', async () => {
+  const {
+    DEFAULT_EH_PREFETCH_CONCURRENCY,
+    DEFAULT_EGRESS_LANE_COUNT,
+    DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+    DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
+  } = await import('../src/options.js');
+  assert.equal(DEFAULT_EH_PREFETCH_CONCURRENCY, 8);
+  assert.equal(DEFAULT_EGRESS_LANE_COUNT, 12);
+  assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900_000);
+  assert.equal(DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES, 256 * 1024 ** 2);
+});
