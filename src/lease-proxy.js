@@ -1,5 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
+import { safeEvent, writeText } from './http-utils.js';
 
 const AUTH_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
 
@@ -42,8 +43,7 @@ export function createLeaseProxy({
   onEvent = () => {},
 } = {}) {
   const server = http.createServer((req, res) => {
-    res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('lease proxy supports CONNECT only\n');
+    writeText(res, 405, 'lease proxy supports CONNECT only\n');
   });
 
   const failuresByIp = new Map();
@@ -96,7 +96,7 @@ export function createLeaseProxy({
     const account = (chunk) => {
       lease.usedBytes += chunk.length;
       if (lease.usedBytes >= lease.maxBytes) {
-        onEvent({ event: 'lease_byte_cap', username: lease.username, usedBytes: lease.usedBytes });
+        safeEvent(onEvent, { event: 'lease_byte_cap', username: lease.username, usedBytes: lease.usedBytes });
         finish();
         return false;
       }
@@ -117,7 +117,7 @@ export function createLeaseProxy({
     const done = lease.revoked || (lease.activeConnections === 0 && (lease.usedBytes > 0 || lease.completedConnections > 0));
     if (done) {
       leaseStore.revoke(lease.username);
-      onEvent({ event: 'lease_completed', username: lease.username, usedBytes: lease.usedBytes, reason });
+      safeEvent(onEvent, { event: 'lease_completed', username: lease.username, usedBytes: lease.usedBytes, reason });
     }
   }
 
@@ -132,13 +132,13 @@ export function createLeaseProxy({
     const lease = credentials ? leaseStore.verify(credentials.username, credentials.password) : null;
     if (!lease) {
       recordFailure(ip);
-      onEvent({ event: 'lease_auth_failure', ip });
+      safeEvent(onEvent, { event: 'lease_auth_failure', ip });
       rejectConnect(clientSocket, 407, 'proxy authentication required\n');
       return;
     }
     const authority = parseAuthority(req.url);
     if (!authority || !lease.allowHosts.includes(authority.hostname)) {
-      onEvent({ event: 'lease_host_denied', username: lease.username, host: authority?.hostname });
+      safeEvent(onEvent, { event: 'lease_host_denied', username: lease.username, host: authority?.hostname });
       rejectConnect(clientSocket, 403, 'host not allowed by lease\n');
       return;
     }
@@ -195,7 +195,7 @@ export function createLeaseProxy({
       server.listen(port, host, () => {
         server.removeListener('error', reject);
         const boundPort = server.address()?.port || port;
-        onEvent({ event: 'lease_proxy_listening', port: boundPort, host });
+        safeEvent(onEvent, { event: 'lease_proxy_listening', port: boundPort, host });
         resolve(boundPort);
       });
     });
