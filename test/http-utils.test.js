@@ -168,3 +168,10 @@ test('parseByteRange parses single, suffix, open-ended and unsatisfiable ranges'
   assert.equal(parseByteRange('invalid', 1000), null);
   assert.equal(parseByteRange('bytes=0-100,200-300', 1000), null);
 });
+
+test('exports CACHE_RESPONSE_HEADERS constants', async () => {
+  const { CACHE_RESPONSE_HEADERS } = await import('../src/http-utils.js');
+  assert.ok(Array.isArray(CACHE_RESPONSE_HEADERS));
+  assert.ok(CACHE_RESPONSE_HEADERS.includes('content-type'));
+  assert.ok(CACHE_RESPONSE_HEADERS.includes('etag'));
+});
