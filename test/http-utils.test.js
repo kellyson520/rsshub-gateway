@@ -370,6 +370,16 @@ test('normalizeHeaderMap and canonicalHeadersString sort and sanitize headers de
   assert.equal(canonicalHeadersString(undefined), '');
 });
 
+test('cleanText collapses whitespace and trims string cleanly', async () => {
+  const { cleanText } = await import('../src/http-utils.js');
+
+  assert.equal(cleanText('  hello   world \n \t  '), 'hello world');
+  assert.equal(cleanText(''), '');
+  assert.equal(cleanText(null), '');
+  assert.equal(cleanText(undefined), '');
+  assert.equal(cleanText(12345), '12345');
+});
+
 test('atomicWriteJson safely creates target directory and writes valid JSON atomically', async () => {
   const { atomicWriteJson } = await import('../src/http-utils.js');
   const os = await import('node:os');

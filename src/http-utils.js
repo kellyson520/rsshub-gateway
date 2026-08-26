@@ -458,6 +458,10 @@ export function asDate(value) {
   return date && Number.isNaN(date.getTime()) ? '' : date?.toUTCString() || '';
 }
 
+export function cleanText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
 export async function atomicWriteJson(targetFile, data, { mode = 0o600, dirMode = 0o700, indent } = {}) {
   if (!targetFile) return false;
   const payload = typeof data === 'string' ? data : (indent ? JSON.stringify(data, null, indent) : JSON.stringify(data));

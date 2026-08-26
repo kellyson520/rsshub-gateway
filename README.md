@@ -378,7 +378,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`, `isSha256Hex(value)`: High-performance cryptographic digest serializers and 64-char lowercase hex validators.
   - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
-  - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.
+  - `failureMessage(kind, pageNumber)`, `cleanText(value)`: Standardized multilingual gallery degradation messaging and text whitespace normalizer.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.

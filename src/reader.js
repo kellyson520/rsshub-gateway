@@ -4,7 +4,7 @@ import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 import { escapeHtml } from './feed-transform.js';
 import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
-import { clamp } from './http-utils.js';
+import { clamp, cleanText } from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
@@ -108,9 +108,7 @@ function isEhentaiPage(url, pattern) {
   }
 }
 
-function cleanText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
-}
+export { cleanText };
 
 export function extractEhGalleryTitle({ url, html }) {
   const $ = cheerio.load(String(html || ''), { decodeEntities: false });
