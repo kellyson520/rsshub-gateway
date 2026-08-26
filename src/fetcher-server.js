@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readJsonBody, readRequestBody, writeJson } from './http-utils.js';
+import { readJsonBody, readRequestBody, sleep, writeJson } from './http-utils.js';
 
 export const DEFAULT_FETCHER_PORT = 8000;
 export const DEFAULT_FETCHER_HOST = '0.0.0.0';
@@ -86,7 +86,7 @@ export async function registerDispatcherRoutes({
         }) + '\n');
         return false;
       }
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      await sleep(retryDelayMs);
     }
   }
   return false;

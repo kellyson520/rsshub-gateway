@@ -22,6 +22,7 @@ import {
   readLimited,
   readRequestBody,
   requestedImageVariantWidth,
+  sleep,
   writeBuffer,
   writeGatewayError,
   writeJson,
@@ -567,7 +568,7 @@ export function createRequestHandler(deps) {
       while (true) {
         prefetch = prefetchStatus?.(session.target) ?? null;
         if (!prefetch || prefetch.status === 'done' || Date.now() >= deadline) break;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(1, deadline - Date.now()))));
+        await sleep(Math.min(250, Math.max(1, deadline - Date.now())));
       }
       writeJson(res, 200, { prefetch, timedOut: prefetch ? prefetch.status !== 'done' : false });
       return;

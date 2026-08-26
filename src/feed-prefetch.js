@@ -1,3 +1,5 @@
+import { sleep as defaultSleep } from './http-utils.js';
+
 export const DEFAULT_FEED_PREFETCH_INTERVAL_MS = 900_000;
 export const DEFAULT_FEED_PREFETCH_CONCURRENCY = 2;
 export const DEFAULT_FEED_PREFETCH_MAX_RETRIES = 2;
@@ -25,7 +27,7 @@ export function createFeedPrefetchQueue({
   fetchFeed = async () => ({ ok: false, status: 503 }),
   logger = { info() {}, warn() {}, error() {} },
   now = () => Date.now(),
-  sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
+  sleep = defaultSleep,
 } = {}) {
   const idleSleep = (delay) => new Promise((resolve) => {
     const timer = setTimeout(resolve, delay);

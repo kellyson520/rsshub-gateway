@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { isAllowedTarget } from './signed-target.js';
-import { boundedInteger, clamp, safeEvent } from './http-utils.js';
+import { boundedInteger, clamp, safeEvent, sleep as defaultSleep } from './http-utils.js';
 import { isRetryableStatus as retryableStatus, isSuccessfulStatus as successfulStatus } from './upstream-errors.js';
 import { DEFAULT_CACHE_ROOT } from './options.js';
 
@@ -57,7 +57,7 @@ export function createMediaPrefetchQueue(options = {}) {
     ? options.queueTtlMs
     : DEFAULT_QUEUE_TTL_MS;
   const now = options.now || (() => Date.now());
-  const sleep = options.sleep || ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
+  const sleep = options.sleep || defaultSleep;
   const random = options.random || Math.random;
   const fetchMedia = options.fetchMedia || (async () => ({ status: 204, cacheState: 'MISS' }));
   const onEvent = options.onEvent;

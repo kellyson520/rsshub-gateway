@@ -214,6 +214,10 @@ export function boundedInteger(value, fallback, minimum, maximum) {
   return clamp(positiveInteger(value, fallback), minimum, maximum);
 }
 
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
 export function parseProbeTargets(value, legacyProbeUrl) {
   if (value && typeof value === 'string') {
     try {

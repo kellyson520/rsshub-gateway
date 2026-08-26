@@ -1,8 +1,5 @@
 import { Readable } from 'node:stream';
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { sleep } from '../http-utils.js';
 
 function pipeAttempt(stream, res, onBytes, onAbort) {
   return new Promise((resolve) => {

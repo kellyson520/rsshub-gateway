@@ -298,6 +298,14 @@ test('safeHost, isHostOrSubdomain and matchesHost handle hostnames and subdomain
   assert.equal(matchesHost('', ['iwara.tv']), false);
 });
 
+test('sleep resolves after specified delay', async () => {
+  const { sleep } = await import('../src/http-utils.js');
+  const started = Date.now();
+  await sleep(15);
+  assert.ok(Date.now() - started >= 10);
+  await sleep(-10); // should resolve immediately without throwing
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

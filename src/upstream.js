@@ -4,6 +4,7 @@ import { adapterForUrl } from './adapters/index.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { GatewayUpstreamError, isRetryableStatus } from './upstream-errors.js';
 import { egressPolicyForRequest } from './egress-policy.js';
+import { sleep as defaultSleep } from './http-utils.js';
 
 const DEFAULT_PROXY = 'http://127.0.0.1:7890';
 const DEFAULT_TIMEOUT = 30_000;
@@ -121,7 +122,7 @@ export function createUpstreamClient({
   egressPool,
 } = {}) {
   const dispatcher = new ProxyAgent(proxyUrl);
-  const sleep = sleepImpl || ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
+  const sleep = sleepImpl || defaultSleep;
   const now = nowImpl || (() => Date.now());
   const breaker = breakerImpl || new CircuitBreaker({ now });
 

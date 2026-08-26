@@ -24,6 +24,7 @@ import {
   readLimited,
   responseFromCachedDocument,
   responseHeaders,
+  sleep,
 } from './http-utils.js';
 import { DEFAULT_CACHE_ROOT, resolveGatewayOptions } from './options.js';
 
@@ -573,7 +574,7 @@ export function createGatewayServer(options = {}) {
       } catch (error) {
         lastError = error;
         if (!isRetryableFetchError(error) || attempt >= attempts) break;
-        await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+        await sleep(backoffMs * attempt);
       }
     }
     throw lastError;
