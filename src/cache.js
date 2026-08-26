@@ -59,6 +59,16 @@ function resultFromEntry(entry, body, state) {
   };
 }
 
+export {
+  keyFor,
+  canonicalUrl,
+  normalizedNamespace,
+  normalizedHeaders,
+  DEFAULT_TTL_SECONDS,
+  DEFAULT_MAX_BYTES,
+  DEFAULT_EVICTION_PRIORITY,
+};
+
 export function createResponseCache({
   root = process.env.GATEWAY_CACHE_DIR || '/var/cache/rsshub-gateway',
   maxBytes = Number.parseInt(process.env.GATEWAY_CACHE_MAX_BYTES || '', 10) || DEFAULT_MAX_BYTES,
@@ -392,5 +402,3 @@ export function createResponseCache({
 
   return { getOrLoad, peek, readRange, keyFor, stats, root: cacheRoot };
 }
-
-export { DEFAULT_MAX_BYTES, DEFAULT_TTL_SECONDS };

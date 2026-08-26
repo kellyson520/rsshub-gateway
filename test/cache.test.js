@@ -356,3 +356,32 @@ test('keyFor generates deterministic sha256 cache keys', () => {
   assert.equal(typeof k1, 'string');
   assert.equal(k1.length, 64);
 });
+
+test('exports cache helpers and default constants for external consumers', async () => {
+  const {
+    keyFor,
+    canonicalUrl,
+    normalizedNamespace,
+    normalizedHeaders,
+    DEFAULT_TTL_SECONDS,
+    DEFAULT_MAX_BYTES,
+    DEFAULT_EVICTION_PRIORITY,
+  } = await import('../src/cache.js');
+
+  assert.equal(canonicalUrl('https://example.com/a/b?x=1'), 'https://example.com/a/b?x=1');
+  assert.equal(normalizedNamespace('  session-1  '), 'session-1');
+  assert.equal(normalizedNamespace(''), 'public');
+
+  const key1 = keyFor('https://example.com/a', 'html', 'public');
+  const key2 = keyFor('https://example.com/a', 'html', 'public');
+  assert.equal(key1, key2);
+  assert.match(key1, /^[a-f0-9]{64}$/);
+
+  assert.deepEqual(normalizedHeaders({ 'Content-Type': 'text/html', 'x-custom': 'ignore' }), {
+    'content-type': 'text/html',
+  });
+
+  assert.equal(DEFAULT_TTL_SECONDS.rss, 300);
+  assert.equal(DEFAULT_MAX_BYTES, 5 * 1024 ** 3);
+  assert.equal(DEFAULT_EVICTION_PRIORITY.rss, 0);
+});
