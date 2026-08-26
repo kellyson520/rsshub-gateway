@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 export const name = 'x';
 export const publiclyReadable = true;
 
-export const MATCH_HOSTS = ['x.com', 'twitter.com', 'twimg.com'];
+export const MATCH_HOSTS = Object.freeze(['x.com', 'twitter.com', 'twimg.com']);
 export const DEFAULT_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
 

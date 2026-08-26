@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 export const name = 'instagram';
 export const publiclyReadable = true;
 
-export const MATCH_HOSTS = ['instagram.com', 'cdninstagram.com', 'fbcdn.net'];
+export const MATCH_HOSTS = Object.freeze(['instagram.com', 'cdninstagram.com', 'fbcdn.net']);
 export const DEFAULT_UNAVAILABLE_MESSAGE = 'Instagram 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const AUTH_LOGIN_PATTERN = /\/(?:accounts\/login|login)(?:[/?#]|$)/i;
 

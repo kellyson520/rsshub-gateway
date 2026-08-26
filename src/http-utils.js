@@ -92,7 +92,7 @@ export async function readBinaryLimited(response, limit) {
   return Buffer.concat(chunks);
 }
 
-const CACHE_RESPONSE_HEADERS = ['content-type', 'content-length', 'etag', 'last-modified', 'cache-control'];
+const CACHE_RESPONSE_HEADERS = Object.freeze(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);
 
 export function responseHeaders(response) {
   const headers = {};

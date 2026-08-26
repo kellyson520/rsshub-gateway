@@ -7,7 +7,7 @@ export const DEFAULT_GZIP_LEVEL = 6;
 
 // Content types eligible for lossless text compression on the gateway edge.
 // Media (image/video/audio) and already-compressed formats stay untouched.
-const COMPRESSIBLE_CONTENT_TYPES = [
+const COMPRESSIBLE_CONTENT_TYPES = Object.freeze([
   'text/',
   'application/xml',
   'application/rss+xml',
@@ -17,7 +17,7 @@ const COMPRESSIBLE_CONTENT_TYPES = [
   'application/javascript',
   'application/manifest+json',
   'image/svg+xml',
-];
+]);
 
 export function isCompressibleContentType(contentType) {
   const value = String(contentType || '').toLowerCase();

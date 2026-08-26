@@ -10,7 +10,7 @@ const RANKING_PERIODS = Object.freeze({
 });
 
 const MAX_ITEMS = 50;
-const MATCH_HOSTS = ['e-hentai.org', 'ehgt.org'];
+const MATCH_HOSTS = Object.freeze(['e-hentai.org', 'ehgt.org']);
 const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 const DEFAULT_UNAVAILABLE_MESSAGE = 'E-Hentai 内容暂时无法读取，请稍后重试或打开原始来源。';

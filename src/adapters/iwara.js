@@ -17,7 +17,7 @@ export const DEFAULT_UNAVAILABLE_MESSAGE = 'Iwara 内容暂时无法读取，请
 
 const API_BASE = 'https://api.iwara.tv';
 const SITE_BASE = 'https://iwara.tv';
-const MATCH_HOSTS = ['iwara.tv'];
+const MATCH_HOSTS = Object.freeze(['iwara.tv']);
 
 export function matches(hostname) {
   return MATCH_HOSTS.some((base) => hostname === base || hostname.endsWith(`.${base}`));

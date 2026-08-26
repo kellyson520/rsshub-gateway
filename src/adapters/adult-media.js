@@ -4,7 +4,7 @@ export const publiclyReadable = true;
 export const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 export const DEFAULT_ACCEPT_LANGUAGE = 'zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7';
 
-export const ADULT_DOMAINS = [
+export const ADULT_DOMAINS = Object.freeze([
   'jable.tv',
   'missav.ws',
   'missav.ai',
@@ -32,7 +32,7 @@ export const ADULT_DOMAINS = [
   'uraaka-joshi.com',
   'netflav.com',
   '91porn.com',
-];
+]);
 
 export function matches(hostname) {
   return ADULT_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`));
@@ -46,11 +46,11 @@ export function headers() {
 }
 
 export const DEFAULT_UNAVAILABLE_MESSAGE = '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';
-export const CHALLENGE_SUBSTRINGS = [
+export const CHALLENGE_SUBSTRINGS = Object.freeze([
   'Just a moment...',
   'cf-challenge',
   'ddos-guard',
-];
+]);
 
 export function readerTarget(url) {
   return String(url);
