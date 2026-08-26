@@ -21,6 +21,12 @@ function requestTimeoutMs(timeout) {
  * worker cannot be spawned. Both transports expose the same fetchdFetch-compatible
  * interface so adapters keep working unchanged.
  */
+export {
+  lineError,
+  requestTimeoutMs,
+  DEFAULT_WORKER_PATH,
+};
+
 export function createBrowserFetchClient({
   workerPath = process.env.BROWSER_FETCH_WORKER_PATH || DEFAULT_WORKER_PATH,
   pythonBin = process.env.BROWSER_FETCH_PYTHON || 'python3',

@@ -161,3 +161,19 @@ test('browser fetch client handles close when no child process was ever spawned'
   assert.equal(client.health().transport, 'none');
   assert.doesNotThrow(() => client.close());
 });
+
+test('exports lineError, requestTimeoutMs and DEFAULT_WORKER_PATH helpers', async () => {
+  const { lineError, requestTimeoutMs, DEFAULT_WORKER_PATH } = await import('../src/browser-fetch.js');
+
+  const err = lineError('worker timed out', { code: 'CUSTOM_TIMEOUT', status: 504 });
+  assert.equal(err.name, 'GatewayUpstreamError');
+  assert.equal(err.code, 'CUSTOM_TIMEOUT');
+  assert.equal(err.status, 504);
+  assert.equal(err.source, 'fetchd');
+
+  assert.equal(requestTimeoutMs(10_000), 15_000);
+  assert.equal(requestTimeoutMs(null), 25_000);
+  assert.equal(requestTimeoutMs(100_000), 65_000);
+
+  assert.ok(typeof DEFAULT_WORKER_PATH === 'string' && DEFAULT_WORKER_PATH.includes('fetch-worker.py'));
+});
