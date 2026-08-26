@@ -164,3 +164,17 @@ test('exports linuxdo adapter helpers and SITE_BASE constant', async () => {
   const rewritten = rewriteCookedHtml('<p>Simple text</p>', { baseUrl: 'http://127.0.0.1:1300', secret: 'test-secret' });
   assert.ok(rewritten.includes('Simple text'));
 });
+
+test('exports adult-media adapter constants and domain array', async () => {
+  const {
+    ADULT_DOMAINS,
+    DEFAULT_USER_AGENT,
+    DEFAULT_ACCEPT_LANGUAGE,
+  } = await import('../src/adapters/adult-media.js');
+
+  assert.ok(Array.isArray(ADULT_DOMAINS));
+  assert.ok(ADULT_DOMAINS.includes('jable.tv'));
+  assert.ok(ADULT_DOMAINS.includes('javbus.com'));
+  assert.ok(DEFAULT_USER_AGENT.includes('Mozilla'));
+  assert.ok(DEFAULT_ACCEPT_LANGUAGE.includes('zh-CN'));
+});

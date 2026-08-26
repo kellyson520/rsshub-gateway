@@ -119,7 +119,17 @@ test('createBrowserRenderClient: enforces minimum 5000ms timeout budget', async 
   assert.equal(passedTimeout, 5000);
 });
 
-test('createBrowserRenderClient exports DEFAULT_RENDER_URL constant', async () => {
-  const { DEFAULT_RENDER_URL } = await import('../src/browser-render.js');
+test('createBrowserRenderClient exports default constants', async () => {
+  const {
+    DEFAULT_RENDER_URL,
+    DEFAULT_RENDER_TIMEOUT_MS,
+    MIN_RENDER_TIMEOUT_MS,
+    RENDER_HEALTH_TIMEOUT_MS,
+    RENDER_BUFFER_TIMEOUT_MS,
+  } = await import('../src/browser-render.js');
   assert.equal(typeof DEFAULT_RENDER_URL, 'string');
+  assert.equal(DEFAULT_RENDER_TIMEOUT_MS, 30_000);
+  assert.equal(MIN_RENDER_TIMEOUT_MS, 5_000);
+  assert.equal(RENDER_HEALTH_TIMEOUT_MS, 3_000);
+  assert.equal(RENDER_BUFFER_TIMEOUT_MS, 10_000);
 });

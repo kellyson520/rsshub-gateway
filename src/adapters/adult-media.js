@@ -1,7 +1,10 @@
 export const name = 'adult-media';
 export const publiclyReadable = true;
 
-const ADULT_DOMAINS = [
+export const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+export const DEFAULT_ACCEPT_LANGUAGE = 'zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7';
+
+export const ADULT_DOMAINS = [
   'jable.tv',
   'missav.ws',
   'missav.ai',
@@ -37,8 +40,8 @@ export function matches(hostname) {
 
 export function headers() {
   return {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7',
+    'User-Agent': DEFAULT_USER_AGENT,
+    'Accept-Language': DEFAULT_ACCEPT_LANGUAGE,
   };
 }
 
