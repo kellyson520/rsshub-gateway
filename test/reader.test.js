@@ -275,3 +275,23 @@ test('renderReaderPage safely handles malformed or empty html body', () => {
   });
   assert.match(output, /class="reader"/);
 });
+
+test('exports reader regular expressions and CSS constants', async () => {
+  const {
+    EH_GALLERY_PATH,
+    EH_IMAGE_PATH,
+    DEFAULT_EH_IMAGE_PRELOAD_COUNT,
+    IMAGE_VARIANT_WIDTHS,
+    IMAGE_SIZES,
+    READER_CSS,
+    escapeHtml,
+  } = await import('../src/reader.js');
+
+  assert.ok(EH_GALLERY_PATH instanceof RegExp);
+  assert.ok(EH_IMAGE_PATH instanceof RegExp);
+  assert.equal(DEFAULT_EH_IMAGE_PRELOAD_COUNT, 1);
+  assert.deepEqual(IMAGE_VARIANT_WIDTHS, [1280, 1920, 2560]);
+  assert.ok(IMAGE_SIZES.includes('1120px'));
+  assert.ok(READER_CSS.includes('color-scheme'));
+  assert.equal(escapeHtml('foo & bar'), 'foo &amp; bar');
+});

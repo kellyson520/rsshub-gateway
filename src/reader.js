@@ -400,3 +400,17 @@ export function renderUnavailablePage({ url, title, message, baseUrl, secret, si
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
+
+export {
+  EH_GALLERY_PATH,
+  EH_IMAGE_PATH,
+  DEFAULT_EH_IMAGE_PRELOAD_COUNT,
+  IMAGE_VARIANT_WIDTHS,
+  IMAGE_SIZES,
+  READER_CSS,
+  escapeHtml,
+  renderDocument,
+  mediaSrcset,
+  localUrl,
+  gatewayUrl,
+};
