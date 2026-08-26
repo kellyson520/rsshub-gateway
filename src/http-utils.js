@@ -218,6 +218,30 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
+export function withDeadline(promise, timeoutMs, fallback = undefined) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      resolve({ value: fallback, timedOut: true });
+    }, Math.max(Number(timeoutMs) || 0, 0));
+    Promise.resolve(promise).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ value, timedOut: false });
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ value: fallback, timedOut: false });
+      },
+    );
+  });
+}
+
 export function parseProbeTargets(value, legacyProbeUrl) {
   if (value && typeof value === 'string') {
     try {

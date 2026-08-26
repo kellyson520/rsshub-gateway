@@ -370,6 +370,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.
   - `clamp(value, min, max)`, `positiveInteger(value, fallback)`, `boundedInteger(value, fallback, min, max)`: Pure numeric bounds clampers and safe integer parsers.
   - `sleep(ms)`: High-precision promise-based sleep delay helper with negative-value absorption.
+  - `withDeadline(promise, timeoutMs, fallback)`: Generic promise execution bounded by a hard millisecond timeout.
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
   - `sha256Hex(value)`, `hmacSha256(value, secret, encoding)`: High-performance cryptographic digest and HMAC serializers.
   - `isSignatureMatch(actual, expected)`, `constantTimeEquals(left, right)`: Timing-safe cryptographic signature and credential verifiers.

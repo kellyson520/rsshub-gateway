@@ -306,6 +306,19 @@ test('sleep resolves after specified delay', async () => {
   await sleep(-10); // should resolve immediately without throwing
 });
 
+test('withDeadline resolves value or times out gracefully', async () => {
+  const { withDeadline } = await import('../src/http-utils.js');
+
+  const fast = await withDeadline(Promise.resolve('success'), 50);
+  assert.deepEqual(fast, { value: 'success', timedOut: false });
+
+  const slow = await withDeadline(new Promise(() => {}), 10, 'fallback-val');
+  assert.deepEqual(slow, { value: 'fallback-val', timedOut: true });
+
+  const failing = await withDeadline(Promise.reject(new Error('boom')), 50, null);
+  assert.deepEqual(failing, { value: null, timedOut: false });
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

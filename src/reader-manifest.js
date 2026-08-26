@@ -1,3 +1,5 @@
+import { withDeadline } from './http-utils.js';
+
 export const DEFAULT_PAGE_STATE_DEFERRED = 'deferred';
 export const DEFAULT_PAGE_STATE_RESOLVED = 'resolved';
 
@@ -30,26 +32,5 @@ export function isManifestComplete(manifest) {
   return manifest.pages.every((page) => page.state === DEFAULT_PAGE_STATE_RESOLVED);
 }
 
-export function withForegroundDeadline(promise, timeoutMs) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      settled = true;
-      resolve({ value: undefined, timedOut: true });
-    }, Math.max(Number(timeoutMs) || 0, 0));
-    Promise.resolve(promise).then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve({ value, timedOut: false });
-      },
-      () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve({ value: undefined, timedOut: false });
-      },
-    );
-  });
-}
+export const withForegroundDeadline = withDeadline;
+export { withDeadline };
