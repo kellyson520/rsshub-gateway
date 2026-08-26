@@ -112,3 +112,13 @@ test('isManifestComplete checks whether all pages in manifest are resolved', asy
   assert.equal(isManifestComplete({}), false);
   assert.equal(isManifestComplete({ pages: [] }), false);
 });
+
+test('exports DEFAULT_PAGE_STATE_DEFERRED and DEFAULT_PAGE_STATE_RESOLVED constants', async () => {
+  const {
+    DEFAULT_PAGE_STATE_DEFERRED,
+    DEFAULT_PAGE_STATE_RESOLVED,
+  } = await import('../src/reader-manifest.js');
+
+  assert.equal(DEFAULT_PAGE_STATE_DEFERRED, 'deferred');
+  assert.equal(DEFAULT_PAGE_STATE_RESOLVED, 'resolved');
+});
