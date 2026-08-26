@@ -1,5 +1,8 @@
+export const DEFAULT_UPSTREAM_ERROR_STATUS = 502;
+export const DEFAULT_UPSTREAM_SOURCE = 'unknown';
+
 export class GatewayUpstreamError extends Error {
-  constructor(message, { code, source = 'unknown', status = 502, attempts = 0, retryAfter } = {}) {
+  constructor(message, { code, source = DEFAULT_UPSTREAM_SOURCE, status = DEFAULT_UPSTREAM_ERROR_STATUS, attempts = 0, retryAfter } = {}) {
     super(message);
     this.name = 'GatewayUpstreamError';
     this.code = code;

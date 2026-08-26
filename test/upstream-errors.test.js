@@ -62,3 +62,9 @@ test('isClientAbortError: detects client disconnection, premature close, and str
   assert.equal(isClientAbortError(null), false);
   assert.equal(isClientAbortError(undefined), false);
 });
+
+test('exports default upstream error status and source constants', async () => {
+  const { DEFAULT_UPSTREAM_ERROR_STATUS, DEFAULT_UPSTREAM_SOURCE } = await import('../src/upstream-errors.js');
+  assert.equal(DEFAULT_UPSTREAM_ERROR_STATUS, 502);
+  assert.equal(DEFAULT_UPSTREAM_SOURCE, 'unknown');
+});

@@ -117,7 +117,20 @@ test('session-affinity throws typed SESSION_LANE_UNAVAILABLE when all lanes are 
 });
 
 test('exports helper functions for deterministic hashing and lane selection', async () => {
-  const { fingerprintFor, normalizedLaneIds, normalizedCredentials, chooseLane } = await import('../src/session-affinity.js');
+  const {
+    VERSION,
+    DEFAULT_MAX_AGE_MS,
+    fingerprintFor,
+    normalizedLaneIds,
+    normalizedCredentials,
+    chooseLane,
+    proxyIdentityHash,
+    validRecord,
+  } = await import('../src/session-affinity.js');
+
+  assert.equal(VERSION, 1);
+  assert.equal(DEFAULT_MAX_AGE_MS, 30 * 24 * 60 * 60 * 1000);
+
   const fp1 = fingerprintFor('x', { authToken: 'token-a', ct0: 'csrf-a' }, 'secret');
   const fp2 = fingerprintFor('x', { ct0: 'csrf-a', authToken: 'token-a' }, 'secret');
   assert.equal(fp1, fp2);
@@ -128,4 +141,25 @@ test('exports helper functions for deterministic hashing and lane selection', as
 
   const selected = chooseLane(fp1, ['lane-1', 'lane-2'], new Set());
   assert.ok(['lane-1', 'lane-2'].includes(selected));
+
+  assert.match(proxyIdentityHash('http://127.0.0.1:8080'), /^[a-f0-9]{64}$/);
+  assert.equal(proxyIdentityHash(''), '');
+
+  const valid = validRecord({
+    fingerprint: fp1,
+    source: 'x',
+    laneId: 'session-01',
+    createdAt: 1000,
+    updatedAt: 1500,
+  }, 2000, 10000);
+  assert.equal(valid, true);
+
+  const invalid = validRecord({
+    fingerprint: 'bad-fp',
+    source: 'x',
+    laneId: 'session-01',
+    createdAt: 1000,
+    updatedAt: 1500,
+  }, 2000, 10000);
+  assert.equal(invalid, false);
 });

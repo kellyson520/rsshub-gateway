@@ -63,10 +63,14 @@ function validRecord(record, now, maxAgeMs) {
 }
 
 export {
+  VERSION,
+  DEFAULT_MAX_AGE_MS,
   fingerprintFor,
   normalizedLaneIds,
   normalizedCredentials,
   chooseLane,
+  proxyIdentityHash,
+  validRecord,
 };
 
 export function createSessionAffinity({
@@ -206,5 +210,3 @@ export function createSessionAffinity({
     file: targetFile,
   };
 }
-
-export { DEFAULT_MAX_AGE_MS };
