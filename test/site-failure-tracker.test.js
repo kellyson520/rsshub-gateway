@@ -58,3 +58,13 @@ test('handles non-string laneId or host values gracefully without crashing', () 
   tracker.reset(null, undefined);
   assert.equal(tracker.blocked(null, undefined), false);
 });
+
+test('clearAll flushes all lane failure records completely', () => {
+  const tracker = createSiteFailureTracker({ threshold: 2, windowMs: 60_000 });
+  tracker.record('lane-01', 'site-a.com', 403);
+  tracker.record('lane-02', 'site-b.com', 500);
+  assert.equal(tracker.stats().length, 2);
+  tracker.clearAll();
+  assert.equal(tracker.stats().length, 0);
+  assert.equal(tracker.blocked('lane-01', 'site-a.com'), false);
+});

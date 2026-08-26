@@ -55,5 +55,9 @@ export function createSiteFailureTracker({
       });
   }
 
-  return { record, reset, blocked, stats };
+  function clearAll() {
+    states.clear();
+  }
+
+  return { record, reset, clearAll, blocked, stats };
 }
