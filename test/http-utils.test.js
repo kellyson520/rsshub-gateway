@@ -190,9 +190,15 @@ test('createConcurrencyLimiter bounds active concurrent tasks', async () => {
   assert.deepEqual(results, [0, 10, 20, 30, 40, 50]);
 });
 
-test('exports CACHE_RESPONSE_HEADERS constants', async () => {
-  const { CACHE_RESPONSE_HEADERS } = await import('../src/http-utils.js');
+test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
+  const {
+    CACHE_RESPONSE_HEADERS,
+    DEFAULT_READ_LIMIT_BYTES,
+    IMAGE_VARIANT_CACHE_VERSION,
+  } = await import('../src/http-utils.js');
   assert.ok(Array.isArray(CACHE_RESPONSE_HEADERS));
   assert.ok(CACHE_RESPONSE_HEADERS.includes('content-type'));
   assert.ok(CACHE_RESPONSE_HEADERS.includes('etag'));
+  assert.equal(DEFAULT_READ_LIMIT_BYTES, 4 * 1024 * 1024);
+  assert.equal(IMAGE_VARIANT_CACHE_VERSION, 'v1');
 });

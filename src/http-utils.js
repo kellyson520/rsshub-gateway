@@ -59,7 +59,9 @@ export function writeGatewayError(res, error) {
   writeText(res, error.status, 'upstream unavailable\n', 'text/plain; charset=utf-8', headers);
 }
 
-export async function readLimited(response, limit = 4 * 1024 * 1024) {
+export const DEFAULT_READ_LIMIT_BYTES = 4 * 1024 * 1024;
+
+export async function readLimited(response, limit = DEFAULT_READ_LIMIT_BYTES) {
   // browser-fetch 响应体是 Buffer（同步可迭代）：直接返回，避免按字节迭代。
   if (Buffer.isBuffer(response.body)) {
     if (response.body.length > limit) throw new Error('upstream response too large');
@@ -186,7 +188,7 @@ export function parseProbeTargets(value, legacyProbeUrl) {
   };
 }
 
-const IMAGE_VARIANT_CACHE_VERSION = 'v1';
+export const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 
 export function requestedImageVariantWidth(searchParams) {
   if (!searchParams.has('w')) return { width: undefined };
