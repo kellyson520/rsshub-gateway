@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import net from 'node:net';
+import { hmacSha256, isSignatureMatch } from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
@@ -186,7 +186,7 @@ export function createSignedTarget(url, secret, ttlSeconds = DEFAULT_TTL_SECONDS
     throw new Error('target host is not allowed');
   }
   const payload = encode(JSON.stringify({ url: target.toString(), exp: now + ttlSeconds, ...routeMetadata(metadata) }));
-  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+  const signature = hmacSha256(payload, secret, 'base64url');
   return `${payload}.${signature}`;
 }
 
@@ -198,13 +198,7 @@ export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now()
 export function isTargetSignatureValid(token, secret) {
   const [payload, signature] = String(token || '').split('.');
   if (!payload || !signature) return false;
-  try {
-    const expected = createHmac('sha256', secret).update(payload).digest();
-    const actual = Buffer.from(signature, 'base64url');
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch {
-    return false;
-  }
+  return isSignatureMatch(signature, hmacSha256(payload, secret));
 }
 
 export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000)) {
@@ -212,9 +206,7 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
   if (!payload || !signature) {
     throw new Error('malformed target token');
   }
-  const expected = createHmac('sha256', secret).update(payload).digest();
-  const actual = Buffer.from(signature, 'base64url');
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+  if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
     throw new Error('invalid target signature');
   }
   const data = JSON.parse(decode(payload));

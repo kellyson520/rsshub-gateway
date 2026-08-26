@@ -1,5 +1,6 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { decode, encode, isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
+import { constantTimeEquals, hmacSha256, isSignatureMatch } from './http-utils.js';
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
@@ -55,9 +56,7 @@ export function createLeaseStore({ now = Date.now } = {}) {
       return null;
     }
     // Constant-time comparison, matching the HMAC verification style elsewhere.
-    const provided = Buffer.from(String(password));
-    const expected = Buffer.from(lease.password);
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    if (!constantTimeEquals(password, lease.password)) {
       return null;
     }
     return lease;
@@ -119,7 +118,7 @@ export function createSignedChunk({ url, start, end, secret, now: nowValue = Mat
     exp: nowValue + ttlSeconds,
     ...metadata,
   }));
-  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+  const signature = hmacSha256(payload, secret, 'base64url');
   return `${payload}.${signature}`;
 }
 
@@ -128,21 +127,13 @@ const CHUNK_METADATA_KEYS = new Set(['egressScope', 'source', 'sessionId', 'inde
 export function isChunkSignatureValid(token, secret) {
   const [payload, signature] = String(token || '').split('.');
   if (!payload || !signature) return false;
-  try {
-    const expected = createHmac('sha256', secret).update(payload).digest();
-    const actual = Buffer.from(signature, 'base64url');
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch {
-    return false;
-  }
+  return isSignatureMatch(signature, hmacSha256(payload, secret));
 }
 
 export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1000)) {
   const [payload, signature] = String(token).split('.');
   if (!payload || !signature) throw new Error('malformed chunk token');
-  const expected = createHmac('sha256', secret).update(payload).digest();
-  const actual = Buffer.from(signature, 'base64url');
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+  if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
     throw new Error('invalid chunk signature');
   }
   const data = JSON.parse(decode(payload));

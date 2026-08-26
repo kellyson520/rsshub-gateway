@@ -263,10 +263,35 @@ export function createConcurrencyLimiter(limit) {
   };
 }
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export function sha256Hex(value) {
   return createHash('sha256').update(String(value ?? '')).digest('hex');
+}
+
+export function hmacSha256(value, secret, encoding) {
+  const hmac = createHmac('sha256', secret).update(String(value ?? ''));
+  return encoding ? hmac.digest(encoding) : hmac.digest();
+}
+
+export function isSignatureMatch(actual, expected) {
+  try {
+    const actualBuf = Buffer.isBuffer(actual) ? actual : Buffer.from(String(actual ?? ''), 'base64url');
+    const expectedBuf = Buffer.isBuffer(expected) ? expected : Buffer.from(String(expected ?? ''), 'base64url');
+    return actualBuf.length === expectedBuf.length && timingSafeEqual(actualBuf, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
+export function constantTimeEquals(left, right) {
+  try {
+    const leftBuf = Buffer.isBuffer(left) ? left : Buffer.from(String(left ?? ''));
+    const rightBuf = Buffer.isBuffer(right) ? right : Buffer.from(String(right ?? ''));
+    return leftBuf.length === rightBuf.length && timingSafeEqual(leftBuf, rightBuf);
+  } catch {
+    return false;
+  }
 }
 
 export function safeEvent(onEvent, event) {

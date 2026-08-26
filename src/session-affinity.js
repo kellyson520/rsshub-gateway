@@ -1,8 +1,8 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { sha256Hex } from './http-utils.js';
+import { hmacSha256, sha256Hex } from './http-utils.js';
 
 const VERSION = 1;
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -26,9 +26,11 @@ function normalizedCredentials(credentials = {}) {
 }
 
 function fingerprintFor(source, credentials, secret) {
-  return createHmac('sha256', secret)
-    .update(`${String(source || '').trim().toLowerCase()}\n${normalizedCredentials(credentials)}`)
-    .digest('hex');
+  return hmacSha256(
+    `${String(source || '').trim().toLowerCase()}\n${normalizedCredentials(credentials)}`,
+    secret,
+    'hex',
+  );
 }
 
 function proxyIdentityHash(value) {

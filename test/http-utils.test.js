@@ -220,6 +220,29 @@ test('sha256Hex produces deterministic lowercase hex digest', async () => {
   assert.equal(sha256Hex(null), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
 });
 
+test('hmacSha256 and isSignatureMatch compute and verify cryptographic signatures safely', async () => {
+  const { hmacSha256, isSignatureMatch, constantTimeEquals } = await import('../src/http-utils.js');
+  const secret = 'test-secret';
+  const data = 'payload-to-sign';
+
+  const rawDigest = hmacSha256(data, secret);
+  assert.ok(Buffer.isBuffer(rawDigest));
+
+  const hexDigest = hmacSha256(data, secret, 'hex');
+  const base64urlDigest = hmacSha256(data, secret, 'base64url');
+  assert.equal(typeof hexDigest, 'string');
+  assert.equal(typeof base64urlDigest, 'string');
+
+  assert.equal(isSignatureMatch(base64urlDigest, rawDigest), true);
+  assert.equal(isSignatureMatch(base64urlDigest, hmacSha256('tampered', secret)), false);
+  assert.equal(isSignatureMatch('invalid-sig', rawDigest), false);
+  assert.equal(isSignatureMatch(null, rawDigest), false);
+
+  assert.equal(constantTimeEquals('secret-password', 'secret-password'), true);
+  assert.equal(constantTimeEquals('secret-password', 'wrong-password'), false);
+  assert.equal(constantTimeEquals(null, 'password'), false);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,
