@@ -347,9 +347,11 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `installGracefulShutdown(opts)`: Connection draining and signal trapping for zero-downtime restarts.
   - `createLeaseBackfillQueue(opts)`: Background slice cache warmer for video download leases.
   - `DEFAULT_POLLER_INTERVAL_MS`, `DEFAULT_POLLER_JITTER_RATIO`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_MAX_CONCURRENCY`: Infrastructure operational defaults.
-- **Resilient Request Pipeline, Upstream & Circuit Breakers (`src/upstream.js`, `src/circuit-breaker.js`, `src/signed-target.js`, `src/infrastructure/request-service.js`)**:
+- **Resilient Request Pipeline, Upstream & Circuit Breakers (`src/upstream.js`, `src/circuit-breaker.js`, `src/signed-target.js`, `src/infrastructure/request-service.js`, `src/upstream-errors.js`)**:
   - `CIRCUIT_STATE_CLOSED`, `CIRCUIT_STATE_OPEN`, `CIRCUIT_STATE_HALF_OPEN`: Standard tri-state circuit breaker identifiers.
   - `DEFAULT_FAILURE_THRESHOLD`, `DEFAULT_COOLDOWN_MS`: Circuit breaker tripping thresholds and cooldown windows.
+  - `isRetryableStatus(status)`, `isSuccessfulStatus(status)`, `isClientAbortError(err)`: Standard HTTP status classifiers and client disconnect predicates.
+  - `GatewayUpstreamError`: Structured error class capturing retry attempts, source name, status code and `retryAfter` payload.
   - `encode(value)`, `decode(value)`: High-performance Base64URL string serializers.
   - `routeMetadata(metadata)`: Route scope and source validation parser.
   - `DEFAULT_PROXY`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_ATTEMPTS`, `MAX_REDIRECTS_PER_ATTEMPT`: Upstream proxy and timeout foundations.
@@ -364,6 +366,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `initialEhGalleryManifest(opts)`: Pure cold-start gallery preview manifest constructor.
   - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.
   - `parseByteRange(value, size)`: RFC 7233 byte range parser with unsatisfiable range detection.
+  - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
   - `failureMessage(kind, pageNumber)`: Standardized multilingual gallery/image degradation messaging.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
