@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { transformFeed } from './feed-transform.js';
 import { verifySignedTarget } from './signed-target.js';
@@ -14,10 +14,13 @@ import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
 import {
   fetchCachedDocument,
+  isBearerAuthorized,
   isEhImagePageTarget,
   mediaFileName,
   publicBaseUrl,
+  readJsonBody,
   readLimited,
+  readRequestBody,
   requestedImageVariantWidth,
   writeBuffer,
   writeGatewayError,
@@ -184,7 +187,7 @@ export function createRequestHandler(deps) {
     }
     const requestStartedAt = Date.now();
     const requestUrl = new URL(req.url || '/', 'http://gateway.internal');
-    const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 64);
+    const requestId = String(req.headers['x-request-id'] || randomUUID()).slice(0, 64);
     res.setHeader('x-request-id', requestId);
     recordMetric('gateway_request', { path: requestUrl.pathname });
     recordMetric(`route_${routeBucket(requestUrl.pathname)}`, { path: requestUrl.pathname });
@@ -358,11 +361,7 @@ export function createRequestHandler(deps) {
         writeText(res, 404, 'not found\n');
         return;
       }
-      const auth = String(req.headers.authorization || '');
-      const expected = `Bearer ${dispatcherRegistrationToken}`;
-      const provided = auth.trim();
-      if (!provided || provided.length !== expected.length
-        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+      if (!isBearerAuthorized(req, dispatcherRegistrationToken)) {
         writeText(res, 401, 'unauthorized\n');
         return;
       }
@@ -376,7 +375,7 @@ export function createRequestHandler(deps) {
       if (req.method === 'POST') {
         let body;
         try {
-          body = JSON.parse(await readRequestBody(req));
+          body = await readJsonBody(req);
         } catch {
           writeJson(res, 400, { error: 'invalid json body' });
           return;
@@ -392,7 +391,7 @@ export function createRequestHandler(deps) {
       if (req.method === 'DELETE') {
         let body;
         try {
-          body = JSON.parse(await readRequestBody(req));
+          body = await readJsonBody(req);
         } catch {
           writeJson(res, 400, { error: 'invalid json body' });
           return;
@@ -413,11 +412,7 @@ export function createRequestHandler(deps) {
         writeText(res, 404, 'not found\n');
         return;
       }
-      const auth = String(req.headers.authorization || '');
-      const expected = `Bearer ${dispatcherRegistrationToken}`;
-      const provided = auth.trim();
-      if (!provided || provided.length !== expected.length
-        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+      if (!isBearerAuthorized(req, dispatcherRegistrationToken)) {
         writeText(res, 401, 'unauthorized\n');
         return;
       }
@@ -428,7 +423,7 @@ export function createRequestHandler(deps) {
       if (req.method === 'POST') {
         let body;
         try {
-          body = JSON.parse(await readRequestBody(req));
+          body = await readJsonBody(req);
         } catch {
           writeJson(res, 400, { error: 'invalid json body' });
           return;
@@ -454,18 +449,14 @@ export function createRequestHandler(deps) {
         writeText(res, 404, 'not found\n');
         return;
       }
-      const auth = String(req.headers.authorization || '');
-      const expected = `Bearer ${dispatcherRegistrationToken}`;
-      const provided = auth.trim();
-      if (!provided || provided.length !== expected.length
-        || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+      if (!isBearerAuthorized(req, dispatcherRegistrationToken)) {
         writeText(res, 401, 'unauthorized\n');
         return;
       }
       if (req.method === 'POST') {
         let body;
         try {
-          body = JSON.parse(await readRequestBody(req));
+          body = await readJsonBody(req);
         } catch {
           writeJson(res, 400, { error: 'invalid json body' });
           return;
@@ -598,7 +589,7 @@ export function createRequestHandler(deps) {
           return;
         }
         const { count, size: chunkSize } = chunkSizeFor(size, Number.isInteger(wanted) ? wanted : 1);
-        const sessionId = crypto.randomUUID();
+        const sessionId = randomUUID();
         const entries = [];
         for (let index = 0; index < count; index += 1) {
           const start = index * chunkSize;

@@ -361,7 +361,8 @@ All core gateway subsystems export pure functions, type predicates, serializatio
 - **Dynamic Microservice Frameworks, Gateways & Server Utilities (`src/fetcher-server.js`, `src/server.js`, `src/request-handler.js`, `src/gallery-benchmark.js`, `src/http-utils.js`)**:
   - `DEFAULT_FETCHER_PORT`, `DEFAULT_FETCHER_HOST`: Sidecar standalone server defaults (`8000` / `0.0.0.0`).
   - `registerDispatcherRoutes(opts)`, `unregisterDispatcherRoutes(opts)`: Sidecar lifecycle self-registration and teardown with backoff.
-  - `HttpError`, `readRequestBody(req)`: Standard HTTP status error wrapper and raw payload buffer reader.
+  - `HttpError`, `readRequestBody(req)`, `readJsonBody(req)`: Standard HTTP status error wrapper and raw/JSON payload buffer readers.
+  - `isBearerAuthorized(reqOrHeader, token)`: Constant-time Bearer token authorization validator.
   - `routeBucket(pathname)`: Fast prefix-based route category bucket parser for Prometheus and logging segregation.
   - `initialEhGalleryManifest(opts)`: Pure cold-start gallery preview manifest constructor.
   - `DEFAULT_READ_LIMIT_BYTES`, `IMAGE_VARIANT_CACHE_VERSION`: HTTP response parsing safety ceiling and WebP cache versioning.

@@ -47,6 +47,21 @@ export function readRequestBody(req) {
   });
 }
 
+export async function readJsonBody(req) {
+  const raw = await readRequestBody(req);
+  return JSON.parse(raw);
+}
+
+export function isBearerAuthorized(reqOrHeader, expectedToken) {
+  if (!expectedToken) return false;
+  const header = reqOrHeader && typeof reqOrHeader === 'object' && reqOrHeader.headers
+    ? reqOrHeader.headers.authorization
+    : reqOrHeader;
+  const expected = `Bearer ${expectedToken}`;
+  const provided = String(header || '').trim();
+  return constantTimeEquals(provided, expected);
+}
+
 export function mediaFileName(target, contentType) {
   try {
     const pathname = new URL(target).pathname;

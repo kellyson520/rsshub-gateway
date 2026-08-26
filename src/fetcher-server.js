@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readRequestBody, writeJson } from './http-utils.js';
+import { readJsonBody, readRequestBody, writeJson } from './http-utils.js';
 
 export const DEFAULT_FETCHER_PORT = 8000;
 export const DEFAULT_FETCHER_HOST = '0.0.0.0';
@@ -25,7 +25,7 @@ export function createFetcherServer({ fetcher, health = () => ({ ok: true }), na
     if (req.method === 'POST' && url.pathname === '/fetch') {
       let body;
       try {
-        body = JSON.parse(await readRequestBody(req));
+        body = await readJsonBody(req);
       } catch {
         writeJson(res, 400, { error: 'invalid json body' });
         return;

@@ -243,6 +243,33 @@ test('hmacSha256 and isSignatureMatch compute and verify cryptographic signature
   assert.equal(constantTimeEquals(null, 'password'), false);
 });
 
+test('isBearerAuthorized validates authorization header in constant time', async () => {
+  const { isBearerAuthorized } = await import('../src/http-utils.js');
+  const token = 'my-secret-token-123';
+
+  assert.equal(isBearerAuthorized(`Bearer ${token}`, token), true);
+  assert.equal(isBearerAuthorized({ headers: { authorization: `Bearer ${token}` } }, token), true);
+  assert.equal(isBearerAuthorized({ headers: { authorization: `Bearer ${token} ` } }, token), true);
+  assert.equal(isBearerAuthorized('Bearer wrong-token', token), false);
+  assert.equal(isBearerAuthorized('Basic dXNlcjpwYXNz', token), false);
+  assert.equal(isBearerAuthorized('', token), false);
+  assert.equal(isBearerAuthorized(null, token), false);
+  assert.equal(isBearerAuthorized(`Bearer ${token}`, ''), false);
+  assert.equal(isBearerAuthorized(`Bearer ${token}`, null), false);
+});
+
+test('readJsonBody parses stream payload into JSON object', async () => {
+  const { Readable } = await import('node:stream');
+  const { readJsonBody } = await import('../src/http-utils.js');
+
+  const stream = Readable.from([Buffer.from('{"hello":'), Buffer.from('"world"}')]);
+  const parsed = await readJsonBody(stream);
+  assert.deepEqual(parsed, { hello: 'world' });
+
+  const invalidStream = Readable.from([Buffer.from('{invalid')]);
+  await assert.rejects(() => readJsonBody(invalidStream), /JSON/);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,
