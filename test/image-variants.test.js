@@ -88,3 +88,30 @@ test('isSupportedImageVariantType and isValidImageVariantWidth predicates work c
   assert.equal(isValidImageVariantWidth(1600), false);
   assert.equal(isValidImageVariantWidth(null), false);
 });
+
+test('exports SUPPORTED_TYPES, WEBP_OPTIONS, normalizedType and originalResult helpers', async () => {
+  const {
+    SUPPORTED_TYPES,
+    WEBP_OPTIONS,
+    normalizedType,
+    originalResult,
+    unsupportedWidthError,
+  } = await import('../src/image-variants.js');
+
+  assert.ok(SUPPORTED_TYPES.has('image/jpeg'));
+  assert.ok(SUPPORTED_TYPES.has('image/png'));
+  assert.ok(SUPPORTED_TYPES.has('image/webp'));
+
+  assert.equal(WEBP_OPTIONS.quality, 92);
+  assert.equal(WEBP_OPTIONS.nearLossless, true);
+
+  assert.equal(normalizedType('Image/JPEG ; charset=binary'), 'image/jpeg');
+  assert.equal(normalizedType(null), '');
+
+  const orig = originalResult(Buffer.from('test'), 'image/png');
+  assert.equal(orig.usedVariant, false);
+  assert.equal(orig.contentType, 'image/png');
+
+  const err = unsupportedWidthError();
+  assert.equal(err.code, 'IMAGE_VARIANT_UNSUPPORTED_WIDTH');
+});

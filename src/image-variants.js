@@ -62,3 +62,11 @@ export async function createImageVariant({ body, contentType, width, encoder = e
     return originalResult(body, contentType);
   }
 }
+
+export {
+  SUPPORTED_TYPES,
+  WEBP_OPTIONS,
+  normalizedType,
+  originalResult,
+  unsupportedWidthError,
+};
