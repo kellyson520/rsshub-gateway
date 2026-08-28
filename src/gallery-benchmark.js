@@ -1,4 +1,5 @@
-import {
+export {
+  benchmarkGallery,
   BENCHMARK_LOCAL_HOSTS as LOCAL_HOSTS,
   DEFAULT_BENCHMARK_VARIANT_WIDTH,
   DEFAULT_MEDIA_CONCURRENCY as MEDIA_CONCURRENCY,
@@ -9,63 +10,3 @@ import {
   numericContentLength,
   variantUrl,
 } from './http-utils.js';
-
-export {
-  LOCAL_HOSTS,
-  MEDIA_CONCURRENCY,
-  DEFAULT_BENCHMARK_VARIANT_WIDTH,
-  localGatewayUrl,
-  mediaUrls,
-  mapWithConcurrency,
-  numericContentLength,
-  durationCheckpoint,
-  variantUrl,
-};
-
-export async function benchmarkGallery({ gatewayUrl, fetchImpl = fetch, now = () => Date.now() } = {}) {
-  const itemUrl = localGatewayUrl(gatewayUrl);
-  const startedAt = now();
-  const itemResponse = await fetchImpl(itemUrl, { headers: { 'accept-encoding': 'identity' } });
-  const html = await itemResponse.text();
-  const htmlMs = Math.max(0, now() - startedAt);
-  const originals = mediaUrls(html, itemUrl);
-
-  const sourceSizes = await mapWithConcurrency(originals, MEDIA_CONCURRENCY, async (url) => {
-    try {
-      const response = await fetchImpl(url, { method: 'HEAD', headers: { 'accept-encoding': 'identity' } });
-      return numericContentLength(response);
-    } catch {
-      return 0;
-    }
-  });
-  const mediaStartedAt = now();
-  const variants = await mapWithConcurrency(originals.map(variantUrl), MEDIA_CONCURRENCY, async (url) => {
-    try {
-      const response = await fetchImpl(url, { headers: { 'accept-encoding': 'identity' } });
-      const body = Buffer.from(await response.arrayBuffer());
-      return { status: response.status, bytes: body.length, completedAt: Math.max(0, now() - mediaStartedAt) };
-    } catch {
-      return { status: 0, bytes: 0, completedAt: Math.max(0, now() - mediaStartedAt) };
-    }
-  });
-  const statusCounts = {};
-  for (const result of variants) statusCounts[result.status] = (statusCounts[result.status] || 0) + 1;
-  const originalBytes = sourceSizes.reduce((total, bytes) => total + bytes, 0);
-  const variantBytes = variants.reduce((total, result) => total + result.bytes, 0);
-  const variantSavedPercent = originalBytes > 0
-    ? Number((((originalBytes - variantBytes) / originalBytes) * 100).toFixed(2))
-    : 0;
-  const firstScreenCount = Math.min(8, variants.length);
-  const quarterCount = Math.ceil(variants.length / 4);
-
-  return {
-    htmlMs,
-    firstScreenMs: durationCheckpoint(variants, firstScreenCount),
-    quarterReadyMs: durationCheckpoint(variants, quarterCount),
-    allReadyMs: durationCheckpoint(variants, variants.length),
-    originalBytes,
-    variantBytes,
-    variantSavedPercent,
-    statusCounts,
-  };
-}
