@@ -717,6 +717,43 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('isAllowedTarget, routeMetadata and isTargetSignatureValid validate URL targets, route scopes and target tokens', async () => {
+  const {
+    isAllowedTarget,
+    routeMetadata,
+    isTargetSignatureValid,
+    ALLOWED_HOSTS,
+    EGRESS_SCOPES,
+    hmacSha256,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isAllowedTarget('https://x.com/user/avatar.jpg'), true);
+  assert.equal(isAllowedTarget('https://e-hentai.org/g/123/456/'), true);
+  assert.equal(isAllowedTarget('http://playno1.com/cover.jpg'), true);
+  assert.equal(isAllowedTarget('https://127.0.0.1/malicious'), false);
+  assert.equal(isAllowedTarget('https://evil.attacker.com/image.jpg'), false);
+  assert.equal(isAllowedTarget('ftp://example.com/file'), false);
+  assert.equal(isAllowedTarget(null), false);
+
+  assert.deepEqual(routeMetadata({ egressScope: 'session', source: 'twitter' }), { egressScope: 'session', source: 'twitter' });
+  assert.deepEqual(routeMetadata({}), {});
+  assert.throws(() => routeMetadata({ egressScope: 'invalid' }), /unsupported egress scope/);
+  assert.throws(() => routeMetadata({ source: '??bad source' }), /unsupported route source/);
+
+  const payload = 'eyJ1cmwiOiJodHRwczovL3guY29tIn0';
+  const secret = 'sig-secret';
+  const validSig = hmacSha256(payload, secret, 'base64url');
+  assert.equal(isTargetSignatureValid(`${payload}.${validSig}`, secret), true);
+  assert.equal(isTargetSignatureValid(`${payload}.invalid`, secret), false);
+  assert.equal(isTargetSignatureValid(null, secret), false);
+
+  assert.equal(EGRESS_SCOPES.has('public'), true);
+  assert.equal(EGRESS_SCOPES.has('session'), true);
+  assert.equal(EGRESS_SCOPES.has('sticky'), true);
+  assert.equal(ALLOWED_HOSTS.includes('x.com'), true);
+  assert.equal(ALLOWED_HOSTS.includes('e-hentai.org'), true);
+});
+
 test('publicLeaseView, isChunkSignatureValid and DEFAULT_LEASE constants project leases and validate chunk signatures', async () => {
   const {
     publicLeaseView,
