@@ -586,6 +586,14 @@ export function isClientAbortError(error) {
     || message.includes('aborted');
 }
 
+export const ALIGN_64K = 64 * 1024;
+
+export function align64k(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return ALIGN_64K;
+  return Math.max(1, Math.ceil(num / ALIGN_64K)) * ALIGN_64K;
+}
+
 export function durationCheckpoint(results = [], count = 0) {
   const safeCount = Number.isInteger(count) ? count : 0;
   if (!safeCount || !Array.isArray(results) || !results.length) return 0;

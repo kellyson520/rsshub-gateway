@@ -89,6 +89,18 @@ test('readLimited and readBinaryLimited read response bodies with limits', async
   await assert.rejects(() => readLimited(new Response('hello world'), 4), /too large/);
 });
 
+test('align64k and ALIGN_64K round positive byte sizes up to nearest 64KiB boundary', async () => {
+  const { align64k, ALIGN_64K } = await import('../src/http-utils.js');
+  assert.equal(ALIGN_64K, 65536);
+  assert.equal(align64k(1), 65536);
+  assert.equal(align64k(65536), 65536);
+  assert.equal(align64k(65537), 131072);
+  assert.equal(align64k(0), 65536);
+  assert.equal(align64k(-100), 65536);
+  assert.equal(align64k(null), 65536);
+  assert.equal(align64k(undefined), 65536);
+});
+
 test('mapWithConcurrency and durationCheckpoint run bounded tasks and compute latency checkpoints', async () => {
   const { durationCheckpoint } = await import('../src/http-utils.js');
   const seen = [];

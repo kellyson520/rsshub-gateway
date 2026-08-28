@@ -384,6 +384,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
+  - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
 
 ## Rollback
 

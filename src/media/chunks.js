@@ -7,6 +7,8 @@
  * bandwidth estimate sizes chunks to roughly `targetSeconds` of stream.
  */
 
+import { align64k, ALIGN_64K } from '../http-utils.js';
+
 const MIN_CHUNK_SIZE = 256 * 1024;
 const MAX_CHUNK_SIZE = 16 * 1024 * 1024;
 const MAX_CHUNKS = 256;
@@ -17,6 +19,7 @@ export {
   MAX_CHUNK_SIZE,
   MAX_CHUNKS,
   DEFAULT_TARGET_SECONDS,
+  ALIGN_64K,
   sizeTier,
   align64k,
 };
@@ -26,10 +29,6 @@ function sizeTier(totalBytes) {
   if (totalBytes <= 512 * 1024 * 1024) return 4 * 1024 * 1024;
   if (totalBytes <= 2 * 1024 ** 3) return 8 * 1024 * 1024;
   return MAX_CHUNK_SIZE;
-}
-
-function align64k(value) {
-  return Math.max(1, Math.ceil(value / (64 * 1024))) * (64 * 1024);
 }
 
 export function adaptiveChunkSize(totalBytes, {
