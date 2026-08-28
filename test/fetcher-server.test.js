@@ -31,8 +31,8 @@ test('registerDispatcherRoutes posts routes with bearer token and returns true',
       token: 'reg-token',
       routes: [{ routeId: '/iwara/users/:username/:kind?', backend: 'sidecar://fetcher-iwara:8000', fallback_upstream: true, cacheTtl: 900 }],
       name: 'fetcher-iwara',
-      retries: 2,
-      retryDelayMs: 10,
+      retries: 5,
+      retryDelayMs: 20,
     });
     assert.equal(ok, true);
     assert.equal(requests.length, 1);
