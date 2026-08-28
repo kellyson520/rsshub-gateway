@@ -1,17 +1,26 @@
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import {
+  DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
   escapeHtml,
+  isLinuxdoTopicTarget,
+  LINUXDO_MATCH_HOSTS as MATCH_HOSTS,
+  linuxdoTopicId,
   matchesHost,
   signedGatewayUrl,
 } from '../http-utils.js';
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;
-export const MATCH_HOSTS = Object.freeze(['linux.do']);
-export const DEFAULT_UNAVAILABLE_MESSAGE = 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
 
 const SITE_BASE = 'https://linux.do';
+
+export {
+  MATCH_HOSTS,
+  DEFAULT_UNAVAILABLE_MESSAGE,
+  isLinuxdoTopicTarget,
+  linuxdoTopicId,
+};
 
 export function matches(hostname) {
   return matchesHost(hostname, MATCH_HOSTS);
@@ -35,22 +44,6 @@ export function isAuthenticationChallenge({ status, headers, body } = {}) {
   if (status === 401 || status === 403) return true;
   if (status < 200 || status >= 300 || typeof body !== 'string') return false;
   return body.includes('Just a moment...') || body.includes('cf-challenge');
-}
-
-export function isLinuxdoTopicTarget(value) {
-  try {
-    const target = new URL(value);
-    return target.protocol === 'https:'
-      && (target.hostname === 'linux.do' || target.hostname === 'www.linux.do')
-      && /^\/t\/(?:[^/]+\/)?\d+/.test(target.pathname);
-  } catch {
-    return false;
-  }
-}
-
-export function linuxdoTopicId(value) {
-  const match = String(value).match(/\/t\/(?:[^/]+\/)?(\d+)/);
-  return match ? match[1] : '';
 }
 
 export function linuxdoTopicPageUrl(topicId, slug = 'topic') {

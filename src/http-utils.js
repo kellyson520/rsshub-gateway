@@ -2092,6 +2092,61 @@ export function parseThumbnailTile(style, sourceUrl, baseUrl, secret, signedTarg
   };
 }
 
+export const LINUXDO_MATCH_HOSTS = Object.freeze(['linux.do']);
+export const DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE = 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
+
+export function isLinuxdoTopicTarget(value) {
+  try {
+    const target = new URL(value);
+    return target.protocol === 'https:'
+      && (target.hostname === 'linux.do' || target.hostname === 'www.linux.do')
+      && /^\/t\/(?:[^/]+\/)?\d+/.test(target.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function linuxdoTopicId(value) {
+  const match = String(value).match(/\/t\/(?:[^/]+\/)?(\d+)/);
+  return match ? match[1] : '';
+}
+
+export const IWARA_API_BASE = 'https://api.iwara.tv';
+export const IWARA_SITE_BASE = 'https://iwara.tv';
+export const IWARA_MATCH_HOSTS = Object.freeze(['iwara.tv']);
+export const DEFAULT_IWARA_UNAVAILABLE_MESSAGE = 'Iwara 内容暂时无法读取，请稍后重试或打开原始来源。';
+
+export function isIwaraVideoTarget(value) {
+  try {
+    const target = new URL(value);
+    return target.protocol === 'https:'
+      && (target.hostname === 'iwara.tv' || target.hostname === 'www.iwara.tv')
+      && /^\/video\/[^/]+/.test(target.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function iwaraVideoId(value) {
+  const match = String(value).match(/\/video\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+export function iwaraThumbnailUrl(fileId, index = 0) {
+  const frame = String(index).padStart(2, '0');
+  return `https://i.iwara.tv/image/thumbnail/${fileId}/thumbnail-${frame}.jpg`;
+}
+
+export function selectIwaraVariant(variants = []) {
+  const numeric = variants
+    .map((variant, index) => ({ variant, index, score: Number.parseInt(String(variant.name), 10) }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  const best = numeric[0]?.variant || variants[0];
+  const source = best?.src?.view || best?.src?.download;
+  return source ? { url: source.startsWith('//') ? `https:${source}` : source } : null;
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

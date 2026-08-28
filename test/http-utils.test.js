@@ -1629,6 +1629,39 @@ test('canonical system gateway configuration default constants are defined and e
   assert.equal(isAdultMediaChallenge({ status: 200, body: '<html>Normal page content</html>' }), false);
 
   const {
+    isLinuxdoTopicTarget,
+    linuxdoTopicId,
+    LINUXDO_MATCH_HOSTS,
+    DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE,
+    isIwaraVideoTarget,
+    iwaraVideoId,
+    iwaraThumbnailUrl,
+    selectIwaraVariant,
+    IWARA_MATCH_HOSTS,
+    DEFAULT_IWARA_UNAVAILABLE_MESSAGE,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/t/topic/123'), true);
+  assert.equal(isLinuxdoTopicTarget('https://linux.do/latest'), false);
+  assert.equal(linuxdoTopicId('https://linux.do/t/topic/123'), '123');
+  assert.ok(LINUXDO_MATCH_HOSTS.includes('linux.do'));
+  assert.equal(typeof DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE, 'string');
+
+  assert.equal(isIwaraVideoTarget('https://iwara.tv/video/abc123xyz'), true);
+  assert.equal(isIwaraVideoTarget('https://iwara.tv/image/abc123xyz'), false);
+  assert.equal(iwaraVideoId('https://iwara.tv/video/abc123xyz'), 'abc123xyz');
+  assert.equal(iwaraThumbnailUrl('file-id-1', 2), 'https://i.iwara.tv/image/thumbnail/file-id-1/thumbnail-02.jpg');
+  assert.ok(IWARA_MATCH_HOSTS.includes('iwara.tv'));
+  assert.equal(typeof DEFAULT_IWARA_UNAVAILABLE_MESSAGE, 'string');
+
+  const picked = selectIwaraVariant([
+    { name: '540', src: { view: '//example.com/540.mp4' } },
+    { name: '1080', src: { view: '//example.com/1080.mp4' } },
+    { name: '720', src: { view: '//example.com/720.mp4' } },
+  ]);
+  assert.equal(picked?.url, 'https://example.com/1080.mp4');
+
+  const {
     SLICE_ALIGN,
     DEFAULT_SLICE_SIZE,
     DEFAULT_SLICE_LOOKAHEAD_BYTES,

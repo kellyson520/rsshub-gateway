@@ -1,10 +1,18 @@
 import {
   cdata,
   createMediaSignedTarget,
+  DEFAULT_IWARA_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
   escapeXml,
+  IWARA_API_BASE as API_BASE,
+  IWARA_MATCH_HOSTS as MATCH_HOSTS,
+  IWARA_SITE_BASE as SITE_BASE,
+  isIwaraVideoTarget,
+  iwaraThumbnailUrl,
+  iwaraVideoId,
   jwtExpiryMs,
   matchesHost,
   nonNegativeInteger,
+  selectIwaraVariant,
 } from '../http-utils.js';
 
 export {
@@ -14,15 +22,15 @@ export {
   jwtExpiryMs,
   escapeXml,
   cdata,
+  isIwaraVideoTarget,
+  iwaraVideoId,
+  iwaraThumbnailUrl,
+  selectIwaraVariant,
+  DEFAULT_UNAVAILABLE_MESSAGE,
 };
 
 export const name = 'iwara';
 export const publiclyReadable = true;
-export const DEFAULT_UNAVAILABLE_MESSAGE = 'Iwara 内容暂时无法读取，请稍后重试或打开原始来源。';
-
-const API_BASE = 'https://api.iwara.tv';
-const SITE_BASE = 'https://iwara.tv';
-const MATCH_HOSTS = Object.freeze(['iwara.tv']);
 
 export function matches(hostname) {
   return matchesHost(hostname, MATCH_HOSTS);
@@ -52,39 +60,8 @@ export function isAuthenticationChallenge({ status, headers, body } = {}) {
     && /(?:name=["']password["']|type=["']password["'])/i.test(body);
 }
 
-export function isIwaraVideoTarget(value) {
-  try {
-    const target = new URL(value);
-    return target.protocol === 'https:'
-      && (target.hostname === 'iwara.tv' || target.hostname === 'www.iwara.tv')
-      && /^\/video\/[^/]+/.test(target.pathname);
-  } catch {
-    return false;
-  }
-}
-
-export function iwaraVideoId(value) {
-  const match = String(value).match(/\/video\/([^/]+)/);
-  return match ? decodeURIComponent(match[1]) : '';
-}
-
-export function iwaraThumbnailUrl(fileId, index = 0) {
-  const frame = String(index).padStart(2, '0');
-  return `https://i.iwara.tv/image/thumbnail/${fileId}/thumbnail-${frame}.jpg`;
-}
-
 export function iwaraVideoPageUrl(video) {
   return `${SITE_BASE}/video/${video.id}/${video.slug || ''}`;
-}
-
-export function selectIwaraVariant(variants = []) {
-  const numeric = variants
-    .map((variant, index) => ({ variant, index, score: Number.parseInt(String(variant.name), 10) }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .sort((left, right) => right.score - left.score || left.index - right.index);
-  const best = numeric[0]?.variant || variants[0];
-  const source = best?.src?.view || best?.src?.download;
-  return source ? { url: source.startsWith('//') ? `https:${source}` : source } : null;
 }
 
 export function renderIwaraFeed({ username = '', kind = 'video', videos = [], selfUrl = '' } = {}) {
