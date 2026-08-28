@@ -2266,6 +2266,135 @@ export function restoreDownloadSessionRecord(record) {
   };
 }
 
+export async function loadCachedMedia({ cache, fetcher, target, range, maxBytes, request }) {
+  const requestOptions = { ...request, range, circuit: false };
+  const foreground = request?.priority === 'foreground';
+  if (!cache || range) {
+    return { response: await fetcher(target, requestOptions), cacheState: 'BYPASS' };
+  }
+  const result = await cache.getOrLoad(target, 'media', async () => {
+    const remote = await fetcher(target, requestOptions);
+    const contentType = remote.headers.get('content-type') || '';
+    const contentLength = nonNegativeInteger(remote.headers.get('content-length'), null);
+    const cacheable = remote.ok
+      && contentType.toLowerCase().startsWith('image/')
+      && contentLength !== null
+      && contentLength <= maxBytes;
+    if (!cacheable) {
+      return { passthrough: remote, cacheable: false };
+    }
+    if (foreground && typeof remote.clone === 'function') {
+      const cacheCopy = remote.clone();
+      return {
+        passthrough: remote,
+        status: remote.status,
+        headers: responseHeaders(remote),
+        cacheable: true,
+        cacheBody: async () => ({
+          status: remote.status,
+          headers: responseHeaders(remote),
+          body: await readBinaryLimited(cacheCopy, maxBytes),
+          cacheable: true,
+        }),
+      };
+    }
+    if (foreground && remote.body && typeof remote.body[Symbol.asyncIterator] !== 'function'
+      && typeof remote.body[Symbol.iterator] === 'function') {
+      return {
+        status: remote.status,
+        headers: responseHeaders(remote),
+        body: await readBinaryLimited(remote, maxBytes),
+        cacheable: true,
+      };
+    }
+    return {
+      status: remote.status,
+      headers: responseHeaders(remote),
+      body: await readBinaryLimited(remote, maxBytes),
+      cacheable: true,
+    };
+  }, { bypassInflight: foreground, deferStore: foreground });
+  cacheStateLog(target, 'media', result.state);
+  return {
+    response: result.passthrough || responseFromCachedDocument(result),
+    cacheState: result.state,
+  };
+}
+
+export async function fetchCachedMedia(options) {
+  return (await loadCachedMedia(options)).response;
+}
+
+export async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency }) {
+  const targets = dedupe((pages || []).map((page) => page?.mediaTarget).filter(Boolean)).slice(0, count);
+  if (!cache || !targets.length) return { targets, failedTargets: [] };
+  const results = await mapWithConcurrency(targets, concurrency, async (target) => {
+    try {
+      const loaded = await loadCachedMedia({ cache, fetcher, target, maxBytes });
+      await loaded.response.body?.cancel();
+      return { target, failed: !loaded.response.ok };
+    } catch {
+      return { target, failed: true };
+    }
+  });
+  return { targets, failedTargets: results.filter((result) => result.failed).map((result) => result.target) };
+}
+
+export async function discoverEhGallery({
+  adapter,
+  target,
+  initialHtml,
+  fetchExternal,
+  concurrency,
+  maxPages,
+}) {
+  const galleryUrls = adapter.galleryPageUrls(initialHtml, target);
+  const galleryResults = await mapWithConcurrency(galleryUrls, concurrency, async (galleryUrl, index) => {
+    if (index === 0) return { url: galleryUrl, body: initialHtml, ok: true, status: 200 };
+    try {
+      const remote = await fetchExternal(adapter.readerTarget(galleryUrl), { galleryShard: index });
+      const body = await readLimited(remote);
+      const contentType = remote.headers.get('content-type') || '';
+      if (!remote.ok || !contentType.includes('html')) {
+        return { url: galleryUrl, body: '', ok: false, status: remote.status, failure: { kind: 'gallery', pageNumber: index + 1 } };
+      }
+      return { url: galleryUrl, body, ok: true, status: remote.status };
+    } catch {
+      return { url: galleryUrl, body: '', ok: false, status: 502, failure: { kind: 'gallery', pageNumber: index + 1 } };
+    }
+  });
+
+  const imageUrls = [];
+  const seen = new Set();
+  const failures = galleryResults.filter((result) => !result.ok).map((result) => ({
+    pageNumber: result.failure.pageNumber,
+    message: failureMessage(result.failure.kind, result.failure.pageNumber),
+  }));
+  for (const result of galleryResults) {
+    if (!result.ok) continue;
+    for (const imageUrl of adapter.imagePageUrls(result.body, result.url)) {
+      if (!seen.has(imageUrl)) {
+        seen.add(imageUrl);
+        imageUrls.push(imageUrl);
+      }
+    }
+  }
+
+  const truncated = imageUrls.length > maxPages;
+  const selectedImageUrls = imageUrls.slice(0, maxPages);
+  if (truncated) failures.push({ message: '画廊页数超过网关预处理上限，后续页面未读取' });
+  return {
+    galleryResults,
+    selectedImageUrls,
+    imageUrls,
+    failures,
+    truncated,
+    totalPages: imageUrls.length,
+    status: galleryResults.find((result) => !result.ok)?.status || 200,
+    title: extractEhGalleryTitle({ url: target, html: initialHtml }),
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
