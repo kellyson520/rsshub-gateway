@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 
 export function safeJsonParse(value, fallback = null) {
   if (value === null || value === undefined) return fallback;
@@ -355,7 +354,18 @@ export function parseProbeTargets(value, legacyProbeUrl) {
   };
 }
 
+export const IMAGE_VARIANT_WIDTHS = Object.freeze([1280, 1920, 2560]);
+export const SUPPORTED_IMAGE_VARIANT_TYPES = Object.freeze(new Set(['image/jpeg', 'image/png', 'image/webp']));
 export const IMAGE_VARIANT_CACHE_VERSION = 'v1';
+
+export function isValidImageVariantWidth(width) {
+  return IMAGE_VARIANT_WIDTHS.includes(Number(width));
+}
+
+export function isSupportedImageVariantType(contentType) {
+  const normalized = String(contentType || '').split(';', 1)[0].trim().toLowerCase();
+  return SUPPORTED_IMAGE_VARIANT_TYPES.has(normalized);
+}
 
 export function requestedImageVariantWidth(searchParams) {
   if (!searchParams.has('w')) return { width: undefined };

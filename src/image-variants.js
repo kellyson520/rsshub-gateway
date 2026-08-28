@@ -1,8 +1,17 @@
 import sharp from 'sharp';
+import {
+  IMAGE_VARIANT_WIDTHS,
+  isSupportedImageVariantType,
+  isValidImageVariantWidth,
+  SUPPORTED_IMAGE_VARIANT_TYPES as SUPPORTED_TYPES,
+} from './http-utils.js';
 
-export const IMAGE_VARIANT_WIDTHS = Object.freeze([1280, 1920, 2560]);
+export {
+  IMAGE_VARIANT_WIDTHS,
+  isSupportedImageVariantType,
+  isValidImageVariantWidth,
+};
 
-const SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const WEBP_OPTIONS = Object.freeze({
   quality: 92,
   nearLossless: true,
@@ -37,14 +46,6 @@ async function encodeWebp({ body, width, options }) {
     .resize({ width, withoutEnlargement: true })
     .webp(options)
     .toBuffer();
-}
-
-export function isSupportedImageVariantType(contentType) {
-  return SUPPORTED_TYPES.has(normalizedType(contentType));
-}
-
-export function isValidImageVariantWidth(width) {
-  return IMAGE_VARIANT_WIDTHS.includes(Number(width));
 }
 
 export async function createImageVariant({ body, contentType, width, encoder = encodeWebp }) {

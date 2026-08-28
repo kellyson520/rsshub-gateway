@@ -58,10 +58,33 @@ test('isEhImagePageTarget and imageVariantCacheUrl', () => {
   assert.equal(imageVariantCacheUrl('https://example.com/i.png', 1920), 'https://example.com/i.png#rsshub-gateway-v1-w1920');
 });
 
-test('requestedImageVariantWidth validates widths', () => {
+test('requestedImageVariantWidth, isValidImageVariantWidth and isSupportedImageVariantType validate widths and mime types', async () => {
+  const {
+    isValidImageVariantWidth,
+    isSupportedImageVariantType,
+    IMAGE_VARIANT_WIDTHS,
+    SUPPORTED_IMAGE_VARIANT_TYPES,
+  } = await import('../src/http-utils.js');
+
   assert.deepEqual(requestedImageVariantWidth(new URLSearchParams('w=1920')), { width: 1920 });
   assert.deepEqual(requestedImageVariantWidth(new URLSearchParams('w=111')), { error: true });
   assert.deepEqual(requestedImageVariantWidth(new URLSearchParams('')), { width: undefined });
+
+  assert.equal(isValidImageVariantWidth(1280), true);
+  assert.equal(isValidImageVariantWidth(1920), true);
+  assert.equal(isValidImageVariantWidth(2560), true);
+  assert.equal(isValidImageVariantWidth(100), false);
+  assert.equal(isValidImageVariantWidth(null), false);
+
+  assert.equal(isSupportedImageVariantType('image/jpeg'), true);
+  assert.equal(isSupportedImageVariantType('image/png; charset=utf-8'), true);
+  assert.equal(isSupportedImageVariantType('image/webp'), true);
+  assert.equal(isSupportedImageVariantType('image/gif'), false);
+  assert.equal(isSupportedImageVariantType('text/plain'), false);
+  assert.equal(isSupportedImageVariantType(null), false);
+
+  assert.ok(IMAGE_VARIANT_WIDTHS.includes(1920));
+  assert.ok(SUPPORTED_IMAGE_VARIANT_TYPES.has('image/webp'));
 });
 
 test('parseProbeTargets handles JSON, defaults and host overrides', () => {
