@@ -445,7 +445,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `tileStyle(tile)`, `tileImage(tile, className, alt, loading)`, `EH_METADATA_LABELS`: Thumbnail sprite tile styling, localized metadata mappings and lazy image element builder.
   - `isEhentaiPage(url, pattern)`, `isEhImagePageTarget(url)`, `EH_GALLERY_PATH`, `EH_IMAGE_PATH`: E-Hentai gallery and reader image target page URL matchers and route regex patterns.
   - `mediaSrcset(media, widths)`, `numericStyle(style, property, fallback)`: Responsive image candidate set generator and CSS pixel style numeric bounds clamper.
-  - `compilePattern(routeId)`, `normalizeRoute(raw)`, `matchSegments(pattern, segments)`, `matchRouteList(routes, path)`, `registerRouteEntries(list, entries)`, `unregisterRouteEntries(list, ids)`, `buildSidecarFetchPayload(route, params, opts)`, `sidecarUrl(backend)`: Zero-overhead dynamic segment route compiler, config normalizer, path matcher, route registry manager, and sidecar backend URL resolver.
+  - `createDispatcher(opts)`, `compilePattern(routeId)`, `normalizeRoute(raw)`, `matchSegments(pattern, segments)`, `matchRouteList(routes, path)`, `registerRouteEntries(list, entries)`, `unregisterRouteEntries(list, ids)`, `buildSidecarFetchPayload(route, params, opts)`, `sidecarUrl(backend)`: Zero-overhead dynamic segment route dispatcher, YAML route configuration parser, runtime route registration, and Sidecar backend RPC client.
   - `cookiesObject(cookies)`, `resolveRedirect(template, params)`: Cookie header normalizer and dynamic URL redirection template resolver.
 
 ## Rollback
