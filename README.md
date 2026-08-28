@@ -385,6 +385,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `cookiesObject(cookies)`, `resolveRedirect(template, params)`: Cookie header normalizer and dynamic URL redirection template resolver.
 
 ## Rollback
 

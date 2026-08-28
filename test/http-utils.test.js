@@ -625,6 +625,27 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('cookiesObject and resolveRedirect parse cookie headers and resolve route templates', async () => {
+  const { cookiesObject, resolveRedirect } = await import('../src/http-utils.js');
+
+  const cookieStr = 'session=abc; token=123; tracking=xyz; empty=';
+  assert.deepEqual(cookiesObject(cookieStr), {
+    session: 'abc',
+    token: '123',
+    tracking: 'xyz',
+    empty: '',
+  });
+
+  assert.deepEqual(cookiesObject({ a: 1, b: 'two' }), { a: '1', b: 'two' });
+  assert.deepEqual(cookiesObject(null), {});
+  assert.deepEqual(cookiesObject(undefined), {});
+
+  assert.equal(resolveRedirect('/user/:id/posts/:page?', { id: 'alice', page: 2 }), '/user/alice/posts/2');
+  assert.equal(resolveRedirect('/user/:id/posts/:page?', { id: 'alice' }), '/user/alice/posts');
+  assert.equal(resolveRedirect('/tag/:name', { name: 'c++ & rust' }), '/tag/c%2B%2B%20%26%20rust');
+  assert.equal(resolveRedirect(null), null);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

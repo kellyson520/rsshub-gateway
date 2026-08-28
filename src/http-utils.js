@@ -663,6 +663,37 @@ export function routeBucket(pathname) {
   return 'feed';
 }
 
+export function cookiesObject(cookies) {
+  if (cookies === undefined || cookies === null) return {};
+  if (typeof cookies === 'string') {
+    const parsed = {};
+    for (const part of cookies.split(';')) {
+      const separator = part.indexOf('=');
+      if (separator <= 0) continue;
+      const name = part.slice(0, separator).trim();
+      const value = part.slice(separator + 1).trim();
+      if (name && !(name in parsed)) parsed[name] = value;
+    }
+    return parsed;
+  }
+  if (typeof cookies === 'object') {
+    return Object.fromEntries(
+      Object.entries(cookies)
+        .filter(([name, value]) => name && value !== undefined && value !== null)
+        .map(([name, value]) => [String(name).trim(), String(value).trim()]),
+    );
+  }
+  return {};
+}
+
+export function resolveRedirect(template, params = {}) {
+  if (typeof template !== 'string') return null;
+  return template.replace(/:([a-zA-Z0-9_]+)\??/g, (_, name) => {
+    const value = params && typeof params === 'object' ? params[name] : undefined;
+    return value !== undefined && value !== null ? encodeURIComponent(String(value)) : '';
+  }).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+}
+
 export function durationCheckpoint(results = [], count = 0) {
   const safeCount = Number.isInteger(count) ? count : 0;
   if (!safeCount || !Array.isArray(results) || !results.length) return 0;

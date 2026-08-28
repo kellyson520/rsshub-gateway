@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
+import { cookiesObject, resolveRedirect } from './http-utils.js';
 
 const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
 // 浏览器渲染类 sidecar（fetcher-missav）需要更长时间；curl_cffi 类 sidecar 远快于此。
@@ -90,39 +91,13 @@ function sidecarUrl(backend) {
   return `http://${hostPort}`;
 }
 
-function cookiesObject(cookies) {
-  if (cookies === undefined || cookies === null) return {};
-  if (typeof cookies === 'string') {
-    const parsed = {};
-    for (const part of cookies.split(';')) {
-      const separator = part.indexOf('=');
-      if (separator <= 0) continue;
-      const name = part.slice(0, separator).trim();
-      const value = part.slice(separator + 1).trim();
-      if (name && !(name in parsed)) parsed[name] = value;
-    }
-    return parsed;
-  }
-  if (typeof cookies === 'object') {
-    return Object.fromEntries(Object.entries(cookies).map(([name, value]) => [String(name), String(value)]));
-  }
-  return {};
-}
-
-export function resolveRedirect(template, params = {}) {
-  if (typeof template !== 'string') return null;
-  return template.replace(/:([a-zA-Z0-9_]+)\??/g, (_, name) => {
-    const value = params[name];
-    return value !== undefined && value !== null ? encodeURIComponent(String(value)) : '';
-  }).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
-}
-
 export {
   compilePattern,
   normalizeRoute,
   matchSegments,
   sidecarUrl,
   cookiesObject,
+  resolveRedirect,
   DEFAULT_SIDECAR_TIMEOUT_MS,
 };
 
