@@ -1292,6 +1292,72 @@ test('session affinity helpers and background poller service orchestrate tasks c
   assert.equal(poller.stats().tasks.length, 0);
 });
 
+test('egress policies and resumable range stream pump operate accurately', async () => {
+  const {
+    isPublicEgressTarget,
+    isPublicRequestTarget,
+    egressPolicyForUrl,
+    egressPolicyForRequest,
+    EGRESS_POLICIES,
+    DEFAULT_PUBLIC_HOSTS,
+    DEFAULT_PUBLIC_REQUEST_HOSTS,
+    isResumableStatus,
+    DEFAULT_RESUMABLE_MAX_ATTEMPTS,
+    DEFAULT_RESUMABLE_BACKOFF_MS,
+    pumpResumableRange,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isPublicEgressTarget('https://e-hentai.org/g/1/2'), true);
+  assert.equal(isPublicEgressTarget('https://unknown-domain.xyz/'), false);
+  assert.equal(isPublicRequestTarget('https://x.com/status/123'), true);
+  assert.equal(egressPolicyForUrl('https://e-hentai.org/g/1/2'), EGRESS_POLICIES.PUBLIC);
+  assert.equal(egressPolicyForUrl('https://other.com/'), EGRESS_POLICIES.STICKY);
+
+  assert.equal(egressPolicyForRequest('https://x.com/status/1', { scope: 'session' }), EGRESS_POLICIES.STICKY);
+  assert.equal(egressPolicyForRequest('https://x.com/status/1', { scope: 'public' }), EGRESS_POLICIES.PUBLIC);
+
+  assert.equal(isResumableStatus(200), true);
+  assert.equal(isResumableStatus(206), true);
+  assert.equal(isResumableStatus(404), false);
+  assert.equal(isResumableStatus(500), false);
+
+  assert.equal(DEFAULT_RESUMABLE_MAX_ATTEMPTS, 3);
+  assert.equal(DEFAULT_RESUMABLE_BACKOFF_MS, 100);
+
+  // Test pumpResumableRange with mock stream and response
+  const chunks = [];
+  const fakeRes = {
+    destroyed: false,
+    writableEnded: false,
+    write: (chunk, cb) => {
+      chunks.push(Buffer.from(chunk));
+      cb?.();
+      return true;
+    },
+    end: () => {
+      fakeRes.writableEnded = true;
+    },
+  };
+  const webStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(Buffer.from('hello range'));
+      controller.close();
+    },
+  });
+  const fakeResponse = new Response(webStream, { status: 206 });
+
+  const result = await pumpResumableRange({
+    response: fakeResponse,
+    fetchRange: async () => null,
+    res: fakeRes,
+    start: 0,
+    end: 10,
+  });
+
+  assert.equal(result.written, 11);
+  assert.equal(Buffer.concat(chunks).toString('utf8'), 'hello range');
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
