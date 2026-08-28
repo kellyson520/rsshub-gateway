@@ -4,8 +4,10 @@ import { createBrowserFetchClient } from '../browser-fetch.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
 import {
+  BROWSER_FETCH_HOSTS,
   browserFetchHost as baseBrowserFetchHost,
   DEFAULT_BROWSER_FETCH_HOSTS,
+  isBrowserFetchTarget,
   parseBrowserFetchHosts,
   safeHost,
 } from '../http-utils.js';
@@ -14,11 +16,9 @@ export {
   safeHost,
   DEFAULT_BROWSER_FETCH_HOSTS,
   parseBrowserFetchHosts,
+  BROWSER_FETCH_HOSTS,
+  isBrowserFetchTarget,
 };
-
-export const BROWSER_FETCH_HOSTS = Object.freeze(
-  parseBrowserFetchHosts(process.env.GATEWAY_BROWSER_FETCH_HOSTS),
-);
 
 export function browserFetchHost(url) {
   return baseBrowserFetchHost(url, BROWSER_FETCH_HOSTS);

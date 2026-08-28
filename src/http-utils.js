@@ -1873,6 +1873,14 @@ export function browserFetchHost(url, hosts = DEFAULT_BROWSER_FETCH_HOSTS) {
   return Boolean(host) && matchesHost(host, hosts);
 }
 
+export const BROWSER_FETCH_HOSTS = Object.freeze(
+  parseBrowserFetchHosts(process.env.GATEWAY_BROWSER_FETCH_HOSTS),
+);
+
+export function isBrowserFetchTarget(url, hosts = BROWSER_FETCH_HOSTS) {
+  return browserFetchHost(url, hosts);
+}
+
 export const BASIC_AUTH_HEADER_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
 
 export function parseProxyAuth(header) {

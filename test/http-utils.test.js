@@ -1501,6 +1501,12 @@ test('browser fetch hosts matching and proxy basic auth authority parsers work r
   assert.equal(browserFetchHost('https://javbus.com/ABC-123'), true);
   assert.equal(browserFetchHost('https://normal-domain.com/path'), false);
 
+  const { BROWSER_FETCH_HOSTS, isBrowserFetchTarget } = await import('../src/http-utils.js');
+  assert.ok(Array.isArray(BROWSER_FETCH_HOSTS));
+  assert.ok(BROWSER_FETCH_HOSTS.includes('jable.tv'));
+  assert.equal(isBrowserFetchTarget('https://jable.tv/videos/123'), true);
+  assert.equal(isBrowserFetchTarget('https://normal-domain.com'), false);
+
   const auth = parseProxyAuth(`Basic ${Buffer.from('admin:secret123').toString('base64')}`);
   assert.deepEqual(auth, { username: 'admin', password: 'secret123' });
   assert.equal(parseProxyAuth('Invalid header'), null);
