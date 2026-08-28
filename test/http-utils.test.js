@@ -1409,6 +1409,57 @@ test('browser render client and browser fetch message adapter helpers function c
   assert.equal(rendered.status, 200);
 });
 
+test('mihomo egress and lease backfill utilities format lane identities and probe configurations', async () => {
+  const {
+    isSubscriptionMetadataName,
+    boundedPositiveInteger,
+    toUrlList,
+    normalizeProbeTargets,
+    laneId,
+    laneGroup,
+    sessionLaneId,
+    sessionLaneGroup,
+    listenerUrl,
+    DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY,
+    DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET,
+    DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES,
+    DEFAULT_EGRESS_CONTROLLER_URL,
+    DEFAULT_EGRESS_LANE_COUNT,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY, 2);
+  assert.equal(DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET, 128 * 1024 ** 2);
+  assert.equal(DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES, 256 * 1024 ** 2);
+  assert.equal(DEFAULT_EGRESS_CONTROLLER_URL, 'http://127.0.0.1:9090');
+  assert.equal(DEFAULT_EGRESS_LANE_COUNT, 12);
+
+  assert.equal(isSubscriptionMetadataName('套餐到期时间: 2026-12-31'), true);
+  assert.equal(isSubscriptionMetadataName('Remaining Traffic 50GB'), true);
+  assert.equal(isSubscriptionMetadataName('US-Node-01'), false);
+
+  assert.equal(boundedPositiveInteger(5, 1, 10), 5);
+  assert.equal(boundedPositiveInteger(0, 1, 10), 1);
+  assert.equal(boundedPositiveInteger(50, 1, 10), 10);
+
+  assert.deepEqual(toUrlList('https://example.com'), ['https://example.com']);
+  assert.deepEqual(toUrlList(['https://a.com', '', 'https://b.com']), ['https://a.com', 'https://b.com']);
+
+  const targets = normalizeProbeTargets({ public: 'https://p.com', sticky: ['https://s.com'] });
+  assert.deepEqual(targets.public, ['https://p.com']);
+  assert.deepEqual(targets.sticky, ['https://s.com']);
+
+  const legacy = normalizeProbeTargets(null, 'https://legacy.com');
+  assert.deepEqual(legacy.public, ['https://legacy.com']);
+
+  assert.equal(laneId(0), 'lane-01');
+  assert.equal(laneGroup(0), 'EGRESS_LANE_01');
+  assert.equal(sessionLaneId(2), 'session-lane-03');
+  assert.equal(sessionLaneGroup(2), 'SESSION_LANE_03');
+
+  assert.equal(listenerUrl('http://127.0.0.1', 0, 7901), 'http://127.0.0.1:7901');
+  assert.equal(listenerUrl('http://127.0.0.1', 2, 7921), 'http://127.0.0.1:7923');
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

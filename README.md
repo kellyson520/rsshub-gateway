@@ -387,6 +387,9 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `laneId(index)`, `laneGroup(index)`, `sessionLaneId(index)`, `sessionLaneGroup(index)`, `listenerUrl(baseUrl, index, port)`: Egress lane slot identifier generators and local proxy listener URL builders.
+  - `isSubscriptionMetadataName(name)`, `normalizeProbeTargets(targets, legacyUrl)`, `boundedPositiveInteger(val, def, max)`, `toUrlList(val)`: Mihomo proxy node metadata detector, multi-scope probe target normalizers and bounded positive integer clampers.
+  - `DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY`, `DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET`, `DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES`: One-time lease download background cache backfill concurrency and memory bounds constants.
   - `createBrowserRenderClient(opts)`, `DEFAULT_RENDER_TIMEOUT_MS`, `MIN_RENDER_TIMEOUT_MS`, `RENDER_HEALTH_TIMEOUT_MS`, `RENDER_BUFFER_TIMEOUT_MS`: Headless browser-side rendering client with health checking and automatic timeout budgets.
   - `browserFetchLineError(msg, opts)`, `browserRequestTimeoutMs(timeout)`, `messageToResponse(msg)`: Python TLS-fingerprint subprocess message decoder, typed upstream error wrapper and request deadline calculator.
   - `pumpResumableRange(opts)`, `pipeAttempt(stream, res, onBytes, onAbort)`, `isResumableStatus(status)`, `DEFAULT_RESUMABLE_MAX_ATTEMPTS`, `DEFAULT_RESUMABLE_BACKOFF_MS`: Network failure resilient chunk-seeking streaming pump with automatic Range restart and client abort cleanup.

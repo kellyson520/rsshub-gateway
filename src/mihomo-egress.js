@@ -1,79 +1,36 @@
 import { ProxyAgent } from 'undici';
-import { boundedInteger, positiveInteger, safeEvent } from './http-utils.js';
+import {
+  boundedInteger,
+  boundedPositiveInteger,
+  DEFAULT_EGRESS_CONTROLLER_URL,
+  DEFAULT_EGRESS_LANE_COUNT,
+  DEFAULT_EGRESS_LISTENER_BASE_URL,
+  DEFAULT_EGRESS_PROBE_CACHE_MS,
+  DEFAULT_EGRESS_PROBE_TIMEOUT_MS,
+  DEFAULT_EGRESS_SESSION_LANE_COUNT,
+  DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT,
+  EGRESS_GROUP_TYPES as GROUP_TYPES,
+  EGRESS_PUBLIC_GROUP as PUBLIC_GROUP,
+  EGRESS_RESERVED_NAMES as RESERVED_NAMES,
+  isSubscriptionMetadataName,
+  laneGroup,
+  laneId,
+  listenerUrl,
+  normalizeProbeTargets,
+  positiveInteger,
+  safeEvent,
+  sessionLaneGroup,
+  sessionLaneId,
+  toUrlList,
+} from './http-utils.js';
 
-const DEFAULT_CONTROLLER_URL = process.env.EGRESS_CONTROLLER_URL || 'http://127.0.0.1:9090';
-const DEFAULT_LISTENER_BASE_URL = process.env.EGRESS_PROXY_BASE_URL || 'http://127.0.0.1';
-const DEFAULT_LANE_COUNT = 12;
-const DEFAULT_SESSION_LANE_COUNT = 12;
-const DEFAULT_SESSION_LISTENER_BASE_PORT = 7921;
-const DEFAULT_PROBE_TIMEOUT_MS = 5_000;
-const DEFAULT_PROBE_CACHE_MS = 5 * 60_000;
-const PUBLIC_GROUP = 'PUBLIC';
-const GROUP_TYPES = new Set(['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Compatible', 'URLTest']);
-const RESERVED_NAMES = new Set(['DIRECT', 'REJECT', 'GLOBAL', 'PASS']);
-
-function isSubscriptionMetadataName(name) {
-  const value = String(name || '').trim().toLowerCase();
-  return value.includes('剩余流量')
-    || value.includes('距离下次重置')
-    || value.includes('套餐到期')
-    || value.includes('官网地址')
-    || value.includes('更新订阅')
-    || value.includes('update subscription')
-    || value.includes('remaining traffic')
-    || value.includes('subscription expires')
-    || value.includes('reset remaining');
-}
-
-function boundedPositiveInteger(value, fallback, maximum) {
-  return boundedInteger(value, fallback, 1, maximum);
-}
-
-function toUrlList(value) {
-  if (!value) return [];
-  const list = Array.isArray(value) ? value : [value];
-  return list.map(String).filter(Boolean);
-}
-
-function normalizeProbeTargets(value, legacyProbeUrl) {
-  if (value && typeof value === 'object') {
-    return {
-      public: toUrlList(value.public),
-      sticky: toUrlList(value.sticky),
-      hosts: value.hosts && typeof value.hosts === 'object' ? value.hosts : {},
-    };
-  }
-  if (!legacyProbeUrl) {
-    return { public: [], sticky: [], hosts: {} };
-  }
-  return {
-    public: toUrlList(legacyProbeUrl),
-    sticky: [],
-    hosts: {},
-  };
-}
-
-function laneId(index) {
-  return `lane-${String(index + 1).padStart(2, '0')}`;
-}
-
-function laneGroup(index) {
-  return `EGRESS_LANE_${String(index + 1).padStart(2, '0')}`;
-}
-
-function sessionLaneId(index) {
-  return `session-lane-${String(index + 1).padStart(2, '0')}`;
-}
-
-function sessionLaneGroup(index) {
-  return `SESSION_LANE_${String(index + 1).padStart(2, '0')}`;
-}
-
-function listenerUrl(baseUrl, index, basePort = 7901) {
-  const target = new URL(baseUrl);
-  target.port = String(basePort + index);
-  return target.toString().replace(/\/$/, '');
-}
+export const DEFAULT_CONTROLLER_URL = process.env.EGRESS_CONTROLLER_URL || DEFAULT_EGRESS_CONTROLLER_URL;
+export const DEFAULT_LISTENER_BASE_URL = process.env.EGRESS_PROXY_BASE_URL || DEFAULT_EGRESS_LISTENER_BASE_URL;
+export const DEFAULT_LANE_COUNT = DEFAULT_EGRESS_LANE_COUNT;
+export const DEFAULT_SESSION_LANE_COUNT = DEFAULT_EGRESS_SESSION_LANE_COUNT;
+export const DEFAULT_SESSION_LISTENER_BASE_PORT = DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT;
+export const DEFAULT_PROBE_TIMEOUT_MS = DEFAULT_EGRESS_PROBE_TIMEOUT_MS;
+export const DEFAULT_PROBE_CACHE_MS = DEFAULT_EGRESS_PROBE_CACHE_MS;
 
 export {
   isSubscriptionMetadataName,
@@ -86,13 +43,6 @@ export {
   boundedPositiveInteger,
   toUrlList,
   safeEvent,
-  DEFAULT_CONTROLLER_URL,
-  DEFAULT_LISTENER_BASE_URL,
-  DEFAULT_LANE_COUNT,
-  DEFAULT_SESSION_LANE_COUNT,
-  DEFAULT_SESSION_LISTENER_BASE_PORT,
-  DEFAULT_PROBE_TIMEOUT_MS,
-  DEFAULT_PROBE_CACHE_MS,
   PUBLIC_GROUP,
   GROUP_TYPES,
   RESERVED_NAMES,

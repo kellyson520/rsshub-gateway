@@ -1847,6 +1847,7 @@ test('download sessions track chunk progress for resume', async () => {
     assert.equal(missingResponse.status, 404);
     const postOther = await fetch(`http://127.0.0.1:${port}/_gateway/metrics`, { method: 'POST' });
     assert.equal(postOther.status, 405);
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await new Promise((resolve) => server.close(resolve));
 
     const restarted = createGatewayServer({

@@ -1732,6 +1732,84 @@ export function messageToResponse(message) {
   };
 }
 
+export const DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY = 2;
+export const DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET = 128 * 1024 ** 2;
+export const DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
+
+export const DEFAULT_EGRESS_CONTROLLER_URL = 'http://127.0.0.1:9090';
+export const DEFAULT_EGRESS_LISTENER_BASE_URL = 'http://127.0.0.1';
+export const DEFAULT_EGRESS_LANE_COUNT = 12;
+export const DEFAULT_EGRESS_SESSION_LANE_COUNT = 12;
+export const DEFAULT_EGRESS_SESSION_LISTENER_BASE_PORT = 7921;
+export const DEFAULT_EGRESS_PROBE_TIMEOUT_MS = 5_000;
+export const DEFAULT_EGRESS_PROBE_CACHE_MS = 5 * 60_000;
+export const EGRESS_PUBLIC_GROUP = 'PUBLIC';
+export const EGRESS_GROUP_TYPES = new Set(['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Compatible', 'URLTest']);
+export const EGRESS_RESERVED_NAMES = new Set(['DIRECT', 'REJECT', 'GLOBAL', 'PASS']);
+
+export function isSubscriptionMetadataName(name) {
+  const value = String(name || '').trim().toLowerCase();
+  return value.includes('剩余流量')
+    || value.includes('距离下次重置')
+    || value.includes('套餐到期')
+    || value.includes('官网地址')
+    || value.includes('更新订阅')
+    || value.includes('update subscription')
+    || value.includes('remaining traffic')
+    || value.includes('subscription expires')
+    || value.includes('reset remaining');
+}
+
+export function boundedPositiveInteger(value, fallback, maximum) {
+  return boundedInteger(value, fallback, 1, maximum);
+}
+
+export function toUrlList(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.map(String).filter(Boolean);
+}
+
+export function normalizeProbeTargets(value, legacyProbeUrl) {
+  if (value && typeof value === 'object') {
+    return {
+      public: toUrlList(value.public),
+      sticky: toUrlList(value.sticky),
+      hosts: value.hosts && typeof value.hosts === 'object' ? value.hosts : {},
+    };
+  }
+  if (!legacyProbeUrl) {
+    return { public: [], sticky: [], hosts: {} };
+  }
+  return {
+    public: toUrlList(legacyProbeUrl),
+    sticky: [],
+    hosts: {},
+  };
+}
+
+export function laneId(index) {
+  return `lane-${String(index + 1).padStart(2, '0')}`;
+}
+
+export function laneGroup(index) {
+  return `EGRESS_LANE_${String(index + 1).padStart(2, '0')}`;
+}
+
+export function sessionLaneId(index) {
+  return `session-lane-${String(index + 1).padStart(2, '0')}`;
+}
+
+export function sessionLaneGroup(index) {
+  return `SESSION_LANE_${String(index + 1).padStart(2, '0')}`;
+}
+
+export function listenerUrl(baseUrl, index, basePort = 7901) {
+  const target = new URL(baseUrl);
+  target.port = String(basePort + index);
+  return target.toString().replace(/\/$/, '');
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
