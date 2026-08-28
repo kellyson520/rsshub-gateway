@@ -1,5 +1,14 @@
 import net from 'node:net';
-import { boundedInteger, hmacSha256, isHostOrSubdomain, isSignatureMatch, matchesHost, safeJsonParse } from './http-utils.js';
+import {
+  base64UrlDecode,
+  base64UrlEncode,
+  boundedInteger,
+  hmacSha256,
+  isHostOrSubdomain,
+  isSignatureMatch,
+  matchesHost,
+  safeJsonParse,
+} from './http-utils.js';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
@@ -134,13 +143,8 @@ const ALLOWED_HOSTS = Object.freeze([
   'fanbox.cc',
 ]);
 
-function encode(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function decode(value) {
-  return Buffer.from(value, 'base64url').toString('utf8');
-}
+const encode = base64UrlEncode;
+const decode = base64UrlDecode;
 
 function routeMetadata(metadata = {}) {
   const result = {};

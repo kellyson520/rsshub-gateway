@@ -479,10 +479,25 @@ export function safeEvent(onEvent, event) {
   }
 }
 
+export function base64UrlEncode(value) {
+  if (value === null || value === undefined) return '';
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value), 'utf8');
+  return buffer.toString('base64url');
+}
+
+export function base64UrlDecode(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  try {
+    return Buffer.from(String(value), 'base64url').toString('utf8');
+  } catch {
+    return fallback;
+  }
+}
+
 export function decodeJwtPayload(value) {
   const parts = String(value || '').split('.');
   if (parts.length < 2) return null;
-  const decoded = Buffer.from(parts[1], 'base64url').toString('utf8');
+  const decoded = base64UrlDecode(parts[1], '');
   const payload = safeJsonParse(decoded, null);
   return payload && typeof payload === 'object' ? payload : null;
 }

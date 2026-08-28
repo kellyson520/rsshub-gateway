@@ -353,7 +353,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `isRetryableStatus(status)`, `isSuccessfulStatus(status)`, `isClientAbortError(err)`: Standard HTTP status classifiers and client disconnect predicates.
   - `RETRYABLE_STATUSES`, `DEFAULT_BLOCKED_STATUSES`: Unified set definitions for transient retryable codes (408/425/429) and egress blocking codes.
   - `GatewayUpstreamError`: Structured error class capturing retry attempts, source name, status code and `retryAfter` payload.
-  - `encode(value)`, `decode(value)`: High-performance Base64URL string serializers.
+  - `encode(value)`, `decode(value)`, `base64UrlEncode(value)`, `base64UrlDecode(value, fallback)`: High-performance Base64URL string serializers and decoders.
   - `routeMetadata(metadata)`: Route scope and source validation parser.
   - `DEFAULT_PROXY`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_ATTEMPTS`, `MAX_REDIRECTS_PER_ATTEMPT`: Upstream proxy and timeout foundations.
   - `isRetryableStatus(status)`, `isSuccessfulStatus(status)`, `isClientAbortError(error)`: Status code predicates and client disconnection detectors.

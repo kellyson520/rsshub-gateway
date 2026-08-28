@@ -262,6 +262,23 @@ test('sha256Hex and isSha256Hex format and validate 64-character lowercase hexad
   assert.equal(sha256Hex(null), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
 });
 
+test('base64UrlEncode and base64UrlDecode serialize and deserialize Base64URL strings safely', async () => {
+  const { base64UrlEncode, base64UrlDecode } = await import('../src/http-utils.js');
+
+  const text = 'hello-world-payload?123';
+  const encoded = base64UrlEncode(text);
+  assert.equal(encoded, Buffer.from(text).toString('base64url'));
+  assert.equal(base64UrlDecode(encoded), text);
+
+  assert.equal(base64UrlEncode(Buffer.from('binary-data')), Buffer.from('binary-data').toString('base64url'));
+  assert.equal(base64UrlEncode(null), '');
+  assert.equal(base64UrlEncode(undefined), '');
+
+  assert.equal(base64UrlDecode(null, 'fallback'), 'fallback');
+  assert.equal(base64UrlDecode(undefined, 'fallback'), 'fallback');
+  assert.equal(base64UrlDecode('', 'default'), '');
+});
+
 test('hmacSha256 and isSignatureMatch compute and verify cryptographic signatures safely', async () => {
   const { hmacSha256, isSignatureMatch, constantTimeEquals } = await import('../src/http-utils.js');
   const secret = 'test-secret';
