@@ -1,14 +1,25 @@
 import { createServer } from 'node:http';
-import { HttpError, readJsonBody, readRequestBody, sleep, writeJson } from './http-utils.js';
-
-export const DEFAULT_FETCHER_PORT = 8000;
-export const DEFAULT_FETCHER_HOST = '0.0.0.0';
-export const DEFAULT_REGISTER_RETRIES = 10;
-export const DEFAULT_REGISTER_RETRY_DELAY_MS = 2000;
-export const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
-export const DEFAULT_UNREGISTER_TIMEOUT_MS = 3000;
+import {
+  DEFAULT_FETCHER_HOST,
+  DEFAULT_FETCHER_PORT,
+  DEFAULT_REGISTER_RETRIES,
+  DEFAULT_REGISTER_RETRY_DELAY_MS,
+  DEFAULT_REGISTER_TIMEOUT_MS,
+  DEFAULT_UNREGISTER_TIMEOUT_MS,
+  HttpError,
+  readJsonBody,
+  readRequestBody,
+  sleep,
+  writeJson,
+} from './http-utils.js';
 
 export {
+  DEFAULT_FETCHER_PORT,
+  DEFAULT_FETCHER_HOST,
+  DEFAULT_REGISTER_RETRIES,
+  DEFAULT_REGISTER_RETRY_DELAY_MS,
+  DEFAULT_REGISTER_TIMEOUT_MS,
+  DEFAULT_UNREGISTER_TIMEOUT_MS,
   HttpError,
 };
 

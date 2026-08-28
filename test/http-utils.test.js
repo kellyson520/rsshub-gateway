@@ -1563,6 +1563,22 @@ test('canonical system gateway configuration default constants are defined and e
   assert.equal(DEFAULT_IMAGE_VARIANT_CONCURRENCY, 2);
   assert.equal(DEFAULT_LEASE_BACKFILL_CONCURRENCY, 2);
   assert.equal(DEFAULT_SLOW_SOURCE_THRESHOLD_MS, 5000);
+
+  const {
+    DEFAULT_FETCHER_PORT,
+    DEFAULT_FETCHER_HOST,
+    DEFAULT_REGISTER_RETRIES,
+    DEFAULT_REGISTER_RETRY_DELAY_MS,
+    DEFAULT_ROUTES_FILE,
+    DEFAULT_SIDECAR_TIMEOUT_MS,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_FETCHER_PORT, 8000);
+  assert.equal(DEFAULT_FETCHER_HOST, '0.0.0.0');
+  assert.equal(DEFAULT_REGISTER_RETRIES, 10);
+  assert.equal(DEFAULT_REGISTER_RETRY_DELAY_MS, 2000);
+  assert.equal(DEFAULT_ROUTES_FILE, 'gateway-routes.yaml');
+  assert.equal(DEFAULT_SIDECAR_TIMEOUT_MS, 60000);
 });
 
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {

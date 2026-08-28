@@ -3,15 +3,15 @@ import YAML from 'yaml';
 import {
   compilePattern,
   cookiesObject,
+  DEFAULT_ROUTES_FILE as BASE_DEFAULT_ROUTES_FILE,
+  DEFAULT_SIDECAR_TIMEOUT_MS,
   matchSegments,
   normalizeRoute,
   resolveRedirect,
   sidecarUrl,
 } from './http-utils.js';
 
-const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
-// 浏览器渲染类 sidecar（fetcher-missav）需要更长时间；curl_cffi 类 sidecar 远快于此。
-const DEFAULT_SIDECAR_TIMEOUT_MS = 60_000;
+const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || BASE_DEFAULT_ROUTES_FILE;
 
 export {
   compilePattern,
