@@ -553,6 +553,50 @@ test('atomicWriteJson safely creates target directory and writes valid JSON atom
   }
 });
 
+test('promLabel and sourceMetricName sanitize prometheus metric and label names', async () => {
+  const { promLabel, sourceMetricName } = await import('../src/http-utils.js');
+  assert.equal(promLabel('normal_value'), 'normal_value');
+  assert.equal(promLabel('line1\nline2'), 'line1\\nline2');
+  assert.equal(promLabel('quote"and\\backslash'), 'quote\\"and\\\\backslash');
+  assert.equal(promLabel(null), '');
+
+  assert.equal(sourceMetricName('iwara'), 'source_iwara_duration_seconds');
+  assert.equal(sourceMetricName('e-hentai'), 'source_e_hentai_duration_seconds');
+  assert.equal(sourceMetricName('  Custom.Source--Name  '), 'source_custom_source_name_duration_seconds');
+  assert.equal(sourceMetricName(''), null);
+  assert.equal(sourceMetricName(null), null);
+});
+
+test('downloadSessionView and withPrefetchStatus project download session and prefetch state safely', async () => {
+  const { downloadSessionView, withPrefetchStatus } = await import('../src/http-utils.js');
+  const dummySession = {
+    id: 'session-123',
+    size: 1048576,
+    chunkSize: 524288,
+    doneBytes: 524288,
+    chunks: [
+      { index: 0, start: 0, end: 524287, size: 524288, status: 'done', url: 'https://example.com/c0' },
+      { index: 1, start: 524288, end: 1048575, size: 524288, status: 'pending', url: 'https://example.com/c1' },
+    ],
+  };
+
+  const view = downloadSessionView(dummySession);
+  assert.equal(view.id, 'session-123');
+  assert.equal(view.count, 2);
+  assert.equal(view.doneChunks, 1);
+  assert.equal(view.doneBytes, 524288);
+  assert.deepEqual(view.urls, ['https://example.com/c0', 'https://example.com/c1']);
+
+  const withPrefetch = withPrefetchStatus(view, 'https://example.com/video.mp4', (target) => ({
+    target,
+    state: 'running',
+  }));
+  assert.deepEqual(withPrefetch.prefetch, { target: 'https://example.com/video.mp4', state: 'running' });
+
+  assert.equal(downloadSessionView(null), null);
+  assert.equal(withPrefetchStatus(null, 'target', () => {}), null);
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,

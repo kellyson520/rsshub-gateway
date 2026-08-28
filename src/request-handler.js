@@ -14,17 +14,21 @@ import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
 import {
   boundedInteger,
+  downloadSessionView,
   fetchCachedDocument,
   isBearerAuthorized,
   isEhImagePageTarget,
   mediaFileName,
   positiveInteger,
+  promLabel,
   publicBaseUrl,
   readJsonBody,
   readLimited,
   readRequestBody,
   requestedImageVariantWidth,
   sleep,
+  sourceMetricName,
+  withPrefetchStatus,
   writeBuffer,
   writeGatewayError,
   writeJson,
@@ -53,46 +57,8 @@ export {
   MAX_PREFETCH_WAIT_MS,
 };
 
-function downloadSessionView(session) {
-  return {
-    id: session.id,
-    size: session.size,
-    chunkSize: session.chunkSize,
-    count: session.chunks.length,
-    doneChunks: session.chunks.filter((chunk) => chunk.status === 'done').length,
-    doneBytes: session.doneBytes,
-    urls: session.chunks.map((chunk) => chunk.url),
-    chunks: session.chunks.map((chunk) => ({
-      index: chunk.index,
-      start: chunk.start,
-      end: chunk.end,
-      size: chunk.size,
-      status: chunk.status,
-      url: chunk.url,
-    })),
-  };
-}
-
-function withPrefetchStatus(view, target, prefetchStatus) {
-  return { ...view, prefetch: prefetchStatus?.(target) ?? null };
-}
-
-function promLabel(value) {
-  return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n');
-}
-
 const DEFAULT_PREFETCH_WAIT_MS = 30_000;
 const MAX_PREFETCH_WAIT_MS = 60_000;
-
-function sourceMetricName(source) {
-  const name = String(source || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 32);
-  return name ? `source_${name}_duration_seconds` : null;
-}
 
 // Unified post-processing text writer: brotli/gzip edge compression for every
 // text-ish response (charter: 所有流量统一经过后处理层) and correct HEAD

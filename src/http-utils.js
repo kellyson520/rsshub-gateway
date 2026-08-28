@@ -594,6 +594,47 @@ export function align64k(value) {
   return Math.max(1, Math.ceil(num / ALIGN_64K)) * ALIGN_64K;
 }
 
+export function promLabel(value) {
+  return String(value ?? '').replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n');
+}
+
+export function sourceMetricName(source) {
+  const name = String(source || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+  return name ? `source_${name}_duration_seconds` : null;
+}
+
+export function downloadSessionView(session) {
+  if (!session || typeof session !== 'object') return null;
+  const chunks = Array.isArray(session.chunks) ? session.chunks : [];
+  return {
+    id: session.id,
+    size: session.size,
+    chunkSize: session.chunkSize,
+    count: chunks.length,
+    doneChunks: chunks.filter((chunk) => chunk?.status === 'done').length,
+    doneBytes: session.doneBytes ?? 0,
+    urls: chunks.map((chunk) => chunk?.url).filter(Boolean),
+    chunks: chunks.map((chunk) => ({
+      index: chunk?.index,
+      start: chunk?.start,
+      end: chunk?.end,
+      size: chunk?.size,
+      status: chunk?.status,
+      url: chunk?.url,
+    })),
+  };
+}
+
+export function withPrefetchStatus(view, target, prefetchStatus) {
+  if (!view || typeof view !== 'object') return view;
+  return { ...view, prefetch: typeof prefetchStatus === 'function' ? (prefetchStatus(target) ?? null) : null };
+}
+
 export function durationCheckpoint(results = [], count = 0) {
   const safeCount = Number.isInteger(count) ? count : 0;
   if (!safeCount || !Array.isArray(results) || !results.length) return 0;
