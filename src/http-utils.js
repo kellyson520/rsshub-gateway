@@ -2622,6 +2622,13 @@ export const ADULT_DOMAINS = Object.freeze([
   '91porn.com',
 ]);
 
+export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, acceptLanguage = DEFAULT_ADULT_ACCEPT_LANGUAGE } = {}) {
+  return {
+    'User-Agent': userAgent,
+    'Accept-Language': acceptLanguage,
+  };
+}
+
 export const DEFAULT_ADULT_UNAVAILABLE_MESSAGE = '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';
 export const ADULT_CHALLENGE_SUBSTRINGS = Object.freeze([
   'Just a moment...',
