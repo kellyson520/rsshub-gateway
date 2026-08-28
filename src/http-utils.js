@@ -1190,6 +1190,233 @@ export async function fetchdJson(fetchdFetch, url, {
   return response.json();
 }
 
+export const DEFAULT_SITE_FAILURE_THRESHOLD = 3;
+export const DEFAULT_SITE_FAILURE_WINDOW_MS = 60_000;
+
+export function failureKey(laneId, host) {
+  return `${String(laneId)}\n${String(host).toLowerCase()}`;
+}
+
+export function createSiteFailureTracker({
+  threshold = DEFAULT_SITE_FAILURE_THRESHOLD,
+  windowMs = DEFAULT_SITE_FAILURE_WINDOW_MS,
+  now = () => Date.now(),
+} = {}) {
+  const states = new Map();
+
+  function key(laneId, host) {
+    return failureKey(laneId, host);
+  }
+
+  function record(laneId, host, status) {
+    const k = key(laneId, host);
+    const current = now();
+    let state = states.get(k);
+    if (!state || current - state.lastAt > windowMs) {
+      state = { count: 0, firstAt: current, lastAt: current, trippedAt: undefined };
+      states.set(k, state);
+    }
+    state.lastAt = current;
+    state.count += 1;
+    if (state.count >= threshold && state.count % threshold === 0) {
+      state.trippedAt = current;
+      return true;
+    }
+    return false;
+  }
+
+  function reset(laneId, host) {
+    states.delete(key(laneId, host));
+  }
+
+  function blocked(laneId, host) {
+    return Boolean(states.get(key(laneId, host))?.trippedAt !== undefined);
+  }
+
+  function stats() {
+    const cutoff = now() - windowMs;
+    return [...states.entries()]
+      .filter(([, state]) => state.trippedAt !== undefined || state.lastAt >= cutoff)
+      .map(([k, state]) => {
+        const [laneId, host] = k.split('\n');
+        return { laneId, host, count: state.count, trippedAt: state.trippedAt || null };
+      });
+  }
+
+  function clearAll() {
+    states.clear();
+  }
+
+  return { record, reset, clearAll, blocked, stats };
+}
+
+export const MIN_CHUNK_SIZE = 256 * 1024;
+export const MAX_CHUNK_SIZE = 16 * 1024 * 1024;
+export const MAX_CHUNKS = 256;
+export const DEFAULT_TARGET_SECONDS = 10;
+
+export function sizeTier(totalBytes) {
+  if (totalBytes <= 64 * 1024 * 1024) return 1024 * 1024;
+  if (totalBytes <= 512 * 1024 * 1024) return 4 * 1024 * 1024;
+  if (totalBytes <= 2 * 1024 ** 3) return 8 * 1024 * 1024;
+  return MAX_CHUNK_SIZE;
+}
+
+export function adaptiveChunkSize(totalBytes, {
+  min = MIN_CHUNK_SIZE,
+  max = MAX_CHUNK_SIZE,
+  bytesPerSecond,
+  targetSeconds = DEFAULT_TARGET_SECONDS,
+} = {}) {
+  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) return min;
+  let size = sizeTier(totalBytes);
+  if (Number.isFinite(bytesPerSecond) && bytesPerSecond > 0) {
+    const bandwidthSize = bytesPerSecond * Math.max(1, Number(targetSeconds) || DEFAULT_TARGET_SECONDS);
+    size = Math.min(size, bandwidthSize);
+  }
+  return Math.min(max, Math.max(min, align64k(size)));
+}
+
+export function chunkSizeFor(totalBytes, chunks, {
+  min = MIN_CHUNK_SIZE,
+  max = MAX_CHUNK_SIZE,
+  bytesPerSecond,
+  targetSeconds,
+  maxChunks = MAX_CHUNKS,
+} = {}) {
+  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) {
+    return { count: 1, size: Math.max(min, MIN_CHUNK_SIZE) };
+  }
+  const preferred = adaptiveChunkSize(totalBytes, { min, max, bytesPerSecond, targetSeconds });
+  const naturalCount = Math.max(1, Math.ceil(totalBytes / preferred));
+  const requested = Number.isInteger(chunks) && chunks >= 1 ? Math.min(chunks, maxChunks) : 0;
+  const minimumCoveringCount = Math.max(1, Math.ceil(totalBytes / max));
+  let count = requested > 0 ? Math.max(requested, minimumCoveringCount) : naturalCount;
+  count = Math.min(count, Math.ceil(totalBytes / min));
+  const size = Math.min(max, Math.max(min, align64k(totalBytes / count)));
+  return { count, size };
+}
+
+export function planChunks(totalBytes, {
+  chunkSize,
+  chunks,
+  min = MIN_CHUNK_SIZE,
+  max = MAX_CHUNK_SIZE,
+  bytesPerSecond,
+  targetSeconds,
+} = {}) {
+  const safeTotal = Number.isSafeInteger(totalBytes) && totalBytes > 0 ? totalBytes : 0;
+  if (safeTotal === 0) return [];
+  const plan = chunkSizeFor(safeTotal, chunks, { min, max, bytesPerSecond, targetSeconds });
+  const effectiveSize = Number.isInteger(chunkSize) && chunkSize > 0 ? chunkSize : plan.size;
+  const list = [];
+  let index = 0;
+  for (let offset = 0; offset < safeTotal; offset += effectiveSize) {
+    const end = Math.min(offset + effectiveSize - 1, safeTotal - 1);
+    list.push({
+      index,
+      start: offset,
+      end,
+      size: end - offset + 1,
+    });
+    index += 1;
+  }
+  return list;
+}
+
+export const REDACT_KEYS = new Set([
+  'authorization',
+  'cookie',
+  'token',
+  'password',
+  'secret',
+  'proxyurl',
+  'username',
+  'credentials',
+]);
+
+export const REDACT_VALUE = '[redacted]';
+
+export function redactValue(key, value) {
+  const normalized = String(key).toLowerCase();
+  if (REDACT_KEYS.has(normalized)) return REDACT_VALUE;
+  if (normalized.includes('token') || normalized.includes('password') || normalized.includes('secret')) return REDACT_VALUE;
+  if (typeof value === 'string' && /(bearer\s+[a-z0-9._-]+|basic\s+[a-z0-9+/=]+|cookie\s*[:=][^;]+)/i.test(value)) {
+    return value.replace(/(bearer\s+)[a-z0-9._-]+/gi, '$1[redacted]')
+      .replace(/(basic\s+)[a-z0-9+/=]+/gi, '$1[redacted]')
+      .replace(/(cookie\s*[:=]\s*)[^;]+/gi, '$1[redacted]');
+  }
+  return value;
+}
+
+export function redactFields(fields) {
+  const output = {};
+  for (const [key, value] of Object.entries(fields || {})) {
+    output[key] = redactValue(key, value);
+  }
+  return output;
+}
+
+export const LOG_LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40 });
+export const DEFAULT_LOG_LEVEL = 'info';
+
+export function createNoopLogger() {
+  const noop = () => {};
+  return {
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    child: () => createNoopLogger(),
+    sink: noop,
+    threshold: 100,
+  };
+}
+
+export function createLogger({
+  level = process.env.GATEWAY_LOG_LEVEL || DEFAULT_LOG_LEVEL,
+  sink = (line) => process.stdout.write(`${line}\n`),
+  redact = true,
+  now = () => Date.now(),
+} = {}) {
+  const levels = LOG_LEVELS;
+  const threshold = levels[level] ?? levels.info;
+
+  function write(event, fields = {}, levelName = 'info') {
+    if ((levels[levelName] ?? levels.info) < threshold) return;
+    const payload = {
+      event,
+      level: levelName,
+      ts: new Date(now()).toISOString(),
+      ...(redact ? redactFields(fields) : fields),
+    };
+    try {
+      sink(JSON.stringify(payload));
+    } catch {
+      // Logging must never break request handling.
+    }
+  }
+
+  function child(context = {}) {
+    return {
+      debug: (event, fields = {}) => write(event, { ...context, ...fields }, 'debug'),
+      info: (event, fields = {}) => write(event, { ...context, ...fields }, 'info'),
+      warn: (event, fields = {}) => write(event, { ...context, ...fields }, 'warn'),
+      error: (event, fields = {}) => write(event, { ...context, ...fields }, 'error'),
+    };
+  }
+
+  return {
+    debug: (event, fields) => write(event, fields, 'debug'),
+    info: (event, fields) => write(event, fields, 'info'),
+    warn: (event, fields) => write(event, fields, 'warn'),
+    error: (event, fields) => write(event, fields, 'error'),
+    child,
+    sink,
+    threshold,
+  };
+}
+
 export function constantTimeEquals(left, right) {
   try {
     const leftBuf = Buffer.isBuffer(left) ? left : Buffer.from(String(left ?? ''));

@@ -387,6 +387,9 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `createSiteFailureTracker(opts)`, `failureKey(laneId, host)`, `DEFAULT_SITE_FAILURE_THRESHOLD`, `DEFAULT_SITE_FAILURE_WINDOW_MS`: Sliding-window per-(lane, host) upstream failure tracking and automatic cooldown re-arming.
+  - `planChunks(totalBytes, opts)`, `adaptiveChunkSize(totalBytes, opts)`, `chunkSizeFor(totalBytes, chunks, opts)`, `sizeTier(bytes)`, `MIN_CHUNK_SIZE`, `MAX_CHUNK_SIZE`, `MAX_CHUNKS`: Dynamic bitrate/size-tier adaptive chunk planner with 64 KiB slice alignment.
+  - `createLogger(opts)`, `createNoopLogger()`, `redactValue(k, v)`, `redactFields(fields)`, `LOG_LEVELS`, `DEFAULT_LOG_LEVEL`, `REDACT_KEYS`, `REDACT_VALUE`: Zero-leakage structured JSON logging pipeline with automatic auth credential/token redaction.
   - `CircuitBreaker`, `CIRCUIT_STATE_CLOSED`, `CIRCUIT_STATE_OPEN`, `CIRCUIT_STATE_HALF_OPEN`, `DEFAULT_FAILURE_THRESHOLD`, `DEFAULT_COOLDOWN_MS`: High-resilience 3-state circuit breaker with half-open single-flight probes, failure metrics and automatic cooldowns.
   - `installGracefulShutdown(opts)`, `stopAcceptingServers(servers)`, `drainServers(servers)`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_SIGNALS`: Zero-downtime graceful shutdown orchestration, HTTP idle connection closing and event-driven server drainers.
   - `fetchdJson(fetchdFetch, url, opts)`, `DEFAULT_FETCHD_BASE_URL`, `DEFAULT_FETCHD_TIMEOUT_MS`, `MAX_FETCHD_TIMEOUT_MS`, `FETCHD_TIMEOUT_SLACK_MS`: Headless browser-fetch RPC JSON client with bounded deadline slack and upstream retry mapping.

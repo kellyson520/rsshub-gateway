@@ -1175,6 +1175,64 @@ test('CircuitBreaker, graceful shutdown helpers and fetchdJson execute resilienc
   shutdownMgr.dispose();
 });
 
+test('createSiteFailureTracker, adaptive chunk planners and structured logger operate reliably', async () => {
+  const {
+    createSiteFailureTracker,
+    failureKey,
+    adaptiveChunkSize,
+    chunkSizeFor,
+    planChunks,
+    MIN_CHUNK_SIZE,
+    MAX_CHUNK_SIZE,
+    DEFAULT_TARGET_SECONDS,
+    createLogger,
+    createNoopLogger,
+    redactValue,
+    redactFields,
+    LOG_LEVELS,
+    DEFAULT_LOG_LEVEL,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(failureKey(1, 'E-Hentai.org'), '1\ne-hentai.org');
+
+  let now = 1000;
+  const tracker = createSiteFailureTracker({ threshold: 2, windowMs: 10000, now: () => now });
+  assert.equal(tracker.blocked(1, 'e-hentai.org'), false);
+  assert.equal(tracker.record(1, 'e-hentai.org', 429), false);
+  assert.equal(tracker.record(1, 'e-hentai.org', 429), true);
+  assert.equal(tracker.blocked(1, 'e-hentai.org'), true);
+  assert.equal(tracker.stats().length, 1);
+  tracker.reset(1, 'e-hentai.org');
+  assert.equal(tracker.blocked(1, 'e-hentai.org'), false);
+
+  assert.equal(adaptiveChunkSize(10 * 1024 * 1024), 1024 * 1024);
+  assert.equal(adaptiveChunkSize(0), MIN_CHUNK_SIZE);
+
+  const plan = planChunks(2 * 1024 * 1024, { chunkSize: 1024 * 1024 });
+  assert.equal(plan.length, 2);
+  assert.equal(plan[0].size, 1024 * 1024);
+  assert.equal(plan[1].size, 1024 * 1024);
+
+  assert.equal(redactValue('cookie', 'secret=abc'), '[redacted]');
+  assert.equal(redactValue('authToken', 'secret=abc'), '[redacted]');
+  assert.deepEqual(redactFields({ token: '123', name: 'user' }), { token: '[redacted]', name: 'user' });
+
+  const logs = [];
+  const logger = createLogger({
+    level: 'info',
+    sink: (line) => logs.push(JSON.parse(line)),
+    now: () => 1700000000000,
+  });
+  logger.info('test_event', { key: 'val', password: 'pass' });
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].event, 'test_event');
+  assert.equal(logs[0].password, '[redacted]');
+
+  const noopLogger = createNoopLogger();
+  assert.doesNotThrow(() => noopLogger.info('ignore'));
+  assert.doesNotThrow(() => noopLogger.child().error('ignore'));
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
