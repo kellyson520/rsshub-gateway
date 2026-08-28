@@ -1620,7 +1620,22 @@ test('canonical system gateway configuration default constants are defined and e
     DEFAULT_REGISTER_RETRY_DELAY_MS,
     DEFAULT_ROUTES_FILE,
     DEFAULT_SIDECAR_TIMEOUT_MS,
+    DEFAULT_EGRESS_SUCCESS_RAMP_AFTER,
+    DEFAULT_EGRESS_COOLDOWN_MS,
+    DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE,
+    DEFAULT_EGRESS_EWMA_ALPHA,
+    DEFAULT_EGRESS_MAX_LATENCY_SAMPLE_MS,
+    poolError,
   } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_EGRESS_SUCCESS_RAMP_AFTER, 6);
+  assert.equal(DEFAULT_EGRESS_COOLDOWN_MS, 500);
+  assert.equal(DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE, 1);
+  assert.equal(DEFAULT_EGRESS_EWMA_ALPHA, 0.2);
+  assert.equal(DEFAULT_EGRESS_MAX_LATENCY_SAMPLE_MS, 10000);
+  const pe = poolError('pool exhausted', 'POOL_EMPTY');
+  assert.equal(pe.message, 'pool exhausted');
+  assert.equal(pe.code, 'POOL_EMPTY');
 
   assert.equal(DEFAULT_FETCHER_PORT, 8000);
   assert.equal(DEFAULT_FETCHER_HOST, '0.0.0.0');

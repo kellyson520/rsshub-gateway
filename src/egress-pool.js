@@ -1,23 +1,25 @@
 import { createSiteFailureTracker } from './infrastructure/site-failure-tracker.js';
-import { boundedInteger, clamp, nonNegativeInteger, positiveInteger, safeEvent } from './http-utils.js';
+import {
+  boundedInteger,
+  clamp,
+  DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE as DEFAULT_BACKGROUND_RESERVE_PER_LANE,
+  DEFAULT_EGRESS_COOLDOWN_MS as DEFAULT_COOLDOWN_MS,
+  DEFAULT_EGRESS_EWMA_ALPHA as EWMA_ALPHA,
+  DEFAULT_EGRESS_MAX_CONCURRENCY_PER_LANE as DEFAULT_MAX_CONCURRENCY_PER_LANE,
+  DEFAULT_EGRESS_MAX_LATENCY_SAMPLE_MS as MAX_LATENCY_SAMPLE_MS,
+  DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE as DEFAULT_MIN_CONCURRENCY_PER_LANE,
+  DEFAULT_EGRESS_SUCCESS_RAMP_AFTER as DEFAULT_SUCCESS_RAMP_AFTER,
+  nonNegativeInteger,
+  poolError,
+  positiveInteger,
+  safeEvent,
+} from './http-utils.js';
 import {
   DEFAULT_BLOCKED_STATUSES,
   isRetryableStatus as isRetryable,
   isSuccessfulStatus as isSuccess,
   RETRYABLE_STATUSES,
 } from './upstream-errors.js';
-
-const DEFAULT_MIN_CONCURRENCY_PER_LANE = 3;
-const DEFAULT_MAX_CONCURRENCY_PER_LANE = 6;
-const DEFAULT_SUCCESS_RAMP_AFTER = 6;
-const DEFAULT_COOLDOWN_MS = 500;
-const DEFAULT_BACKGROUND_RESERVE_PER_LANE = 1;
-const EWMA_ALPHA = 0.2;
-const MAX_LATENCY_SAMPLE_MS = 10_000;
-
-function poolError(message, code) {
-  return Object.assign(new Error(message), { code });
-}
 
 export {
   isSuccess,

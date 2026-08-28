@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `poolError(msg, code)`, `DEFAULT_EGRESS_SUCCESS_RAMP_AFTER`, `DEFAULT_EGRESS_COOLDOWN_MS`, `DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE`, `DEFAULT_EGRESS_EWMA_ALPHA`, `DEFAULT_EGRESS_MAX_LATENCY_SAMPLE_MS`: High-concurrency egress proxy lane rate limiting, EWMA latency tracking and typed pool exception factory.
   - `buildDownloadSession(opts)`, `restoreDownloadSessionRecord(record)`, `DOWNLOAD_SESSION_VERSION`: Pure state multi-threaded download session builder, deserializer and persistence projection.
   - `createSignedChunk(opts)`, `verifySignedChunk(token, secret, now, opts)`, `CHUNK_METADATA_KEYS`: Cryptographic HMAC download lease chunk token signers, range verifiers and allowed metadata key sets.
   - `isBrowserFetchTarget(url, hosts)`, `BROWSER_FETCH_HOSTS`: Dynamic and environment-driven browser-fingerprint WAF bypass target predicates and host list frozen sets.

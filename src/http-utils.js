@@ -1922,6 +1922,16 @@ export const DEFAULT_IMAGE_VARIANT_CONCURRENCY = 2;
 export const DEFAULT_LEASE_BACKFILL_CONCURRENCY = 2;
 export const DEFAULT_SLOW_SOURCE_THRESHOLD_MS = 5_000;
 
+export const DEFAULT_EGRESS_SUCCESS_RAMP_AFTER = 6;
+export const DEFAULT_EGRESS_COOLDOWN_MS = 500;
+export const DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE = 1;
+export const DEFAULT_EGRESS_EWMA_ALPHA = 0.2;
+export const DEFAULT_EGRESS_MAX_LATENCY_SAMPLE_MS = 10_000;
+
+export function poolError(message, code) {
+  return Object.assign(new Error(message), { code });
+}
+
 export const DEFAULT_FETCHER_PORT = 8000;
 export const DEFAULT_FETCHER_HOST = '0.0.0.0';
 export const DEFAULT_REGISTER_RETRIES = 10;
