@@ -12,9 +12,12 @@ import {
   DEFAULT_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY as DEFAULT_PER_ORIGIN_CONCURRENCY,
   DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS as DEFAULT_QUEUE_TTL_MS,
   DEFAULT_MEDIA_PREFETCH_SUCCESS_RAMP_AFTER as DEFAULT_SUCCESS_RAMP_AFTER,
+  isValidMediaPrefetchRecord,
   MAX_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY as MAX_PER_ORIGIN_CONCURRENCY,
   MAX_MEDIA_PREFETCH_QUEUE_ITEMS as MAX_QUEUE_ITEMS,
+  MEDIA_PREFETCH_QUEUE_VERSION,
   mediaOriginFor as originFor,
+  mediaPrefetchRetryDelay,
   safeEvent,
   safeJsonParse,
   sleep as defaultSleep,
@@ -32,6 +35,9 @@ export {
   successfulStatus,
   boundedInteger,
   safeEvent,
+  isValidMediaPrefetchRecord,
+  mediaPrefetchRetryDelay,
+  MEDIA_PREFETCH_QUEUE_VERSION,
   DEFAULT_CACHE_ROOT,
   DEFAULT_INITIAL_CONCURRENCY,
   DEFAULT_MIN_CONCURRENCY,
@@ -101,7 +107,7 @@ export function createMediaPrefetchQueue(options = {}) {
     if (!persistEnabled) return Promise.resolve();
     const items = [...records.values()].map((record) => ({ ...record }));
     persistChain = persistChain.then(async () => {
-      await atomicWriteJson(queueFile, { version: 1, items }, { mode: null, dirMode: 0o755 });
+      await atomicWriteJson(queueFile, { version: MEDIA_PREFETCH_QUEUE_VERSION, items }, { mode: null, dirMode: 0o755 });
     }, async () => {}).catch(() => {});
     return persistChain;
   }
@@ -182,7 +188,7 @@ export function createMediaPrefetchQueue(options = {}) {
       } else if (retryableStatus(status) && record && record.attempts < maxRetries) {
         record.attempts += 1;
         retry = true;
-        retryDelay = Math.min(2_000, 250 * (2 ** record.attempts) + Math.floor(random() * 100));
+        retryDelay = mediaPrefetchRetryDelay(record.attempts, random() * 100);
         reduceConcurrency(host, status);
         emit({ state: 'retry', host, status, attempt: record.attempts });
       } else {
@@ -196,7 +202,7 @@ export function createMediaPrefetchQueue(options = {}) {
       if (record && record.attempts < maxRetries) {
         record.attempts += 1;
         retry = true;
-        retryDelay = Math.min(2_000, 250 * (2 ** record.attempts) + Math.floor(random() * 100));
+        retryDelay = mediaPrefetchRetryDelay(record.attempts, random() * 100);
         reduceConcurrency(host, status);
         emit({ state: 'retry', host, status, attempt: record.attempts });
       } else {
@@ -250,11 +256,10 @@ export function createMediaPrefetchQueue(options = {}) {
       const content = await fsp.readFile(queueFile, 'utf8');
       const parsed = safeJsonParse(content, null);
       for (const item of Array.isArray(parsed?.items) ? parsed.items : []) {
-        const target = String(item?.target || '');
-        const enqueuedAt = Number(item?.enqueuedAt);
-        if (!originFor(target) || !Number.isFinite(enqueuedAt) || now() - enqueuedAt > queueTtlMs) continue;
-        if (records.size >= MAX_QUEUE_ITEMS || records.has(target)) continue;
-        records.set(target, { target, enqueuedAt, attempts: boundedInteger(item?.attempts, 0, 0, maxRetries) });
+        if (!isValidMediaPrefetchRecord(item, now(), queueTtlMs)) continue;
+        const target = String(item.target);
+        if (!originFor(target) || records.size >= MAX_QUEUE_ITEMS || records.has(target)) continue;
+        records.set(target, { target, enqueuedAt: item.enqueuedAt, attempts: boundedInteger(item?.attempts, 0, 0, maxRetries) });
         pending.push(target);
       }
     } catch {

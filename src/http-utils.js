@@ -2018,6 +2018,28 @@ export const DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_MEDIA_PREFETCH_QUEUE_ITEMS = 2_000;
 export const MAX_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY = 48;
 
+export const MEDIA_PREFETCH_QUEUE_VERSION = 1;
+
+export function mediaPrefetchRetryDelay(attempts, jitter = 0) {
+  const base = 250 * (2 ** Math.max(0, Number(attempts) || 0));
+  return Math.min(2_000, base + Math.floor(Number(jitter) || 0));
+}
+
+export function isValidMediaPrefetchRecord(record, now = Date.now(), ttlMs = DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS) {
+  if (!record || typeof record !== 'object') return false;
+  if (typeof record.target !== 'string' || !record.target) return false;
+  if (!Number.isFinite(record.enqueuedAt) || record.enqueuedAt <= 0) return false;
+  if (now - record.enqueuedAt > ttlMs) return false;
+  return Number.isInteger(record.attempts) && record.attempts >= 0;
+}
+
+export function calculateCacheHeadroom(cacheStats = {}, evictionBudget = DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET) {
+  const used = Number(cacheStats?.bytes) || 0;
+  const limitBytes = Number(cacheStats?.byteLimit) || 0;
+  if (limitBytes <= 0) return Infinity;
+  return Math.max(0, limitBytes - used) + Math.max(0, Number(evictionBudget) || 0);
+}
+
 export function mediaOriginFor(target, allowedHosts = ALLOWED_HOSTS) {
   try {
     const parsed = new URL(target);

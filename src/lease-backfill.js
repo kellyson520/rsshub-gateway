@@ -1,5 +1,6 @@
 import {
   boundedInteger,
+  calculateCacheHeadroom,
   DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET as DEFAULT_EVICTION_BUDGET,
   DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY as DEFAULT_MAX_CONCURRENCY,
   DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES as DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
@@ -10,6 +11,7 @@ export {
   DEFAULT_EVICTION_BUDGET,
   DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
   boundedInteger,
+  calculateCacheHeadroom,
 };
 
 /**
@@ -50,11 +52,7 @@ export function createLeaseBackfillQueue({
   }
 
   function cacheHeadroom() {
-    const current = cache?.stats?.() || {};
-    const used = Number(current.bytes) || 0;
-    const limitBytes = Number(current.byteLimit) || 0;
-    if (limitBytes <= 0) return Infinity;
-    return Math.max(0, limitBytes - used) + evictionBudget;
+    return calculateCacheHeadroom(cache?.stats?.(), evictionBudget);
   }
 
   async function run(lease) {
