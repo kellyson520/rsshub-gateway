@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `publicLeaseView(lease, opts, now)`, `isChunkSignatureValid(token, secret)`, `DEFAULT_LEASE_TTL_MS`, `DEFAULT_LEASE_MAX_BYTES`, `DEFAULT_LEASE_MAX_CONCURRENCY`: Download proxy lease projection, chunk token HMAC signature validation and lease quota defaults.
   - `tileStyle(tile)`, `tileImage(tile, className, alt, loading)`, `EH_METADATA_LABELS`: Thumbnail sprite tile styling, localized metadata mappings and lazy image element builder.
   - `isEhentaiPage(url, pattern)`, `isEhImagePageTarget(url)`, `EH_GALLERY_PATH`, `EH_IMAGE_PATH`: E-Hentai gallery and reader image target page URL matchers and route regex patterns.
   - `mediaSrcset(media, widths)`, `numericStyle(style, property, fallback)`: Responsive image candidate set generator and CSS pixel style numeric bounds clamper.

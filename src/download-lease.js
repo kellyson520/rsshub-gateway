@@ -1,10 +1,25 @@
 import { randomBytes } from 'node:crypto';
 import { decode, encode, isAllowedTarget, EGRESS_SCOPES } from './signed-target.js';
-import { constantTimeEquals, dedupe, hmacSha256, isSignatureMatch, safeJsonParse } from './http-utils.js';
+import {
+  constantTimeEquals,
+  DEFAULT_LEASE_MAX_BYTES as DEFAULT_MAX_BYTES,
+  DEFAULT_LEASE_MAX_CONCURRENCY as DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_LEASE_TTL_MS as DEFAULT_TTL_MS,
+  dedupe,
+  hmacSha256,
+  isChunkSignatureValid,
+  isSignatureMatch,
+  publicLeaseView,
+  safeJsonParse,
+} from './http-utils.js';
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_MAX_BYTES = 2 * 1024 ** 3;
-const DEFAULT_MAX_CONCURRENCY = 8;
+export {
+  DEFAULT_TTL_MS,
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_CONCURRENCY,
+  publicLeaseView,
+  isChunkSignatureValid,
+};
 
 /**
  * One-time, short-lived download leases.
@@ -79,28 +94,8 @@ export function createLeaseStore({ now = Date.now } = {}) {
     return expired;
   }
 
-  function publicView(lease, { proxyHost, proxyPort, proxyUrl }) {
-    let endpoint;
-    if (proxyUrl) {
-      const url = new URL(String(proxyUrl));
-      url.username = lease.username;
-      url.password = lease.password;
-      endpoint = url.toString().replace(/\/$/, '');
-    } else {
-      endpoint = `http://${lease.username}:${lease.password}@${proxyHost}:${proxyPort}`;
-    }
-    return {
-      username: lease.username,
-      password: lease.password,
-      proxyUrl: endpoint,
-      url: lease.resolvedUrl,
-      allowHosts: lease.allowHosts,
-      expiresAt: lease.expiresAt,
-      ttlMs: lease.expiresAt - now(),
-      maxBytes: lease.maxBytes,
-      maxConcurrency: lease.maxConcurrency,
-      once: true,
-    };
+  function publicView(lease, options) {
+    return publicLeaseView(lease, options, now);
   }
 
   function stats() {
@@ -123,12 +118,6 @@ export function createSignedChunk({ url, start, end, secret, now: nowValue = Mat
 }
 
 const CHUNK_METADATA_KEYS = new Set(['egressScope', 'source', 'sessionId', 'index']);
-
-export function isChunkSignatureValid(token, secret) {
-  const [payload, signature] = String(token || '').split('.');
-  if (!payload || !signature) return false;
-  return isSignatureMatch(signature, hmacSha256(payload, secret));
-}
 
 export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1000)) {
   const [payload, signature] = String(token).split('.');

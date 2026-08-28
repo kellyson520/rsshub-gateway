@@ -717,6 +717,48 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('publicLeaseView, isChunkSignatureValid and DEFAULT_LEASE constants project leases and validate chunk signatures', async () => {
+  const {
+    publicLeaseView,
+    isChunkSignatureValid,
+    DEFAULT_LEASE_TTL_MS,
+    DEFAULT_LEASE_MAX_BYTES,
+    DEFAULT_LEASE_MAX_CONCURRENCY,
+    hmacSha256,
+  } = await import('../src/http-utils.js');
+
+  const dummyLease = {
+    username: 'user123',
+    password: 'pwd456',
+    targetUrl: 'https://example.com/stream.mp4',
+    resolvedUrl: 'https://example.com/stream.mp4?auth=ok',
+    allowHosts: ['example.com'],
+    expiresAt: 1700000000000 + 1800000,
+    maxBytes: DEFAULT_LEASE_MAX_BYTES,
+    maxConcurrency: DEFAULT_LEASE_MAX_CONCURRENCY,
+  };
+
+  const view = publicLeaseView(dummyLease, { proxyHost: '127.0.0.1', proxyPort: 1301 }, () => 1700000000000);
+  assert.equal(view.username, 'user123');
+  assert.equal(view.password, 'pwd456');
+  assert.equal(view.proxyUrl, 'http://user123:pwd456@127.0.0.1:1301');
+  assert.equal(view.url, 'https://example.com/stream.mp4?auth=ok');
+  assert.equal(view.ttlMs, 1800000);
+  assert.equal(view.maxConcurrency, 8);
+  assert.equal(view.once, true);
+
+  assert.equal(publicLeaseView(null), null);
+
+  const payload = 'eyJ1cmwiOiJodHRwczovL2V4YW1wbGUuY29tIn0';
+  const secret = 'test-secret';
+  const validSig = hmacSha256(payload, secret, 'base64url');
+  assert.equal(isChunkSignatureValid(`${payload}.${validSig}`, secret), true);
+  assert.equal(isChunkSignatureValid(`${payload}.invalid`, secret), false);
+  assert.equal(isChunkSignatureValid(null, secret), false);
+
+  assert.equal(DEFAULT_LEASE_TTL_MS, 1800000);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

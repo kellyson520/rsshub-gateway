@@ -763,6 +763,42 @@ export function tileImage(tile, className = '', alt = '', loading = 'lazy') {
   return `<img class="${escapeHtml(className)}" src="${escapeHtml(tile.media)}" alt="${escapeHtml(alt)}" loading="${escapeHtml(loading)}" style="transform:translate(${x}px,${y}px)">`;
 }
 
+export const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000;
+export const DEFAULT_LEASE_MAX_BYTES = 2 * 1024 ** 3;
+export const DEFAULT_LEASE_MAX_CONCURRENCY = 8;
+
+export function publicLeaseView(lease, { proxyHost, proxyPort, proxyUrl } = {}, now = Date.now) {
+  if (!lease || typeof lease !== 'object') return null;
+  let endpoint;
+  if (proxyUrl) {
+    const url = new URL(String(proxyUrl));
+    url.username = lease.username;
+    url.password = lease.password;
+    endpoint = url.toString().replace(/\/$/, '');
+  } else {
+    endpoint = `http://${lease.username}:${lease.password}@${proxyHost}:${proxyPort}`;
+  }
+  const nowMs = typeof now === 'function' ? now() : Number(now || Date.now());
+  return {
+    username: lease.username,
+    password: lease.password,
+    proxyUrl: endpoint,
+    url: lease.resolvedUrl || lease.targetUrl,
+    allowHosts: Array.isArray(lease.allowHosts) ? lease.allowHosts : [],
+    expiresAt: lease.expiresAt,
+    ttlMs: Number.isFinite(lease.expiresAt) ? lease.expiresAt - nowMs : 0,
+    maxBytes: lease.maxBytes,
+    maxConcurrency: lease.maxConcurrency,
+    once: true,
+  };
+}
+
+export function isChunkSignatureValid(token, secret) {
+  const [payload, signature] = String(token || '').split('.');
+  if (!payload || !signature || !secret) return false;
+  return isSignatureMatch(signature, hmacSha256(payload, secret, 'base64url'));
+}
+
 export function initialEhGalleryManifest(opts = {}) {
   if (!opts || typeof opts !== 'object') return null;
   const {
