@@ -1,9 +1,11 @@
 import * as cheerio from 'cheerio';
 import {
   DEFAULT_X_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
+  isXReaderUnavailable,
   matchesHost,
   X_AUTH_FLOW_LOGIN_PATTERN as AUTH_FLOW_LOGIN_PATTERN,
   X_MATCH_HOSTS as MATCH_HOSTS,
+  xHeaders,
 } from '../http-utils.js';
 
 export const name = 'x';
@@ -13,6 +15,8 @@ export {
   MATCH_HOSTS,
   DEFAULT_UNAVAILABLE_MESSAGE,
   AUTH_FLOW_LOGIN_PATTERN,
+  xHeaders,
+  isXReaderUnavailable,
 };
 
 export function matches(hostname) {
@@ -20,11 +24,7 @@ export function matches(hostname) {
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {
-  if (!includeCredentials) return {};
-  const cookies = [];
-  if (config.authToken) cookies.push(`auth_token=${config.authToken}`);
-  if (config.ct0) cookies.push(`ct0=${config.ct0}`);
-  return cookies.length ? { cookie: cookies.join('; ') } : {};
+  return xHeaders(config, { includeCredentials });
 }
 
 export function readerTarget(url) {
@@ -36,9 +36,7 @@ export function unavailableMessage() {
 }
 
 export function isReaderUnavailable(html) {
-  const $ = cheerio.load(html);
-  return $('[data-testid="tweet"], article').length === 0
-    && $('form[action*="login"], form input[name="text"][autocomplete="username"], form input[name="password"], a[href*="/i/flow/login"]').length > 0;
+  return isXReaderUnavailable(html, cheerio);
 }
 
 export function isAuthenticationChallenge({ status, headers, body } = {}) {

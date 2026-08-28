@@ -2518,6 +2518,26 @@ export const X_MATCH_HOSTS = Object.freeze(['x.com', 'twitter.com', 'twimg.com']
 export const DEFAULT_X_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const X_AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
 
+export function isXReaderUnavailable(html, cheerioParser) {
+  if (typeof html !== 'string' || !html) return false;
+  if (!cheerioParser) {
+    return !html.includes('data-testid="tweet"')
+      && !html.includes('<article')
+      && (html.includes('/i/flow/login') || (html.includes('name="password"') && html.includes('autocomplete="username"')));
+  }
+  const $ = cheerioParser.load(html);
+  return $('[data-testid="tweet"], article').length === 0
+    && $('form[action*="login"], form input[name="text"][autocomplete="username"], form input[name="password"], a[href*="/i/flow/login"]').length > 0;
+}
+
+export function xHeaders(config = {}, { includeCredentials = false } = {}) {
+  if (!includeCredentials) return {};
+  const cookies = [];
+  if (config.authToken) cookies.push(`auth_token=${config.authToken}`);
+  if (config.ct0) cookies.push(`ct0=${config.ct0}`);
+  return cookies.length ? { cookie: cookies.join('; ') } : {};
+}
+
 export const INSTAGRAM_MATCH_HOSTS = Object.freeze(['instagram.com', 'cdninstagram.com', 'fbcdn.net']);
 export const DEFAULT_INSTAGRAM_UNAVAILABLE_MESSAGE = 'Instagram 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const INSTAGRAM_AUTH_LOGIN_PATTERN = /\/(?:accounts\/login|login)(?:[/?#]|$)/i;
