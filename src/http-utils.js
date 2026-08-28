@@ -5497,7 +5497,309 @@ export function sourceHeaders(url, sources = {}, { includeCredentials = false, c
   return {
     'user-agent': 'rsshub-gateway/0.1',
     ...(referer ? { referer } : {}),
-    ...adapter.headers(credentials ?? sources[adapter.name], { includeCredentials }),
+    ...adapter?.headers?.(credentials ?? (adapter.name ? sources[adapter.name] : undefined), { includeCredentials }),
+  };
+}
+
+export function createUpstreamClient({
+  proxyUrl = DEFAULT_UPSTREAM_PROXY,
+  sourceConfig = {},
+  fetchImpl = fetch,
+  maxAttempts = DEFAULT_UPSTREAM_MAX_ATTEMPTS,
+  totalTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT,
+  sleep: sleepImpl,
+  now: nowImpl,
+  breaker: breakerImpl,
+  onRequestPolicy,
+  egressPool,
+  adapterFor,
+  ProxyAgentImpl = ProxyAgent,
+} = {}) {
+  const dispatcher = ProxyAgentImpl ? new ProxyAgentImpl(proxyUrl) : null;
+  const sleepFn = sleepImpl || sleep;
+  const nowFn = nowImpl || (() => Date.now());
+  const breaker = breakerImpl || new CircuitBreaker({ now: nowFn });
+
+  function sourceName(url) {
+    return new URL(url).hostname.toLowerCase();
+  }
+
+  async function requestWithPolicy(url, {
+    headers = {},
+    range,
+    priority = 'foreground',
+    galleryShard,
+    timeout = totalTimeoutMs,
+    source = sourceName(url),
+    useProxy = true,
+    allowTarget = false,
+    recordResponseFailures = true,
+    circuit = true,
+    egressScope = 'auto',
+    sessionDispatcher,
+    sessionCredentials,
+    allowSessionRetry = false,
+    authChallenge,
+    method = 'GET',
+  } = {}) {
+    let current = new URL(url);
+    const original = new URL(url);
+    let currentScope = egressScope;
+    let sessionRetried = currentScope === 'session';
+    const startedAt = nowFn();
+    const deadline = startedAt + timeout;
+    if (circuit && !breaker.canRequest(source)) {
+      throw new GatewayUpstreamError(`upstream circuit is open for ${source}`, {
+        code: 'UPSTREAM_CIRCUIT_OPEN',
+        source,
+        status: 503,
+        retryAfter: Math.ceil(breaker.cooldownMs / 1000),
+      });
+    }
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let redirects = 0;
+      let retryableFailure;
+      while (true) {
+        const remaining = deadline - nowFn();
+        if (remaining <= 0) {
+          if (circuit) breaker.recordFailure(source);
+          throw new GatewayUpstreamError(`upstream request timed out for ${source}`, {
+            code: 'UPSTREAM_TIMEOUT',
+            source,
+            status: 504,
+            attempts: attempt,
+          });
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), remaining);
+        const requestPolicy = egressPolicyForRequest(current, { scope: currentScope });
+        const requestHeaders = useProxy
+          ? {
+            ...sourceHeaders(current.toString(), sourceConfig, {
+              includeCredentials: currentScope === 'session',
+              credentials: sessionCredentials,
+              adapterFor,
+            }),
+            ...(currentScope === 'session' ? headers : withoutCredentials(headers)),
+          }
+          : headers;
+        if (range) requestHeaders.range = range;
+        let lease;
+        try {
+          let response;
+          try {
+            if (useProxy && currentScope === 'session') {
+              response = await fetchImpl(current, {
+                dispatcher: sessionDispatcher || dispatcher,
+                headers: requestHeaders,
+                method,
+                redirect: 'manual',
+                signal: controller.signal,
+              });
+            } else {
+              if (useProxy && egressPool && requestPolicy === 'public') {
+                try {
+                  lease = await egressPool.acquire({ host: current.hostname.toLowerCase(), priority, galleryShard });
+                } catch (error) {
+                  if (error?.code !== 'EGRESS_POOL_EMPTY') throw error;
+                }
+              }
+              response = await fetchImpl(current, {
+                ...(useProxy ? { dispatcher: lease?.dispatcher || dispatcher } : {}),
+                headers: requestHeaders,
+                method,
+                redirect: 'manual',
+                signal: controller.signal,
+              });
+            }
+          } catch (error) {
+            lease?.release({ error });
+            lease = undefined;
+            if (controller.signal.aborted) {
+              if (circuit) breaker.recordFailure(source);
+              throw new GatewayUpstreamError(`upstream request timed out for ${source}`, {
+                code: 'UPSTREAM_TIMEOUT',
+                source,
+                status: 504,
+                attempts: attempt,
+              });
+            }
+            retryableFailure = error;
+            break;
+          }
+
+          if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get('location');
+            if (!location) {
+              if (circuit) breaker.recordSuccess(source);
+              return responseWithLease(response, lease);
+            }
+            if (useProxy && allowSessionRetry && !sessionRetried && currentScope !== 'session'
+              && sessionDispatcher && sessionCredentials
+              && isAuthenticationRedirect(response)) {
+              await response.body?.cancel();
+              lease?.release({ status: response.status });
+              lease = undefined;
+              currentScope = 'session';
+              sessionRetried = true;
+              current = original;
+              continue;
+            }
+            if (!allowTarget) {
+              if (circuit) breaker.recordSuccess(source);
+              return responseWithLease(response, lease);
+            }
+            await response.body?.cancel();
+            lease?.release({ status: response.status });
+            lease = undefined;
+            current = new URL(location, current);
+            if (allowTarget && !isAllowedTarget(current)) {
+              throw new GatewayUpstreamError(`redirect target is outside the allowlist: ${current.hostname}`, {
+                code: 'UPSTREAM_REDIRECT_DISALLOWED',
+                source,
+                status: 502,
+                attempts: attempt,
+              });
+            }
+            redirects += 1;
+            if (redirects > DEFAULT_MAX_REDIRECTS) {
+              throw new GatewayUpstreamError(`too many redirects for ${source}`, {
+                code: 'UPSTREAM_REDIRECT_LIMIT',
+                source,
+                status: 502,
+                attempts: attempt,
+              });
+            }
+            continue;
+          }
+
+          if (isRetryableStatus(response.status)) {
+            retryableFailure = new GatewayUpstreamError(`upstream returned ${response.status}`, {
+              code: 'UPSTREAM_RETRYABLE_STATUS',
+              source,
+              status: response.status,
+              attempts: attempt,
+              retryAfter: parseRetryAfter(response),
+            });
+            await response.body?.cancel();
+            lease?.release({ status: response.status });
+            lease = undefined;
+            break;
+          }
+
+          if (useProxy && allowSessionRetry && !sessionRetried && currentScope !== 'session'
+            && sessionDispatcher && sessionCredentials
+            && await isAuthenticationChallenge(response, current, authChallenge)) {
+            await response.body?.cancel();
+            lease?.release({ status: response.status });
+            lease = undefined;
+            currentScope = 'session';
+            sessionRetried = true;
+            current = original;
+            continue;
+          }
+
+          if (circuit) breaker.recordSuccess(source);
+          return responseWithLease(response, lease);
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      if (attempt >= maxAttempts) {
+        if (circuit && (recordResponseFailures || retryableFailure?.code !== 'UPSTREAM_RETRYABLE_STATUS')) breaker.recordFailure(source);
+        throw new GatewayUpstreamError(retryableFailure?.message || `upstream request failed for ${source}`, {
+          code: 'UPSTREAM_RETRY_EXHAUSTED',
+          source,
+          status: 502,
+          attempts: attempt,
+          retryAfter: retryableFailure?.retryAfter,
+        });
+      }
+      const remaining = deadline - nowFn();
+      if (remaining <= 0) {
+        if (circuit) breaker.recordFailure(source);
+        throw new GatewayUpstreamError(`upstream request timed out for ${source}`, {
+          code: 'UPSTREAM_TIMEOUT',
+          source,
+          status: 504,
+          attempts: attempt,
+        });
+      }
+      const retryAfterDelay = retryableFailure?.retryAfter !== undefined && retryableFailure.retryAfter > 0
+        ? retryableFailure.retryAfter * 1000
+        : upstreamRetryDelay(attempt);
+      await sleepFn(Math.min(retryAfterDelay, remaining));
+    }
+    throw new GatewayUpstreamError(`upstream request failed for ${source}`, {
+      code: 'UPSTREAM_RETRY_EXHAUSTED',
+      source,
+      status: 502,
+      attempts: maxAttempts,
+    });
+  }
+
+  async function fetchExternal(url, {
+    headers = {},
+    range,
+    timeout,
+    priority = 'foreground',
+    galleryShard,
+    circuit = true,
+    egressScope = 'auto',
+    sessionDispatcher,
+    sessionCredentials,
+    allowSessionRetry = false,
+    authChallenge,
+  } = {}) {
+    const target = new URL(url);
+    if (!isAllowedTarget(target)) throw new Error('external target is not allowed');
+    try {
+      onRequestPolicy?.({
+        host: target.hostname.toLowerCase(),
+        policy: egressPolicyForRequest(target, { scope: egressScope }),
+      });
+    } catch {
+      // Diagnostics must never affect upstream requests.
+    }
+    return requestWithPolicy(target, {
+      headers,
+      range,
+      priority,
+      galleryShard,
+      timeout: timeout ?? totalTimeoutMs,
+      source: target.hostname.toLowerCase(),
+      useProxy: true,
+      allowTarget: true,
+      circuit,
+      egressScope,
+      sessionDispatcher,
+      sessionCredentials,
+      allowSessionRetry,
+      authChallenge,
+    });
+  }
+
+  async function fetchRssHub(pathAndQuery, rsshubUrl, headers = {}, { timeout, method = 'GET' } = {}) {
+    const base = rsshubUrl || process.env.RSSHUB_URL || 'http://rsshub:1200';
+    const target = new URL(pathAndQuery, base);
+    return requestWithPolicy(target, {
+      headers,
+      method: method === 'HEAD' ? 'HEAD' : 'GET',
+      timeout: timeout ?? totalTimeoutMs,
+      source: 'rsshub',
+      useProxy: false,
+      allowTarget: false,
+      recordResponseFailures: false,
+    });
+  }
+
+  return {
+    fetchExternal,
+    fetchRssHub,
+    openCircuits: () => breaker.openKeys(),
+    circuitStats: () => breaker.stats(),
   };
 }
 
