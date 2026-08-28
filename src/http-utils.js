@@ -3,6 +3,8 @@ import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+import { spawn as nodeSpawn } from 'node:child_process';
+import readline from 'node:readline';
 import { Readable } from 'node:stream';
 import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
@@ -2524,6 +2526,183 @@ export function messageToResponse(message) {
     json: async () => JSON.parse(body.toString('utf8')),
     text: async () => body.toString('utf8'),
   };
+}
+
+export function createBrowserFetchClient({
+  workerPath,
+  pythonBin = process.env.BROWSER_FETCH_PYTHON || DEFAULT_PYTHON_BIN,
+  httpFallbackUrl = process.env.IWARA_FETCHD_URL || '',
+  impersonate = process.env.FETCHD_IMPERSONATE || DEFAULT_IMPERSONATE,
+  maxBody = positiveInteger(process.env.FETCHD_MAX_BODY, DEFAULT_MAX_BODY),
+  spawnImpl = nodeSpawn,
+  canSpawn = () => true,
+  readlineImpl = readline,
+} = {}) {
+  const resolvedWorkerPath = workerPath || process.env.BROWSER_FETCH_WORKER_PATH || new URL('./fetch-worker.py', import.meta.url).pathname;
+  let child = null;
+  let nextId = 1;
+  const pending = new Map();
+  let workerFailed = false;
+  let closing = false;
+
+  function isWorkerUsable() {
+    return Boolean(child && !workerFailed && child.pid !== undefined);
+  }
+
+  function reapWorker() {
+    if (!child) return;
+    const dead = child;
+    child = null;
+    dead.removeAllListeners?.();
+    dead.stdout?.removeAllListeners?.('data');
+    dead.stderr?.removeAllListeners?.('data');
+    dead.stdin?.removeAllListeners?.('error');
+    try { dead.kill?.('SIGKILL'); } catch { /* already gone */ }
+  }
+
+  function failPending(error) {
+    for (const entry of pending.values()) {
+      clearTimeout(entry.timer);
+      entry.reject(error);
+    }
+    pending.clear();
+  }
+
+  function spawnWorker() {
+    if (closing) return false;
+    let spawned;
+    try {
+      spawned = spawnImpl(pythonBin, [resolvedWorkerPath], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      });
+    } catch (error) {
+      workerFailed = true;
+      failPending(browserFetchLineError(`browser fetch worker spawn failed: ${error.message}`));
+      return false;
+    }
+    child = spawned;
+    workerFailed = false;
+    spawned.stderr?.on('data', (chunk) => {
+      const text = String(chunk).trim();
+      if (text) console.log(JSON.stringify({ event: 'browser_fetch_worker', level: 'stderr', message: text.slice(0, 500) }));
+    });
+    spawned.stdin?.on('error', () => {});
+    spawned.stdout?.on('error', () => {});
+    spawned.on('error', (error) => {
+      workerFailed = true;
+      failPending(browserFetchLineError(`browser fetch worker error: ${error.message}`));
+    });
+    spawned.on('exit', (code, signal) => {
+      workerFailed = true;
+      const message = `browser fetch worker exited (code=${code} signal=${signal})`;
+      const error = browserFetchLineError(message, { code: 'FETCHD_WORKER_EXIT' });
+      for (const [id, entry] of [...pending.entries()]) {
+        clearTimeout(entry.timer);
+        pending.delete(id);
+        if (entry.retries < 1 && Date.now() - entry.started < 5_000) {
+          sendRaw(entry.payload, entry.retries + 1).then(entry.resolve, entry.reject);
+        } else {
+          entry.reject(error);
+        }
+      }
+      if (child === spawned) child = null;
+    });
+    spawned.stdout?.setEncoding?.('utf8');
+    const lines = readlineImpl.createInterface({ input: spawned.stdout });
+    lines.on('line', (line) => {
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        return;
+      }
+      const entry = pending.get(message.id);
+      if (!entry) return;
+      clearTimeout(entry.timer);
+      pending.delete(message.id);
+      if (message.ok) {
+        entry.resolve(message);
+      } else {
+        entry.reject(browserFetchLineError(message.error || 'browser fetch failed', {
+          code: message.code || 'FETCHD_ERROR',
+          status: message.status || 502,
+        }));
+      }
+    });
+    return true;
+  }
+
+  function sendRaw(payload, retries = 0) {
+    return new Promise((resolve, reject) => {
+      if (!isWorkerUsable() && !spawnWorker()) {
+        reject(browserFetchLineError('browser fetch worker unavailable'));
+        return;
+      }
+      const id = nextId++;
+      const entry = {
+        payload,
+        resolve,
+        reject,
+        retries,
+        started: Date.now(),
+        timer: null,
+      };
+      const timeoutMs = browserRequestTimeoutMs(payload.timeout);
+      entry.timer = setTimeout(() => {
+        pending.delete(id);
+        reject(browserFetchLineError(`browser fetch timed out after ${timeoutMs}ms`, { code: 'FETCHD_TIMEOUT' }));
+      }, timeoutMs);
+      pending.set(id, entry);
+      try {
+        child.stdin.write(`${JSON.stringify({ id, ...payload })}\n`);
+      } catch (error) {
+        clearTimeout(entry.timer);
+        pending.delete(id);
+        reject(browserFetchLineError(`browser fetch write failed: ${error.message}`));
+      }
+    });
+  }
+
+  function buildPayload(url, options = {}) {
+    return buildBrowserFetchPayload(url, options, impersonate, maxBody);
+  }
+
+  async function fetchdFetch(url, options = {}) {
+    const payload = buildPayload(url, options);
+    try {
+      const message = await sendRaw(payload);
+      return messageToResponse(message);
+    } catch (error) {
+      if (!closing && httpFallbackUrl && ['FETCHD_WORKER_EXIT', 'FETCHD_UNAVAILABLE'].includes(error.code)) {
+        const fallback = createFetchdClient({ baseUrl: httpFallbackUrl });
+        return fallback(url, options);
+      }
+      throw error;
+    }
+  }
+
+  function health() {
+    return {
+      transport: isWorkerUsable() ? 'worker' : (httpFallbackUrl ? 'http' : 'none'),
+      workerPid: child?.pid ?? null,
+      pending: pending.size,
+      impersonate,
+    };
+  }
+
+  function close() {
+    closing = true;
+    const error = browserFetchLineError('browser fetch client closed');
+    failPending(error);
+    reapWorker();
+  }
+
+  return { fetch: fetchdFetch, fetchdFetch, health, close };
+}
+
+export function createFetchdCompat({ browserFetch, httpFallbackUrl }) {
+  return browserFetch || createBrowserFetchClient({ httpFallbackUrl });
 }
 
 export const DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY = 2;
