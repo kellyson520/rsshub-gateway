@@ -10,6 +10,9 @@ import * as adultMedia from './adult-media.js';
 import {
   DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
   defaultAdapter,
+  getAdapterSourceNames,
+  isKnownAdapterTarget,
+  matchAdapter,
   resolveSourceMode as resolveMode,
   safeHost,
 } from '../http-utils.js';
@@ -20,21 +23,19 @@ export {
   DEFAULT_UNAVAILABLE_MESSAGE,
   defaultAdapter,
   resolveMode,
+  matchAdapter,
+  getAdapterSourceNames,
+  isKnownAdapterTarget,
 };
 
 export function adapterForUrl(url) {
-  const hostname = safeHost(url, '');
-  if (!hostname) {
-    return { ...defaultAdapter };
-  }
-  return { ...defaultAdapter, ...adapters.find((adapter) => adapter.matches(hostname)) };
+  return matchAdapter(url, adapters, defaultAdapter);
 }
 
 export function getSupportedSourceNames() {
-  return adapters.map((adapter) => adapter.name).filter(Boolean);
+  return getAdapterSourceNames(adapters);
 }
 
 export function isKnownSourceUrl(url) {
-  const adapter = adapterForUrl(url);
-  return adapter && adapter.name !== 'unknown';
+  return isKnownAdapterTarget(url, adapters, defaultAdapter);
 }

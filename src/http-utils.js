@@ -2514,6 +2514,23 @@ export function resolveSourceMode(source, config = {}) {
   return 'public';
 }
 
+export function matchAdapter(url, adapterList = [], fallback = defaultAdapter) {
+  const hostname = safeHost(url, '');
+  if (!hostname) {
+    return { ...fallback };
+  }
+  return { ...fallback, ...adapterList.find((adapter) => adapter.matches(hostname)) };
+}
+
+export function getAdapterSourceNames(adapterList = []) {
+  return adapterList.map((adapter) => adapter.name).filter(Boolean);
+}
+
+export function isKnownAdapterTarget(url, adapterList = [], fallback = defaultAdapter) {
+  const adapter = matchAdapter(url, adapterList, fallback);
+  return Boolean(adapter && adapter.name !== 'unknown');
+}
+
 export const X_MATCH_HOSTS = Object.freeze(['x.com', 'twitter.com', 'twimg.com']);
 export const DEFAULT_X_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const X_AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
