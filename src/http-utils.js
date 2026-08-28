@@ -1810,6 +1810,33 @@ export function listenerUrl(baseUrl, index, basePort = 7901) {
   return target.toString().replace(/\/$/, '');
 }
 
+export const DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY = 6;
+export const DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY = 3;
+export const DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY = 12;
+export const DEFAULT_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY = 2;
+export const DEFAULT_MEDIA_PREFETCH_MAX_RETRIES = 2;
+export const DEFAULT_MEDIA_PREFETCH_SUCCESS_RAMP_AFTER = 6;
+export const DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
+export const MAX_MEDIA_PREFETCH_QUEUE_ITEMS = 2_000;
+export const MAX_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY = 48;
+
+export function mediaOriginFor(target, allowedHosts = ALLOWED_HOSTS) {
+  try {
+    const parsed = new URL(target);
+    return isAllowedTarget(parsed, allowedHosts) ? parsed.host.toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+export const DEFAULT_FEED_PREFETCH_INTERVAL_MS = 900_000;
+export const DEFAULT_FEED_PREFETCH_CONCURRENCY = 2;
+export const DEFAULT_FEED_PREFETCH_MAX_RETRIES = 2;
+export const DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS = 5_000;
+export const MAX_FEED_PREFETCH_CONCURRENCY = 8;
+export const MAX_FEED_PREFETCH_RETRIES = 5;
+export const MAX_FEED_PREFETCH_INTERVAL_CAP_MS = 4 * 60 * 60_000;
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

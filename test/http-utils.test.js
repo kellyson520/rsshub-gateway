@@ -1460,6 +1460,29 @@ test('mihomo egress and lease backfill utilities format lane identities and prob
   assert.equal(listenerUrl('http://127.0.0.1', 2, 7921), 'http://127.0.0.1:7923');
 });
 
+test('media prefetch and feed prefetch constants and origin extraction function properly', async () => {
+  const {
+    mediaOriginFor,
+    DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY,
+    DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY,
+    DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY,
+    DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+    DEFAULT_FEED_PREFETCH_CONCURRENCY,
+    DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY, 6);
+  assert.equal(DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY, 3);
+  assert.equal(DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY, 12);
+  assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900000);
+  assert.equal(DEFAULT_FEED_PREFETCH_CONCURRENCY, 2);
+  assert.equal(DEFAULT_FEED_PREFETCH_MAX_RETRIES, 2);
+
+  assert.equal(mediaOriginFor('https://e-hentai.org/g/1/2'), 'e-hentai.org');
+  assert.equal(mediaOriginFor('https://not-allowed-domain.xyz/image.jpg'), '');
+  assert.equal(mediaOriginFor('not-a-url'), '');
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

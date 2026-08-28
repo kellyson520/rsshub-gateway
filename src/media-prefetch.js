@@ -1,33 +1,30 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
-import { isAllowedTarget } from './signed-target.js';
-import { atomicWriteJson, boundedInteger, clamp, safeEvent, safeJsonParse, sleep as defaultSleep } from './http-utils.js';
+import {
+  atomicWriteJson,
+  boundedInteger,
+  clamp,
+  DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY as DEFAULT_INITIAL_CONCURRENCY,
+  DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY as DEFAULT_MAX_CONCURRENCY,
+  DEFAULT_MEDIA_PREFETCH_MAX_RETRIES as DEFAULT_MAX_RETRIES,
+  DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY as DEFAULT_MIN_CONCURRENCY,
+  DEFAULT_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY as DEFAULT_PER_ORIGIN_CONCURRENCY,
+  DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS as DEFAULT_QUEUE_TTL_MS,
+  DEFAULT_MEDIA_PREFETCH_SUCCESS_RAMP_AFTER as DEFAULT_SUCCESS_RAMP_AFTER,
+  MAX_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY as MAX_PER_ORIGIN_CONCURRENCY,
+  MAX_MEDIA_PREFETCH_QUEUE_ITEMS as MAX_QUEUE_ITEMS,
+  mediaOriginFor as originFor,
+  safeEvent,
+  safeJsonParse,
+  sleep as defaultSleep,
+} from './http-utils.js';
 import {
   isRetryableStatus as retryableStatus,
   isSuccessfulStatus as successfulStatus,
   RETRYABLE_STATUSES,
 } from './upstream-errors.js';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-
-const DEFAULT_INITIAL_CONCURRENCY = 6;
-const DEFAULT_MIN_CONCURRENCY = 3;
-const DEFAULT_MAX_CONCURRENCY = 12;
-const DEFAULT_PER_ORIGIN_CONCURRENCY = 2;
-const DEFAULT_MAX_RETRIES = 2;
-const DEFAULT_SUCCESS_RAMP_AFTER = 6;
-const DEFAULT_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_QUEUE_ITEMS = 2_000;
-const MAX_PER_ORIGIN_CONCURRENCY = 48;
-
-function originFor(target) {
-  try {
-    const parsed = new URL(target);
-    return isAllowedTarget(parsed) ? parsed.host.toLowerCase() : '';
-  } catch {
-    return '';
-  }
-}
 
 export {
   originFor,
