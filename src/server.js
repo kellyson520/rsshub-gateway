@@ -17,6 +17,7 @@ import {
   decodeJwtPayload,
   dedupe,
   documentCacheKind,
+  failureMessage,
   fetchCachedDocument,
   imageVariantCacheUrl,
   mapWithConcurrency,
@@ -26,6 +27,7 @@ import {
   readLimited,
   responseFromCachedDocument,
   responseHeaders,
+  routeBucket,
   sleep,
 } from './http-utils.js';
 import { DEFAULT_CACHE_ROOT, resolveGatewayOptions } from './options.js';
@@ -137,11 +139,6 @@ async function warmEhMedia({ pages, cache, fetcher, maxBytes, count, concurrency
     }
   });
   return { targets, failedTargets: results.filter((result) => result.failed).map((result) => result.target) };
-}
-
-function failureMessage(kind, pageNumber) {
-  if (kind === 'gallery') return `画廊分页 ${pageNumber} 暂时无法读取`;
-  return `第 ${pageNumber} 页暂时无法读取`;
 }
 
 async function discoverEhGallery({
@@ -307,20 +304,6 @@ async function prefetchEhGallery({
     truncated: discovery.truncated,
     status,
   };
-}
-
-function routeBucket(pathname) {
-  if (pathname === '/healthz') return 'healthz';
-  if (pathname === '/readyz') return 'readyz';
-  if (pathname.startsWith('/_gateway/lease/')) return 'lease';
-  if (pathname.startsWith('/_gateway/chunk/')) return 'chunk';
-  if (pathname.startsWith('/_gateway/infra')) return 'infra';
-  if (pathname.startsWith('/_gateway/prefetch')) return 'prefetch';
-  if (pathname.startsWith('/_gateway/metrics')) return 'metrics';
-  if (pathname.startsWith('/_gateway/item/')) return 'item';
-  if (pathname.startsWith('/_gateway/media/')) return 'media';
-  if (pathname.startsWith('/ehviewer/')) return 'ehviewer';
-  return 'feed';
 }
 
 export function createGatewayServer(options = {}) {

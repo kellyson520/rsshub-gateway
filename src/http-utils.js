@@ -635,6 +635,26 @@ export function withPrefetchStatus(view, target, prefetchStatus) {
   return { ...view, prefetch: typeof prefetchStatus === 'function' ? (prefetchStatus(target) ?? null) : null };
 }
 
+export function failureMessage(kind, pageNumber) {
+  if (kind === 'gallery') return `画廊分页 ${pageNumber} 暂时无法读取`;
+  return `第 ${pageNumber} 页暂时无法读取`;
+}
+
+export function routeBucket(pathname) {
+  const p = String(pathname || '');
+  if (p === '/healthz') return 'healthz';
+  if (p === '/readyz') return 'readyz';
+  if (p.startsWith('/_gateway/lease/')) return 'lease';
+  if (p.startsWith('/_gateway/chunk/')) return 'chunk';
+  if (p.startsWith('/_gateway/infra')) return 'infra';
+  if (p.startsWith('/_gateway/prefetch')) return 'prefetch';
+  if (p.startsWith('/_gateway/metrics')) return 'metrics';
+  if (p.startsWith('/_gateway/item/')) return 'item';
+  if (p.startsWith('/_gateway/media/')) return 'media';
+  if (p.startsWith('/ehviewer/')) return 'ehviewer';
+  return 'feed';
+}
+
 export function durationCheckpoint(results = [], count = 0) {
   const safeCount = Number.isInteger(count) ? count : 0;
   if (!safeCount || !Array.isArray(results) || !results.length) return 0;

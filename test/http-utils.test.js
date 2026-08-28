@@ -597,6 +597,25 @@ test('downloadSessionView and withPrefetchStatus project download session and pr
   assert.equal(withPrefetchStatus(null, 'target', () => {}), null);
 });
 
+test('failureMessage and routeBucket provide degradation messaging and route classification', async () => {
+  const { failureMessage, routeBucket } = await import('../src/http-utils.js');
+  assert.equal(failureMessage('gallery', 2), '画廊分页 2 暂时无法读取');
+  assert.equal(failureMessage('image', 5), '第 5 页暂时无法读取');
+
+  assert.equal(routeBucket('/healthz'), 'healthz');
+  assert.equal(routeBucket('/readyz'), 'readyz');
+  assert.equal(routeBucket('/_gateway/lease/create'), 'lease');
+  assert.equal(routeBucket('/_gateway/chunk/123'), 'chunk');
+  assert.equal(routeBucket('/_gateway/infra/stats'), 'infra');
+  assert.equal(routeBucket('/_gateway/prefetch/queue'), 'prefetch');
+  assert.equal(routeBucket('/_gateway/metrics'), 'metrics');
+  assert.equal(routeBucket('/_gateway/item/token'), 'item');
+  assert.equal(routeBucket('/_gateway/media/token'), 'media');
+  assert.equal(routeBucket('/ehviewer/ranking'), 'ehviewer');
+  assert.equal(routeBucket('/feed/rss.xml'), 'feed');
+  assert.equal(routeBucket(null), 'feed');
+});
+
 test('exports CACHE_RESPONSE_HEADERS, DEFAULT_READ_LIMIT_BYTES and IMAGE_VARIANT_CACHE_VERSION constants', async () => {
   const {
     CACHE_RESPONSE_HEADERS,
