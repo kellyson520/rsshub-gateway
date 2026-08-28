@@ -2017,6 +2017,48 @@ export function isAdultMediaChallenge({ status, headers, body } = {}) {
   return ADULT_CHALLENGE_SUBSTRINGS.some((substr) => body.includes(substr));
 }
 
+export const SLICE_ALIGN = 64 * 1024;
+export const DEFAULT_SLICE_SIZE = 4 * 1024 * 1024;
+export const DEFAULT_SLICE_LOOKAHEAD_BYTES = 16 * 1024 * 1024;
+export const DEFAULT_KNOWN_SIZE_TTL_MS = 24 * 60 * 60_000;
+export const DEFAULT_KNOWN_SIZE_CAP = 10_000;
+export const DEFAULT_PREFETCH_STATES_CAP = 1000;
+
+export function sliceRanges(start, end, size, {
+  sliceSize = DEFAULT_SLICE_SIZE,
+  lookahead = DEFAULT_SLICE_LOOKAHEAD_BYTES,
+} = {}) {
+  const slice = Math.max(SLICE_ALIGN, Math.ceil(sliceSize / SLICE_ALIGN) * SLICE_ALIGN);
+  const from = Math.max(0, Number(start) || 0);
+  const endValue = end === undefined || end === null ? size - 1 : Number(end);
+  const to = Number.isFinite(endValue) ? Math.min(size - 1, endValue) : size - 1;
+  if (from > to || !Number.isSafeInteger(size) || size <= 0) return { slice, ranges: [] };
+  const firstIndex = Math.floor(from / slice);
+  const prefetchEnd = Math.min(size - 1, Math.max(to, firstIndex * slice + lookahead - 1));
+  const lastIndex = Math.floor(prefetchEnd / slice);
+  const ranges = [];
+  for (let index = firstIndex; index <= lastIndex; index += 1) {
+    ranges.push({ start: index * slice, end: Math.min(size - 1, index * slice + slice - 1), index });
+  }
+  return { slice, ranges };
+}
+
+export const DEFAULT_PREFETCH_WAIT_MS = 30_000;
+export const MAX_PREFETCH_WAIT_MS = 60_000;
+
+export function writeEncodedText(res, req, status, body, contentType = 'text/plain; charset=utf-8', headers = {}) {
+  const encoded = encodeTextResponse({
+    body,
+    contentType,
+    acceptEncoding: req?.headers?.['accept-encoding'],
+    method: 'GET',
+    headers,
+  });
+  res.writeHead(status, { 'content-type': contentType, ...encoded.headers });
+  if (req?.method === 'HEAD') res.end();
+  else res.end(encoded.body);
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

@@ -1627,6 +1627,46 @@ test('canonical system gateway configuration default constants are defined and e
   assert.equal(isAdultMediaChallenge({ status: 403 }), true);
   assert.equal(isAdultMediaChallenge({ status: 200, body: '<html>Just a moment...</html>' }), true);
   assert.equal(isAdultMediaChallenge({ status: 200, body: '<html>Normal page content</html>' }), false);
+
+  const {
+    SLICE_ALIGN,
+    DEFAULT_SLICE_SIZE,
+    DEFAULT_SLICE_LOOKAHEAD_BYTES,
+    sliceRanges,
+    DEFAULT_PREFETCH_WAIT_MS,
+    MAX_PREFETCH_WAIT_MS,
+    writeEncodedText,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(SLICE_ALIGN, 64 * 1024);
+  assert.equal(DEFAULT_SLICE_SIZE, 4 * 1024 * 1024);
+  assert.equal(DEFAULT_SLICE_LOOKAHEAD_BYTES, 16 * 1024 * 1024);
+  assert.equal(DEFAULT_PREFETCH_WAIT_MS, 30000);
+  assert.equal(MAX_PREFETCH_WAIT_MS, 60000);
+
+  const slices = sliceRanges(0, 10 * 1024 * 1024, 20 * 1024 * 1024, { sliceSize: 4 * 1024 * 1024, lookahead: 8 * 1024 * 1024 });
+  assert.ok(slices.ranges.length >= 2);
+  assert.equal(slices.ranges[0].start, 0);
+
+  // Test writeEncodedText
+  let writtenStatus = 0;
+  let writtenHeaders = {};
+  let writtenBody = null;
+  let ended = false;
+  const fakeRes = {
+    writeHead(status, headers) {
+      writtenStatus = status;
+      writtenHeaders = headers;
+    },
+    end(body) {
+      writtenBody = body;
+      ended = true;
+    },
+  };
+  writeEncodedText(fakeRes, { headers: {} }, 200, 'hello plain text');
+  assert.equal(writtenStatus, 200);
+  assert.equal(ended, true);
+  assert.equal(writtenHeaders['content-type'], 'text/plain; charset=utf-8');
 });
 
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {

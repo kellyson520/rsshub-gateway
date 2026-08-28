@@ -14,10 +14,12 @@ import { pumpResumableRange } from './media/resumable-range.js';
 import { encodeHtmlResponse, encodeTextResponse } from './http-encoding.js';
 import {
   boundedInteger,
+  DEFAULT_PREFETCH_WAIT_MS,
   downloadSessionView,
   fetchCachedDocument,
   isBearerAuthorized,
   isEhImagePageTarget,
+  MAX_PREFETCH_WAIT_MS,
   mediaFileName,
   positiveInteger,
   promLabel,
@@ -30,6 +32,7 @@ import {
   sourceMetricName,
   withPrefetchStatus,
   writeBuffer,
+  writeEncodedText,
   writeGatewayError,
   writeJson,
   writeText,
@@ -56,28 +59,6 @@ export {
   DEFAULT_PREFETCH_WAIT_MS,
   MAX_PREFETCH_WAIT_MS,
 };
-
-const DEFAULT_PREFETCH_WAIT_MS = 30_000;
-const MAX_PREFETCH_WAIT_MS = 60_000;
-
-// Unified post-processing text writer: brotli/gzip edge compression for every
-// text-ish response (charter: 所有流量统一经过后处理层) and correct HEAD
-// semantics (headers without a body).
-function writeEncodedText(res, req, status, body, contentType = 'text/plain; charset=utf-8', headers = {}) {
-  // Compute headers exactly as a GET would (content-encoding + compressed
-  // content-length), then suppress the body for HEAD so HEAD answers are
-  // faithful previews of GET.
-  const encoded = encodeTextResponse({
-    body,
-    contentType,
-    acceptEncoding: req.headers['accept-encoding'],
-    method: 'GET',
-    headers,
-  });
-  res.writeHead(status, { 'content-type': contentType, ...encoded.headers });
-  if (req.method === 'HEAD') res.end();
-  else res.end(encoded.body);
-}
 
 export function createRequestHandler(deps) {
   const {

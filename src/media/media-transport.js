@@ -1,24 +1,24 @@
 import { Readable } from 'node:stream';
 import {
   CACHE_RESPONSE_HEADERS,
-  IMAGE_VARIANT_CACHE_VERSION,
   clamp,
+  DEFAULT_KNOWN_SIZE_CAP,
+  DEFAULT_KNOWN_SIZE_TTL_MS,
+  DEFAULT_MEDIA_BROWSER_CACHE_SECONDS,
+  DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES,
+  DEFAULT_PREFETCH_STATES_CAP,
+  DEFAULT_SLICE_LOOKAHEAD_BYTES,
+  DEFAULT_SLICE_SIZE,
+  DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
+  IMAGE_VARIANT_CACHE_VERSION,
   imageVariantCacheUrl,
   nonNegativeInteger,
   parseByteRange,
   responseFromCachedDocument,
   responseHeaders,
+  SLICE_ALIGN,
+  sliceRanges,
 } from '../http-utils.js';
-
-const SLICE_ALIGN = 64 * 1024;
-const DEFAULT_SLICE_SIZE = 4 * 1024 * 1024;
-const DEFAULT_SLICE_LOOKAHEAD_BYTES = 16 * 1024 * 1024;
-const DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES = 32 * 1024 ** 2;
-const DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
-const DEFAULT_MEDIA_BROWSER_CACHE_SECONDS = 300;
-const DEFAULT_KNOWN_SIZE_TTL_MS = 24 * 60 * 60_000;
-const DEFAULT_KNOWN_SIZE_CAP = 10_000;
-const DEFAULT_PREFETCH_STATES_CAP = 1000;
 
 export {
   CACHE_RESPONSE_HEADERS,
@@ -36,28 +36,8 @@ export {
   responseFromCachedDocument,
   imageVariantCacheUrl,
   parseByteRange,
+  sliceRanges,
 };
-
-export function sliceRanges(start, end, size, {
-  sliceSize = 4 * 1024 * 1024,
-  lookahead = 16 * 1024 * 1024,
-} = {}) {
-  const slice = Math.max(SLICE_ALIGN, Math.ceil(sliceSize / SLICE_ALIGN) * SLICE_ALIGN);
-  const from = Math.max(0, Number(start) || 0);
-  // Number(undefined) is NaN and NaN ?? fallback does NOT fall back: an omitted
-  // end must mean "to EOF", not an empty plan.
-  const endValue = end === undefined || end === null ? size - 1 : Number(end);
-  const to = Number.isFinite(endValue) ? Math.min(size - 1, endValue) : size - 1;
-  if (from > to || !Number.isSafeInteger(size) || size <= 0) return { slice, ranges: [] };
-  const firstIndex = Math.floor(from / slice);
-  const prefetchEnd = Math.min(size - 1, Math.max(to, firstIndex * slice + lookahead - 1));
-  const lastIndex = Math.floor(prefetchEnd / slice);
-  const ranges = [];
-  for (let index = firstIndex; index <= lastIndex; index += 1) {
-    ranges.push({ start: index * slice, end: Math.min(size - 1, index * slice + slice - 1), index });
-  }
-  return { slice, ranges };
-}
 
 /**
  * Unified media transport.
