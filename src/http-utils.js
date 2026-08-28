@@ -4647,28 +4647,38 @@ export async function unregisterDispatcherRoutes({
   token,
   routeIds,
   name = 'fetcher',
+  retries = 3,
+  retryDelayMs = DEFAULT_REGISTER_RETRY_DELAY_MS,
   fetchImpl = fetch,
   timeoutMs = DEFAULT_UNREGISTER_TIMEOUT_MS,
 } = {}) {
   if (!url || !token || !Array.isArray(routeIds) || routeIds.length === 0) return;
-  try {
-    await fetchImpl(url, {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ routeIds }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    process.stdout.write(JSON.stringify({
-      event: `${name}_routes_unregistered`,
-      routes: routeIds.length,
-      ts: new Date().toISOString(),
-    }) + '\n');
-  } catch (error) {
-    process.stderr.write(JSON.stringify({
-      event: `${name}_routes_unregister_failed`,
-      error: error.message,
-      ts: new Date().toISOString(),
-    }) + '\n');
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ routeIds }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`gateway returned ${response.status}`);
+      process.stdout.write(JSON.stringify({
+        event: `${name}_routes_unregistered`,
+        routes: routeIds.length,
+        ts: new Date().toISOString(),
+      }) + '\n');
+      return;
+    } catch (error) {
+      if (attempt >= retries) {
+        process.stderr.write(JSON.stringify({
+          event: `${name}_routes_unregister_failed`,
+          error: error.message,
+          ts: new Date().toISOString(),
+        }) + '\n');
+        return;
+      }
+      await sleep(retryDelayMs);
+    }
   }
 }
 

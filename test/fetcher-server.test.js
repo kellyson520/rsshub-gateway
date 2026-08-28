@@ -116,6 +116,8 @@ test('unregisterDispatcherRoutes sends a DELETE with route ids', async () => {
       url: `http://127.0.0.1:${port}/_gateway/dispatcher/routes`,
       token: 'reg-token',
       routeIds: ['/iwara/users/:username/:kind?'],
+      retries: 5,
+      retryDelayMs: 20,
     });
     assert.equal(requests.length, 1);
     assert.equal(requests[0].method, 'DELETE');
