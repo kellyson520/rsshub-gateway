@@ -1,95 +1,17 @@
 import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
-import { cookiesObject, resolveRedirect } from './http-utils.js';
+import {
+  compilePattern,
+  cookiesObject,
+  matchSegments,
+  normalizeRoute,
+  resolveRedirect,
+  sidecarUrl,
+} from './http-utils.js';
 
 const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || 'gateway-routes.yaml';
 // 浏览器渲染类 sidecar（fetcher-missav）需要更长时间；curl_cffi 类 sidecar 远快于此。
 const DEFAULT_SIDECAR_TIMEOUT_MS = 60_000;
-
-function compilePattern(routeId) {
-  const segments = String(routeId).split('/').filter(Boolean);
-  const pattern = [];
-  let star = false;
-  for (const segment of segments) {
-    if (segment === '*') {
-      star = true;
-      pattern.push({ type: 'star' });
-    } else if (segment.startsWith(':')) {
-      const name = segment.slice(1);
-      if (name.endsWith('?')) {
-        pattern.push({ type: 'optional', name: name.slice(0, -1) });
-      } else {
-        pattern.push({ type: 'param', name });
-      }
-    } else {
-      pattern.push({ type: 'literal', value: segment });
-    }
-  }
-  if (star && pattern[pattern.length - 1].type !== 'star') {
-    throw new Error(`route "${routeId}": * must be the last segment`);
-  }
-  return pattern;
-}
-
-function normalizeRoute(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const routeId = String(raw.routeId || '').trim();
-  const backend = String(raw.backend || '').trim();
-  if (!routeId || !backend) return null;
-  let pattern;
-  try {
-    pattern = compilePattern(routeId);
-  } catch {
-    return null;
-  }
-  const fallbackUpstream = raw.fallback_upstream === true || raw.fallbackUpstream === true;
-  const cacheTtl = Number.isInteger(raw.cacheTtl) && raw.cacheTtl > 0 ? raw.cacheTtl : undefined;
-  const redirectTo = typeof raw.redirectTo === 'string' && raw.redirectTo.trim()
-    ? raw.redirectTo.trim()
-    : (typeof raw.redirect_to === 'string' && raw.redirect_to.trim() ? raw.redirect_to.trim() : undefined);
-  return { routeId, backend, fallbackUpstream, cacheTtl, redirectTo, pattern };
-}
-
-function matchSegments(pattern, segments) {
-  const params = {};
-  const starIndex = pattern.findIndex((part) => part.type === 'star');
-  const required = pattern.filter((part) => part.type !== 'optional');
-  const minLength = starIndex >= 0 ? starIndex : required.length;
-  const maxLength = starIndex >= 0 ? Infinity : pattern.length;
-  if (segments.length < minLength || segments.length > maxLength) return null;
-  let segmentIndex = 0;
-  for (let index = 0; index < pattern.length; index += 1) {
-    const part = pattern[index];
-    if (part.type === 'star') {
-      return params;
-    }
-    if (segmentIndex >= segments.length) {
-      if (part.type === 'optional') return params;
-      return null;
-    }
-    const value = segments[segmentIndex];
-    if (part.type === 'literal') {
-      if (value !== part.value) return null;
-    } else if (part.type === 'param' || part.type === 'optional') {
-      try {
-        params[part.name] = decodeURIComponent(value);
-      } catch {
-        // Malformed percent-encoding must reject the match, never crash the
-        // process: the request then falls through to upstream RSSHub.
-        return null;
-      }
-    }
-    segmentIndex += 1;
-  }
-  return segmentIndex === segments.length ? params : null;
-}
-
-function sidecarUrl(backend) {
-  if (typeof backend !== 'string' || !backend.startsWith('sidecar://')) return null;
-  const hostPort = backend.slice('sidecar://'.length).replace(/\/$/, '');
-  if (!hostPort) return null;
-  return `http://${hostPort}`;
-}
 
 export {
   compilePattern,

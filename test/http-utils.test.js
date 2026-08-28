@@ -685,6 +685,53 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('compilePattern, normalizeRoute, matchSegments and sidecarUrl provide route pattern matching and sidecar url resolution', async () => {
+  const {
+    compilePattern,
+    normalizeRoute,
+    matchSegments,
+    sidecarUrl,
+  } = await import('../src/http-utils.js');
+
+  const pattern = compilePattern('/user/:id/posts/:page?/*');
+  assert.deepEqual(pattern, [
+    { type: 'literal', value: 'user' },
+    { type: 'param', name: 'id' },
+    { type: 'literal', value: 'posts' },
+    { type: 'optional', name: 'page' },
+    { type: 'star' },
+  ]);
+
+  assert.throws(() => compilePattern('/*/extra'), /must be the last segment/);
+
+  const route = normalizeRoute({
+    routeId: '/iwara/video/:id',
+    backend: 'sidecar://127.0.0.1:8001',
+    fallback_upstream: true,
+    cacheTtl: 3600,
+  });
+  assert.equal(route.routeId, '/iwara/video/:id');
+  assert.equal(route.backend, 'sidecar://127.0.0.1:8001');
+  assert.equal(route.fallbackUpstream, true);
+  assert.equal(route.cacheTtl, 3600);
+  assert.equal(normalizeRoute(null), null);
+  assert.equal(normalizeRoute({}), null);
+
+  const matched = matchSegments(pattern, ['user', 'alice', 'posts', '2', 'deep', 'link']);
+  assert.deepEqual(matched, { id: 'alice', page: '2' });
+
+  const optionalPattern = compilePattern('/user/:id/:page?');
+  const matchedOptional = matchSegments(optionalPattern, ['user', 'bob']);
+  assert.deepEqual(matchedOptional, { id: 'bob' });
+
+  assert.equal(matchSegments(pattern, ['user']), null);
+  assert.equal(matchSegments(null, ['user']), null);
+
+  assert.equal(sidecarUrl('sidecar://127.0.0.1:8000/'), 'http://127.0.0.1:8000');
+  assert.equal(sidecarUrl('https://example.com'), null);
+  assert.equal(sidecarUrl(null), null);
+});
+
 test('cookiesObject and resolveRedirect parse cookie headers and resolve route templates', async () => {
   const { cookiesObject, resolveRedirect } = await import('../src/http-utils.js');
 
