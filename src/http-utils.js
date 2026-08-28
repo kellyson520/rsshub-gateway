@@ -2092,6 +2092,129 @@ export const DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY = 2;
 export const DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET = 128 * 1024 ** 2;
 export const DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES = 256 * 1024 ** 2;
 
+export function createLeaseBackfillQueue({
+  mediaTransport,
+  fetchExternal,
+  resolveMediaUrl = async () => null,
+  leaseStore,
+  cache,
+  isVideoTarget = () => false,
+  probeSize,
+  maxConcurrency = DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY,
+  evictionBudget = DEFAULT_LEASE_BACKFILL_EVICTION_BUDGET,
+  videoCacheMaxFileBytes = DEFAULT_LEASE_BACKFILL_VIDEO_CACHE_MAX_FILE_BYTES,
+  logger = { info() {}, warn() {}, error() {} },
+} = {}) {
+  const limit = boundedInteger(maxConcurrency, DEFAULT_LEASE_BACKFILL_MAX_CONCURRENCY, 0, 8);
+  const active = new Map();
+  const stops = new Map();
+  const stats = { running: 0, completed: 0, failed: 0, skipped: 0, bytesFilled: 0 };
+  let running = 0;
+
+  function sizeFor(lease) {
+    if (typeof probeSize === 'function') return probeSize(lease);
+    if (mediaTransport?.probeSize) {
+      return mediaTransport.probeSize(lease.targetUrl, { namespace: 'public' });
+    }
+    return null;
+  }
+
+  function cacheHeadroom() {
+    return calculateCacheHeadroom(cache?.stats?.(), evictionBudget);
+  }
+
+  async function run(lease) {
+    const target = String(lease.targetUrl || '');
+    const stop = stops.get(target) || { stopped: false };
+    let host = 'unknown';
+    try {
+      host = new URL(target).hostname;
+    } catch {
+      // Diagnostics must never fail backfill.
+    }
+    try {
+      const size = await sizeFor(lease);
+      if (!Number.isSafeInteger(size) || size <= 0) {
+        stats.skipped += 1;
+        logger.info('lease_backfill_skipped', { host, reason: 'unknown-size' });
+        return;
+      }
+      const expected = Math.min(size, videoCacheMaxFileBytes);
+      if (cacheHeadroom() < expected) {
+        stats.skipped += 1;
+        logger.info('lease_backfill_skipped', { host, reason: 'cache-full' });
+        return;
+      }
+      const resolved = await resolveMediaUrl(target);
+      if (!resolved?.url) {
+        stats.skipped += 1;
+        logger.info('lease_backfill_skipped', { host, reason: 'unresolved' });
+        return;
+      }
+      mediaTransport?.rememberVideoSize?.(target, size);
+      await mediaTransport.fillVideoSlices(
+        target,
+        resolved.url,
+        size,
+        'public',
+        { start: 0, end: size - 1 },
+        videoCacheMaxFileBytes,
+        { shouldStop: () => stop.stopped },
+      );
+      stats.bytesFilled += expected;
+      stats.completed += 1;
+      logger.info('lease_backfill_completed', { host, size });
+    } catch (error) {
+      stats.failed += 1;
+      logger.warn('lease_backfill_failed', { host, error: error.message });
+    } finally {
+      active.delete(target);
+      stops.delete(target);
+      running -= 1;
+      stats.running = running;
+    }
+  }
+
+  function enqueue(lease) {
+    if (!lease || !isVideoTarget(lease.targetUrl) || !lease.resolvedUrl) {
+      stats.skipped += 1;
+      return Promise.resolve();
+    }
+    const target = String(lease.targetUrl || '');
+    const existing = active.get(target);
+    if (existing) return existing;
+    if (limit > 0 && running >= limit) {
+      stats.skipped += 1;
+      return Promise.resolve();
+    }
+    if (!stops.has(target)) stops.set(target, { stopped: false, usernames: new Set() });
+    const stop = stops.get(target);
+    stop.usernames.add(lease.username);
+    running += 1;
+    stats.running = running;
+    const task = run(lease);
+    active.set(target, task);
+    return task;
+  }
+
+  function cancel(username) {
+    const name = String(username);
+    for (const [target, stop] of stops) {
+      stop.usernames.delete(name);
+      if (!stop.usernames.size) {
+        stop.stopped = true;
+        stops.delete(target);
+      }
+    }
+  }
+
+  return {
+    enqueue,
+    cancel,
+    stats: () => ({ ...stats }),
+  };
+}
+
 export const DEFAULT_EGRESS_CONTROLLER_URL = 'http://127.0.0.1:9090';
 export const DEFAULT_EGRESS_LISTENER_BASE_URL = 'http://127.0.0.1';
 export const DEFAULT_EGRESS_LANE_COUNT = 12;
