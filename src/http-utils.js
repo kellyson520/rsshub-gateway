@@ -698,6 +698,45 @@ export function failureMessage(kind, pageNumber) {
   return `第 ${pageNumber} 页暂时无法读取`;
 }
 
+export function extractEhGalleryTitle({ url, html }) {
+  const str = String(html || '');
+  const gnMatch = str.match(/<h1[^>]*id=["']gn["'][^>]*>([\s\S]*?)<\/h1>/i);
+  if (gnMatch) {
+    const text = cleanText(gnMatch[1].replace(/<[^>]+>/g, ''));
+    if (text) return text;
+  }
+  const titleMatch = str.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleMatch) {
+    const text = cleanText(titleMatch[1].replace(/<[^>]+>/g, ''));
+    if (text) return text;
+  }
+  return cleanText(url) || url;
+}
+
+export function initialEhGalleryManifest(opts = {}) {
+  if (!opts || typeof opts !== 'object') return null;
+  const {
+    adapter,
+    target,
+    initialHtml,
+    maxPages,
+    extractTitle = extractEhGalleryTitle,
+  } = opts;
+  if (!adapter || typeof adapter.imagePageUrls !== 'function') return null;
+  const rawImageUrls = adapter.imagePageUrls(initialHtml, target) || [];
+  const imageUrls = rawImageUrls.slice(0, maxPages);
+  const galleryUrls = typeof adapter.galleryPageUrls === 'function' ? (adapter.galleryPageUrls(initialHtml, target) || []) : [];
+  return {
+    galleryUrls,
+    imageUrls,
+    failures: [],
+    truncated: false,
+    totalPages: imageUrls.length,
+    status: 200,
+    title: typeof extractTitle === 'function' ? extractTitle({ url: target, html: initialHtml }) : 'E-Hentai 画廊',
+  };
+}
+
 export function routeBucket(pathname) {
   const p = String(pathname || '');
   if (p === '/healthz') return 'healthz';

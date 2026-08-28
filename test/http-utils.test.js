@@ -666,6 +666,33 @@ test('downloadSessionView and withPrefetchStatus project download session and pr
   assert.equal(withPrefetchStatus(null, 'target', () => {}), null);
 });
 
+test('initialEhGalleryManifest constructs gallery initial cold-state structure cleanly', async () => {
+  const { initialEhGalleryManifest } = await import('../src/http-utils.js');
+  const mockAdapter = {
+    imagePageUrls: (html, target) => ['https://example.com/p1', 'https://example.com/p2', 'https://example.com/p3'],
+    galleryPageUrls: (html, target) => ['https://example.com/g/1', 'https://example.com/g/2'],
+  };
+
+  const manifest = initialEhGalleryManifest({
+    adapter: mockAdapter,
+    target: 'https://example.com/g/1',
+    initialHtml: '<html><head><title>Sample Gallery</title></head></html>',
+    maxPages: 2,
+    extractTitle: () => 'Sample Gallery Title',
+  });
+
+  assert.deepEqual(manifest.imageUrls, ['https://example.com/p1', 'https://example.com/p2']);
+  assert.deepEqual(manifest.galleryUrls, ['https://example.com/g/1', 'https://example.com/g/2']);
+  assert.equal(manifest.totalPages, 2);
+  assert.equal(manifest.status, 200);
+  assert.equal(manifest.title, 'Sample Gallery Title');
+  assert.equal(manifest.truncated, false);
+  assert.deepEqual(manifest.failures, []);
+
+  assert.equal(initialEhGalleryManifest(null), null);
+  assert.equal(initialEhGalleryManifest({}), null);
+});
+
 test('failureMessage and routeBucket provide degradation messaging and route classification', async () => {
   const { failureMessage, routeBucket } = await import('../src/http-utils.js');
   assert.equal(failureMessage('gallery', 2), '画廊分页 2 暂时无法读取');

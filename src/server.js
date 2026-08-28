@@ -20,6 +20,7 @@ import {
   failureMessage,
   fetchCachedDocument,
   imageVariantCacheUrl,
+  initialEhGalleryManifest,
   mapWithConcurrency,
   nonNegativeInteger,
   parseByteRange,
@@ -192,19 +193,6 @@ async function discoverEhGallery({
     truncated,
     totalPages: imageUrls.length,
     status: galleryResults.find((result) => !result.ok)?.status || 200,
-    title: extractEhGalleryTitle({ url: target, html: initialHtml }),
-  };
-}
-
-function initialEhGalleryManifest({ adapter, target, initialHtml, maxPages }) {
-  const imageUrls = adapter.imagePageUrls(initialHtml, target).slice(0, maxPages);
-  return {
-    galleryUrls: adapter.galleryPageUrls(initialHtml, target),
-    imageUrls,
-    failures: [],
-    truncated: false,
-    totalPages: imageUrls.length,
-    status: 200,
     title: extractEhGalleryTitle({ url: target, html: initialHtml }),
   };
 }
