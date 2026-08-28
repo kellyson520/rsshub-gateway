@@ -3363,6 +3363,471 @@ export function initialFeedPathStats(paused = false) {
   };
 }
 
+export function createMediaPrefetchQueue(options = {}) {
+  const queueFile = path.resolve(options.queueFile || path.join(DEFAULT_CACHE_ROOT, 'media-prefetch.json'));
+  const initialConcurrency = boundedInteger(options.initialConcurrency, DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY, 1, DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY);
+  const minConcurrency = boundedInteger(options.minConcurrency, DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY, 1, DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY);
+  const maxConcurrency = boundedInteger(options.maxConcurrency, DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY, minConcurrency, DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY);
+  const perOriginConcurrency = boundedInteger(options.perOriginConcurrency, DEFAULT_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY, 1, MAX_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY);
+  const maxRetries = boundedInteger(options.maxRetries, DEFAULT_MEDIA_PREFETCH_MAX_RETRIES, 0, 4);
+  const successRampAfter = boundedInteger(options.successRampAfter, DEFAULT_MEDIA_PREFETCH_SUCCESS_RAMP_AFTER, 1, 100);
+  const queueTtlMs = Number.isFinite(options.queueTtlMs) && options.queueTtlMs > 0
+    ? options.queueTtlMs
+    : DEFAULT_MEDIA_PREFETCH_QUEUE_TTL_MS;
+  const now = options.now || (() => Date.now());
+  const sleepFn = options.sleep || sleep;
+  const random = options.random || Math.random;
+  const fetchMedia = options.fetchMedia || (async () => ({ status: 204, cacheState: 'MISS' }));
+  const onEvent = options.onEvent;
+  const minimumConcurrencyProvider = options.minimumConcurrencyProvider;
+  const capacityProvider = options.capacityProvider;
+  const persistEnabled = options.persist !== false;
+
+  let currentConcurrency = clamp(initialConcurrency, minConcurrency, maxConcurrency);
+  let active = 0;
+  let delayed = 0;
+  let successStreak = 0;
+  let completed = 0;
+  let failures = 0;
+  const pending = [];
+  const records = new Map();
+  const activeByOrigin = new Map();
+  const earlyTargets = [];
+  const idleWaiters = [];
+  let persistChain = Promise.resolve();
+  let initialized = false;
+
+  function providerValue(provider, fallback) {
+    try {
+      const value = Number(provider?.());
+      return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function isIdle() {
+    return initialized && active === 0 && delayed === 0 && pending.length === 0;
+  }
+
+  function notifyIdle() {
+    if (!isIdle()) return;
+    while (idleWaiters.length) idleWaiters.shift()();
+  }
+
+  function schedulePersist() {
+    if (!persistEnabled) return Promise.resolve();
+    const items = [...records.values()].map((rec) => ({ ...rec }));
+    persistChain = persistChain.then(async () => {
+      await atomicWriteJson(queueFile, { version: MEDIA_PREFETCH_QUEUE_VERSION, items }, { mode: null, dirMode: 0o755 });
+    }, async () => {}).catch(() => {});
+    return persistChain;
+  }
+
+  function emit(event) {
+    safeEvent(onEvent, {
+      ...event,
+      concurrency: currentConcurrency,
+      queued: records.size,
+      active,
+    });
+  }
+
+  function addTargets(targets) {
+    for (const value of targets || []) {
+      const target = String(value || '');
+      const origin = mediaOriginFor(target);
+      if (!origin || records.has(target) || records.size >= MAX_MEDIA_PREFETCH_QUEUE_ITEMS) continue;
+      records.set(target, { target, enqueuedAt: now(), attempts: 0 });
+      pending.push(target);
+      emit({ state: 'queued', host: origin });
+    }
+    void schedulePersist();
+    drain();
+  }
+
+  function nextTargetIndex() {
+    for (let index = 0; index < pending.length; index += 1) {
+      const target = pending[index];
+      const origin = mediaOriginFor(target);
+      if ((activeByOrigin.get(origin) || 0) < perOriginConcurrency) return index;
+    }
+    return -1;
+  }
+
+  function releaseOrigin(origin) {
+    const count = (activeByOrigin.get(origin) || 1) - 1;
+    if (count <= 0) activeByOrigin.delete(origin);
+    else activeByOrigin.set(origin, count);
+  }
+
+  function reduceConcurrency(host, status) {
+    currentConcurrency = Math.max(minConcurrency, currentConcurrency - 1);
+    successStreak = 0;
+    emit({ state: 'backoff', host, status });
+  }
+
+  function recordSuccess(host, cacheState) {
+    if (cacheState === 'HIT' || cacheState === 'STALE') {
+      emit({ state: 'hit', host });
+      return;
+    }
+    successStreak += 1;
+    if (successStreak >= successRampAfter) {
+      currentConcurrency = Math.min(maxConcurrency, currentConcurrency + 1);
+      successStreak = 0;
+      emit({ state: 'ramp', host });
+    } else {
+      emit({ state: 'success', host });
+    }
+  }
+
+  async function runTarget(target) {
+    const recordEntry = records.get(target);
+    const host = mediaOriginFor(target);
+    active += 1;
+    activeByOrigin.set(host, (activeByOrigin.get(host) || 0) + 1);
+    let retry = false;
+    let retryDelay = 0;
+    let result;
+    try {
+      result = await fetchMedia(target);
+      const status = Number(result?.status);
+      if (isSuccessfulStatus(status)) {
+        completed += 1;
+        records.delete(target);
+        recordSuccess(host, result?.cacheState);
+      } else if (isRetryableStatus(status) && recordEntry && recordEntry.attempts < maxRetries) {
+        recordEntry.attempts += 1;
+        retry = true;
+        retryDelay = mediaPrefetchRetryDelay(recordEntry.attempts, random() * 100);
+        reduceConcurrency(host, status);
+        emit({ state: 'retry', host, status, attempt: recordEntry.attempts });
+      } else {
+        failures += 1;
+        records.delete(target);
+        reduceConcurrency(host, status);
+        emit({ state: 'failed', host, status });
+      }
+    } catch (error) {
+      const status = Number(error?.status) || 504;
+      if (recordEntry && recordEntry.attempts < maxRetries) {
+        recordEntry.attempts += 1;
+        retry = true;
+        retryDelay = mediaPrefetchRetryDelay(recordEntry.attempts, random() * 100);
+        reduceConcurrency(host, status);
+        emit({ state: 'retry', host, status, attempt: recordEntry.attempts });
+      } else {
+        failures += 1;
+        records.delete(target);
+        reduceConcurrency(host, status);
+        emit({ state: 'failed', host, status });
+      }
+    } finally {
+      active -= 1;
+      releaseOrigin(host);
+      void schedulePersist();
+    }
+
+    if (retry && records.has(target)) {
+      delayed += 1;
+      await sleepFn(retryDelay);
+      delayed -= 1;
+      if (records.has(target)) pending.push(target);
+      void schedulePersist();
+    }
+    drain();
+    notifyIdle();
+  }
+
+  function drain() {
+    if (!initialized) return;
+    const dynamicMinimum = Math.max(minConcurrency, providerValue(minimumConcurrencyProvider, 0));
+    const dynamicCapacity = Math.max(dynamicMinimum, providerValue(capacityProvider, maxConcurrency));
+    const effectiveMaximum = Math.min(maxConcurrency, dynamicCapacity);
+    currentConcurrency = clamp(currentConcurrency, dynamicMinimum, effectiveMaximum);
+    while (active < currentConcurrency) {
+      const index = nextTargetIndex();
+      if (index < 0) break;
+      const target = pending.splice(index, 1)[0];
+      void runTarget(target);
+    }
+    notifyIdle();
+  }
+
+  async function initialize() {
+    if (!persistEnabled) {
+      initialized = true;
+      if (earlyTargets.length) addTargets(earlyTargets.splice(0));
+      drain();
+      notifyIdle();
+      return;
+    }
+    await fsp.mkdir(path.dirname(queueFile), { recursive: true }).catch(() => {});
+    try {
+      const content = await fsp.readFile(queueFile, 'utf8');
+      const parsed = safeJsonParse(content, null);
+      for (const item of Array.isArray(parsed?.items) ? parsed.items : []) {
+        if (!isValidMediaPrefetchRecord(item, now(), queueTtlMs)) continue;
+        const target = String(item.target);
+        if (!mediaOriginFor(target) || records.size >= MAX_MEDIA_PREFETCH_QUEUE_ITEMS || records.has(target)) continue;
+        records.set(target, { target, enqueuedAt: item.enqueuedAt, attempts: boundedInteger(item?.attempts, 0, 0, maxRetries) });
+        pending.push(target);
+      }
+    } catch {
+      // A missing or corrupt queue is equivalent to an empty queue.
+    }
+    initialized = true;
+    if (earlyTargets.length) addTargets(earlyTargets.splice(0));
+    drain();
+    notifyIdle();
+  }
+
+  const ready = initialize();
+
+  function enqueue(targets) {
+    const list = Array.isArray(targets) ? targets : (targets ? [targets] : []);
+    if (!initialized) earlyTargets.push(...list);
+    else addTargets(list);
+  }
+
+  async function idle() {
+    await ready;
+    if (!isIdle()) await new Promise((resolve) => idleWaiters.push(resolve));
+    await persistChain;
+  }
+
+  function stats() {
+    return {
+      queued: records.size,
+      pending: pending.length,
+      active,
+      delayed,
+      completed,
+      failures,
+      concurrency: currentConcurrency,
+    };
+  }
+
+  return { enqueue, idle, ready: () => ready, stats };
+}
+
+export function createFeedPrefetchQueue({
+  paths = [],
+  intervalMs = DEFAULT_FEED_PREFETCH_INTERVAL_MS,
+  concurrency = DEFAULT_FEED_PREFETCH_CONCURRENCY,
+  maxRetries = DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+  retryBackoffMs = DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS,
+  fetchFeed = async () => ({ ok: false, status: 503 }),
+  logger = { info() {}, warn() {}, error() {} },
+  now = () => Date.now(),
+  sleep: sleepFn = sleep,
+} = {}) {
+  const idleSleep = (delay) => new Promise((resolve) => {
+    const timer = setTimeout(resolve, delay);
+    timer.unref?.();
+  });
+  const limit = Math.min(MAX_FEED_PREFETCH_CONCURRENCY, Math.max(1, Math.floor(Number(concurrency) || DEFAULT_FEED_PREFETCH_CONCURRENCY)));
+  const retries = Math.min(MAX_FEED_PREFETCH_RETRIES, Math.max(0, Math.floor(Number(maxRetries) || 0)));
+  const interval = Math.max(1_000, Number(intervalMs) || DEFAULT_FEED_PREFETCH_INTERVAL_MS);
+  const configured = dedupe(paths.map(String).filter(Boolean));
+  const pending = new Map();
+  const pathStats = new Map();
+  const pausedPaths = new Set();
+  const idleWaiters = [];
+  let inFlight = 0;
+  let completed = 0;
+  let failed = 0;
+  let lastRunAt = 0;
+  let running = false;
+  let wake = null;
+
+  function notifyIdle() {
+    if (pending.size !== 0 || inFlight !== 0) return;
+    while (idleWaiters.length) idleWaiters.shift()();
+  }
+
+  function idle() {
+    if (pending.size === 0 && inFlight === 0) return Promise.resolve();
+    return new Promise((resolve) => idleWaiters.push(resolve));
+  }
+
+  function record(feedPath, patch) {
+    const entry = pathStats.get(feedPath) || initialFeedPathStats();
+    pathStats.set(feedPath, { ...entry, ...patch, paused: pausedPaths.has(feedPath) });
+    return pathStats.get(feedPath);
+  }
+
+  function togglePause(feedPath, paused) {
+    const key = String(feedPath || '').trim();
+    if (!key) return false;
+    const shouldPause = paused === undefined ? !pausedPaths.has(key) : Boolean(paused);
+    if (shouldPause) {
+      pausedPaths.add(key);
+      pending.delete(key);
+    } else {
+      pausedPaths.delete(key);
+    }
+    record(key, { paused: shouldPause });
+    return shouldPause;
+  }
+
+  function effectiveInterval(key) {
+    const entry = pathStats.get(key);
+    return feedPrefetchEffectiveInterval(interval, entry?.backoffMultiplier);
+  }
+
+  function enqueue(feedPath, { force = false } = {}) {
+    const key = String(feedPath || '').trim();
+    if (!key) return { queued: 0, skipped: 1 };
+    if (pausedPaths.has(key)) return { queued: 0, skipped: 1, reason: 'paused' };
+    if (pending.has(key)) return { queued: 0, skipped: 1, reason: 'already-pending' };
+    const entry = pathStats.get(key);
+    const pathInterval = effectiveInterval(key);
+    if (!force && entry?.lastAttemptAt && now() - entry.lastAttemptAt < pathInterval) {
+      return { queued: 0, skipped: 1, reason: 'within-interval' };
+    }
+    pending.set(key, { path: key, attempts: 0, retryAt: 0 });
+    record(key, { queued: (pathStats.get(key)?.queued || 0) + 1 });
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+    return { queued: 1, skipped: 0 };
+  }
+
+  function runCycle() {
+    lastRunAt = now();
+    let enqueued = 0;
+    for (const feedPath of configured) {
+      const result = enqueue(feedPath);
+      if (result.queued) enqueued += 1;
+    }
+    return { paths: configured.length, enqueued, queueLength: pending.size };
+  }
+
+  function nextPath() {
+    const timestamp = now();
+    for (const [key, item] of pending) {
+      if (item.retryAt <= timestamp) return { key, item };
+    }
+    return null;
+  }
+
+  async function runItem(key, item) {
+    const startedAt = now();
+    item.attempts += 1;
+    record(key, { attempts: item.attempts, lastAttemptAt: startedAt });
+    let result;
+    try {
+      result = await fetchFeed(key);
+    } catch (error) {
+      result = { ok: false, status: 0, error: error.message };
+    }
+    const durationMs = now() - startedAt;
+    if (result?.notReady) {
+      pending.set(key, { ...item, retryAt: now() + 1000 });
+      return;
+    }
+    if (result?.ok) {
+      completed += 1;
+      pending.delete(key);
+      record(key, {
+        completed: (pathStats.get(key)?.completed || 0) + 1,
+        consecutiveFailures: 0,
+        backoffMultiplier: 1,
+        lastStatus: result.status,
+        lastDurationMs: durationMs,
+        lastAttemptAt: startedAt,
+      });
+      logger.info('feed_prefetch_completed', { path: key, status: result.status, durationMs });
+      notifyIdle();
+      return;
+    }
+    if (item.attempts > retries) {
+      failed += 1;
+      const currentFailures = (pathStats.get(key)?.consecutiveFailures || 0) + 1;
+      const nextMultiplier = feedPrefetchBackoffMultiplier(currentFailures);
+      record(key, {
+        failed: (pathStats.get(key)?.failed || 0) + 1,
+        consecutiveFailures: currentFailures,
+        backoffMultiplier: nextMultiplier,
+        lastStatus: result.status || 0,
+        lastDurationMs: durationMs,
+      });
+      logger.warn('feed_prefetch_failed', {
+        path: key,
+        status: result.status,
+        error: result.error,
+        attempts: item.attempts,
+        consecutiveFailures: currentFailures,
+        backoffMultiplier: nextMultiplier,
+      });
+      notifyIdle();
+      return;
+    }
+    item.retryAt = now() + feedPrefetchRetryDelay(item.attempts, retryBackoffMs);
+    pending.set(key, item);
+  }
+
+  async function drainLoop() {
+    while (running) {
+      if (pending.size === 0) {
+        if (inFlight === 0) notifyIdle();
+        await new Promise((resolve) => {
+          wake = resolve;
+          const timer = setTimeout(resolve, 100);
+          timer.unref?.();
+        });
+        continue;
+      }
+      let spawned = 0;
+      while (spawned < limit && inFlight < limit) {
+        const next = nextPath();
+        if (!next) break;
+        pending.delete(next.key);
+        inFlight += 1;
+        spawned += 1;
+        runItem(next.key, next.item)
+          .catch((error) => {
+            logger.error('feed_prefetch_internal', { error: error.message });
+          })
+          .finally(() => {
+            inFlight -= 1;
+            notifyIdle();
+          });
+      }
+      await idleSleep(spawned === 0 ? 20 : 1);
+    }
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    void drainLoop();
+  }
+
+  function stop() {
+    running = false;
+  }
+
+  function stats() {
+    return {
+      enabled: configured.length > 0,
+      configured: configured.length,
+      queueLength: pending.size,
+      inFlight,
+      completed,
+      failed,
+      lastRunAt,
+      paths: Object.fromEntries([...pathStats.entries()].map(([feedPath, entry]) => [feedPath, { ...entry }])),
+    };
+  }
+
+  return { enqueue, togglePause, runCycle, idle, start, stop, stats };
+}
+
 export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
   'javbus.com',
   'javdb.com',
