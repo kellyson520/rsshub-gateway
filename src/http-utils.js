@@ -2059,6 +2059,10 @@ export function writeEncodedText(res, req, status, body, contentType = 'text/pla
   else res.end(encoded.body);
 }
 
+export function positiveNumber(value, fallback) {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

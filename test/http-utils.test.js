@@ -1667,6 +1667,13 @@ test('canonical system gateway configuration default constants are defined and e
   assert.equal(writtenStatus, 200);
   assert.equal(ended, true);
   assert.equal(writtenHeaders['content-type'], 'text/plain; charset=utf-8');
+
+  const { positiveNumber } = await import('../src/http-utils.js');
+  assert.equal(positiveNumber(42.5, 10), 42.5);
+  assert.equal(positiveNumber(0, 10), 10);
+  assert.equal(positiveNumber(-5, 10), 10);
+  assert.equal(positiveNumber(NaN, 10), 10);
+  assert.equal(positiveNumber(Infinity, 10), 10);
 });
 
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {

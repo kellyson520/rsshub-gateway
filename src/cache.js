@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
-import { DEFAULT_CACHE_ROOT } from './options.js';
 import {
   atomicWriteJson,
   CACHE_SAFE_HEADERS as SAFE_HEADERS,
   cacheKeyFor as keyFor,
   canonicalUrl,
   DEFAULT_CACHE_MAX_BYTES as DEFAULT_MAX_BYTES,
+  DEFAULT_CACHE_ROOT,
   DEFAULT_CACHE_TTL_SECONDS as DEFAULT_TTL_SECONDS,
   DEFAULT_EVICTION_PRIORITY,
   isSha256Hex,
@@ -16,14 +16,11 @@ import {
   normalizeCacheHeaders as normalizedHeaders,
   normalizedNamespace,
   positiveInteger,
+  positiveNumber,
   resultFromCacheEntry as resultFromEntry,
   safeJsonParse,
   sha256Hex,
 } from './http-utils.js';
-
-function positiveNumber(value, fallback) {
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
 
 export {
   keyFor,
