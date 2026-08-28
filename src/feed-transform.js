@@ -8,6 +8,7 @@ import {
   isValidXmlCodePoint,
   matchesFeedFilters,
   normalizeNumericEntities,
+  rewriteFeedHtml,
   signedGatewayUrl,
   XML_NAMED_ENTITIES,
   XML_NAMED_ENTITIES as NAMED_ENTITIES,
@@ -35,43 +36,7 @@ function localUrl(baseUrl, kind, target, options) {
 }
 
 function rewriteHtml(html, options) {
-  const $ = cheerio.load(String(html ?? ''), { decodeEntities: false }, false);
-  $('a[href]').each((_, element) => {
-    const href = $(element).attr('href');
-    try {
-      if (href) {
-        $(element).attr('href', localUrl(options.baseUrl, 'item', new URL(href).toString(), options));
-      }
-    } catch {
-      // Preserve relative and malformed links in feed content.
-    }
-  });
-  $('img,video,audio,source').each((_, element) => {
-    for (const attribute of ['src', 'poster', 'data-original', 'data-src', 'data-lazy-src', 'data-lazy']) {
-      const value = $(element).attr(attribute);
-      if (!value) continue;
-      try {
-        $(element).attr(attribute, localUrl(options.baseUrl, 'media', new URL(value).toString(), options));
-      } catch {
-        // Preserve relative and malformed media URLs.
-      }
-    }
-    const srcset = $(element).attr('srcset');
-    if (srcset) {
-      const rewritten = String(srcset).split(',').map((candidate) => {
-        const parts = candidate.trim().split(/\s+/);
-        if (!parts.length) return candidate;
-        try {
-          parts[0] = localUrl(options.baseUrl, 'media', new URL(parts[0]).toString(), options);
-        } catch {
-          // Preserve unparseable srcset candidates.
-        }
-        return parts.join(' ');
-      }).join(', ');
-      $(element).attr('srcset', rewritten);
-    }
-  });
-  return $.root().html() ?? '';
+  return rewriteFeedHtml(html, options, cheerio);
 }
 
 function rewriteEntry($, entry, options) {

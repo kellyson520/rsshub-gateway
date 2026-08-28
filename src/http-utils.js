@@ -1136,6 +1136,52 @@ export function matchesFeedFilters(item = {}, filters = {}) {
   return false;
 }
 
+export function rewriteFeedHtml(html, options = {}, cheerioParser) {
+  if (html === null || html === undefined || typeof html !== 'string' || !html) {
+    return '';
+  }
+  if (!cheerioParser) {
+    return String(html);
+  }
+  const $ = cheerioParser.load(String(html), { decodeEntities: false }, false);
+  $('a[href]').each((_, element) => {
+    const href = $(element).attr('href');
+    try {
+      if (href) {
+        $(element).attr('href', signedGatewayUrl(options.baseUrl, 'item', new URL(href).toString(), options));
+      }
+    } catch {
+      // Preserve relative and malformed links in feed content.
+    }
+  });
+  $('img,video,audio,source').each((_, element) => {
+    for (const attribute of ['src', 'poster', 'data-original', 'data-src', 'data-lazy-src', 'data-lazy']) {
+      const value = $(element).attr(attribute);
+      if (!value) continue;
+      try {
+        $(element).attr(attribute, signedGatewayUrl(options.baseUrl, 'media', new URL(value).toString(), options));
+      } catch {
+        // Preserve relative and malformed media URLs.
+      }
+    }
+    const srcset = $(element).attr('srcset');
+    if (srcset) {
+      const rewritten = String(srcset).split(',').map((candidate) => {
+        const parts = candidate.trim().split(/\s+/);
+        if (!parts.length) return candidate;
+        try {
+          parts[0] = signedGatewayUrl(options.baseUrl, 'media', new URL(parts[0]).toString(), options);
+        } catch {
+          // Preserve unparseable srcset candidates.
+        }
+        return parts.join(' ');
+      }).join(', ');
+      $(element).attr('srcset', rewritten);
+    }
+  });
+  return $.root().html() ?? '';
+}
+
 export const DEFAULT_PAGE_STATE_DEFERRED = 'deferred';
 export const DEFAULT_PAGE_STATE_RESOLVED = 'resolved';
 export const DEFAULT_FIRST_DETAIL_BUDGET_MS = 1_200;
