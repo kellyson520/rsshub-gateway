@@ -1,47 +1,28 @@
 import * as cheerio from 'cheerio';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
-import { cdata, escapeHtml, escapeXml } from './http-utils.js';
+import {
+  cdata,
+  decodeEntity,
+  decodeTextEntities,
+  escapeHtml,
+  escapeXml,
+  isValidXmlCodePoint,
+  normalizeNumericEntities,
+  XML_NAMED_ENTITIES,
+  XML_NAMED_ENTITIES as NAMED_ENTITIES,
+} from './http-utils.js';
 
-export { cdata, escapeHtml, escapeXml };
-
-const NAMED_ENTITIES = {
-  amp: '&',
-  apos: "'",
-  gt: '>',
-  lt: '<',
-  quot: '"',
+export {
+  cdata,
+  decodeEntity,
+  decodeTextEntities,
+  escapeHtml,
+  escapeXml,
+  isValidXmlCodePoint,
+  NAMED_ENTITIES,
+  normalizeNumericEntities,
+  XML_NAMED_ENTITIES,
 };
-
-function isValidXmlCodePoint(codePoint) {
-  return codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd
-    || (codePoint >= 0x20 && codePoint <= 0xd7ff)
-    || (codePoint >= 0xe000 && codePoint <= 0xfffd)
-    || (codePoint >= 0x10000 && codePoint <= 0x10ffff);
-}
-
-function decodeEntity(entity) {
-  const named = entity.match(/^&([a-z]+);$/i);
-  if (named) return NAMED_ENTITIES[named[1].toLowerCase()] || entity;
-  const numeric = entity.match(/^&#(?:x([0-9a-f]+)|([0-9]+));$/i);
-  if (!numeric) return entity;
-  const codePoint = Number.parseInt(numeric[1] || numeric[2], numeric[1] ? 16 : 10);
-  if (!Number.isSafeInteger(codePoint) || !isValidXmlCodePoint(codePoint)) return entity;
-  return String.fromCodePoint(codePoint);
-}
-
-function decodeTextEntities(value) {
-  return String(value ?? '').replace(/&(?:amp|apos|gt|lt|quot);|&#(?:x[0-9a-f]+|[0-9]+);/gi, decodeEntity);
-}
-
-function normalizeNumericEntities(xml) {
-  return String(xml).replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (entity, hexadecimal, decimal) => {
-    const codePoint = Number.parseInt(hexadecimal || decimal, hexadecimal ? 16 : 10);
-    if (!Number.isSafeInteger(codePoint) || !isValidXmlCodePoint(codePoint) || [0x22, 0x26, 0x27, 0x3c, 0x3e].includes(codePoint)) {
-      return entity;
-    }
-    return String.fromCodePoint(codePoint);
-  });
-}
 
 function setCdata($, element, content) {
   $(element).html(cdata(content));
@@ -184,11 +165,6 @@ function matchesFilters($, entry, filters = {}) {
 }
 
 export {
-  NAMED_ENTITIES,
-  decodeEntity,
-  decodeTextEntities,
-  normalizeNumericEntities,
-  isValidXmlCodePoint,
   rewriteHtml,
   matchesFilters,
 };

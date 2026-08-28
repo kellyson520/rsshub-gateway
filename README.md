@@ -382,6 +382,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `safeEvent(onEvent, event)`: Non-intrusive event emitter wrapper absorbing runtime listener failures.
   - `failureMessage(kind, pageNumber)`, `cleanText(value)`: Standardized multilingual gallery degradation messaging and text whitespace normalizer.
   - `escapeHtml(value)`, `escapeXml(value)`, `cdata(value)`: Standardized DOM entity and XML/CDATA payload encoders.
+  - `isValidXmlCodePoint(codePoint)`, `decodeEntity(entity)`, `decodeTextEntities(value)`, `normalizeNumericEntities(xml)`, `XML_NAMED_ENTITIES`: XML standard code point validators and numeric/named entity decoders and normalizers.
   - `downloadSessionView(session)`, `withPrefetchStatus(view, target, status)`: Pure state session projection for download managers.
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.

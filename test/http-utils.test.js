@@ -513,6 +513,43 @@ test('withDeadline resolves value or times out gracefully', async () => {
   assert.deepEqual(failing, { value: null, timedOut: false });
 });
 
+test('isValidXmlCodePoint, decodeEntity, decodeTextEntities and normalizeNumericEntities handle XML/HTML character entities safely', async () => {
+  const {
+    isValidXmlCodePoint,
+    decodeEntity,
+    decodeTextEntities,
+    normalizeNumericEntities,
+    XML_NAMED_ENTITIES,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isValidXmlCodePoint(0x9), true);
+  assert.equal(isValidXmlCodePoint(0x20), true);
+  assert.equal(isValidXmlCodePoint(0x0), false);
+  assert.equal(isValidXmlCodePoint(0x1), false);
+  assert.equal(isValidXmlCodePoint(0xd800), false);
+
+  assert.equal(decodeEntity('&amp;'), '&');
+  assert.equal(decodeEntity('&apos;'), "'");
+  assert.equal(decodeEntity('&quot;'), '"');
+  assert.equal(decodeEntity('&lt;'), '<');
+  assert.equal(decodeEntity('&gt;'), '>');
+  assert.equal(decodeEntity('&#x4f60;'), '你');
+  assert.equal(decodeEntity('&#20320;'), '你');
+  assert.equal(decodeEntity('&unknown;'), '&unknown;');
+  assert.equal(decodeEntity('plain'), 'plain');
+  assert.equal(decodeEntity(null), null);
+  assert.equal(decodeEntity(undefined), undefined);
+
+  assert.equal(decodeTextEntities('&lt;hello&gt; &amp; &quot;world&quot;'), '<hello> & "world"');
+  assert.equal(decodeTextEntities(null), '');
+
+  assert.equal(normalizeNumericEntities('&#x4f60;&#x597d;'), '你好');
+  assert.equal(normalizeNumericEntities('&#60;&#62;&#38;'), '&#60;&#62;&#38;'); // brackets & amp preserved
+  assert.equal(normalizeNumericEntities(null), '');
+
+  assert.equal(XML_NAMED_ENTITIES.quot, '"');
+});
+
 test('dedupe removes duplicate items preserving order and supports key mapper', async () => {
   const { dedupe } = await import('../src/http-utils.js');
   assert.deepEqual(dedupe(['a', 'b', 'a', 'c', 'b']), ['a', 'b', 'c']);
