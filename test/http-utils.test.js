@@ -712,6 +712,22 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
+  const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
+
+  const tile = { width: 200, height: 289, x: -10, y: -20, media: 'https://example.com/sprite.jpg' };
+  assert.equal(tileStyle(tile), 'width:200px;height:289px;overflow:hidden');
+  assert.equal(tileStyle(null), '');
+
+  const img = tileImage(tile, 'eh-thumb-tile', 'Page 1', 'lazy');
+  assert.equal(img, '<img class="eh-thumb-tile" src="https://example.com/sprite.jpg" alt="Page 1" loading="lazy" style="transform:translate(-10px,-20px)">');
+  assert.equal(tileImage(null), '');
+
+  assert.equal(EH_METADATA_LABELS.Posted, '发布');
+  assert.equal(EH_METADATA_LABELS.Language, '语言');
+  assert.equal(EH_METADATA_LABELS.Favorited, '收藏');
+});
+
 test('mediaSrcset and numericStyle construct responsive image candidate sets and clamp CSS pixel styles', async () => {
   const { mediaSrcset, numericStyle } = await import('../src/http-utils.js');
 

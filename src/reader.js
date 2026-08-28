@@ -6,10 +6,13 @@ import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
 import {
   clamp,
   cleanText,
+  EH_METADATA_LABELS,
   escapeHtml,
   mediaSrcset,
   nonNegativeInteger,
   numericStyle,
+  tileImage,
+  tileStyle,
 } from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
@@ -128,30 +131,13 @@ function parseTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata) {
   };
 }
 
-function tileStyle(tile) {
-  return `width:${tile.width}px;height:${tile.height}px;overflow:hidden`;
-}
-
-function tileImage(tile, className, alt, loading) {
-  return `<img class="${className}" src="${escapeHtml(tile.media)}" alt="${escapeHtml(alt)}" loading="${loading}" style="transform:translate(${tile.x}px,${tile.y}px)">`;
-}
-
 function renderMetadata($) {
-  const labels = {
-    Posted: '发布',
-    Parent: '父项',
-    Visible: '可见',
-    Language: '语言',
-    'File Size': '文件大小',
-    Length: '篇幅',
-    Favorited: '收藏',
-  };
   const rows = $('#gdd tr').map((_, row) => {
     const cells = $(row).find('td');
     const rawLabel = cleanText(cells.first().text()).replace(/:$/, '');
     const value = cleanText(cells.last().text());
     if (!rawLabel || !value) return '';
-    return `<div class="eh-details-row"><strong>${escapeHtml(labels[rawLabel] || rawLabel)}:</strong><span>${escapeHtml(value)}</span></div>`;
+    return `<div class="eh-details-row"><strong>${escapeHtml(EH_METADATA_LABELS[rawLabel] || rawLabel)}:</strong><span>${escapeHtml(value)}</span></div>`;
   }).get().filter(Boolean).join('');
   return rows ? `<div class="eh-details">${rows}</div>` : '';
 }
@@ -387,6 +373,7 @@ export function renderUnavailablePage({ url, title, message, baseUrl, secret, si
 export {
   EH_GALLERY_PATH,
   EH_IMAGE_PATH,
+  EH_METADATA_LABELS,
   DEFAULT_EH_IMAGE_PRELOAD_COUNT,
   IMAGE_VARIANT_WIDTHS,
   IMAGE_SIZES,
@@ -394,6 +381,8 @@ export {
   escapeHtml,
   renderDocument,
   mediaSrcset,
+  tileStyle,
+  tileImage,
   localUrl,
   gatewayUrl,
   isEhentaiPage,

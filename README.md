@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `tileStyle(tile)`, `tileImage(tile, className, alt, loading)`, `EH_METADATA_LABELS`: Thumbnail sprite tile styling, localized metadata mappings and lazy image element builder.
   - `mediaSrcset(media, widths)`, `numericStyle(style, property, fallback)`: Responsive image candidate set generator and CSS pixel style numeric bounds clamper.
   - `compilePattern(routeId)`, `normalizeRoute(raw)`, `matchSegments(pattern, segments)`, `sidecarUrl(backend)`: Zero-overhead dynamic segment route compiler, config normalizer, path matcher, and sidecar backend URL resolver.
   - `cookiesObject(cookies)`, `resolveRedirect(template, params)`: Cookie header normalizer and dynamic URL redirection template resolver.

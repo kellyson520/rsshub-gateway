@@ -733,6 +733,30 @@ export function extractEhGalleryTitle({ url, html }) {
   return cleanText(url) || url;
 }
 
+export const EH_METADATA_LABELS = Object.freeze({
+  Posted: '发布',
+  Parent: '父项',
+  Visible: '可见',
+  Language: '语言',
+  'File Size': '文件大小',
+  Length: '篇幅',
+  Favorited: '收藏',
+});
+
+export function tileStyle(tile) {
+  if (!tile || typeof tile !== 'object') return '';
+  const width = Number(tile.width) || 0;
+  const height = Number(tile.height) || 0;
+  return `width:${width}px;height:${height}px;overflow:hidden`;
+}
+
+export function tileImage(tile, className = '', alt = '', loading = 'lazy') {
+  if (!tile || typeof tile !== 'object' || !tile.media) return '';
+  const x = Number(tile.x) || 0;
+  const y = Number(tile.y) || 0;
+  return `<img class="${escapeHtml(className)}" src="${escapeHtml(tile.media)}" alt="${escapeHtml(alt)}" loading="${escapeHtml(loading)}" style="transform:translate(${x}px,${y}px)">`;
+}
+
 export function initialEhGalleryManifest(opts = {}) {
   if (!opts || typeof opts !== 'object') return null;
   const {
