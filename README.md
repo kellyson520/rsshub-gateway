@@ -407,6 +407,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `resolveSourceMode(source, config)`, `defaultAdapter`, `isTelegramChannelPostUrl(url, hosts)`, `isAdultMediaChallenge(res)`: Universal multi-source adapter mode resolver, default fallback adapter, Telegram channel post URL checker, and adult media Cloudflare challenge detector.
   - `DEFAULT_CACHE_ROOT`, `DEFAULT_EH_PREFETCH_CONCURRENCY`, `DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE`, `DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES`, `DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES`, `DEFAULT_SLOW_SOURCE_THRESHOLD_MS`: Unified gateway configuration and cache storage default constants.
   - `browserFetchHost(url, hosts)`, `parseBrowserFetchHosts(envVal, fallback)`, `DEFAULT_BROWSER_FETCH_HOSTS`: Browser-fingerprint WAF bypass target matcher and host list parser.
+  - `createRequestService(opts)`: Unified request dispatcher facade orchestrating browser TLS workers and upstream pool dispatchers with fallback telemetry.
   - `parseProxyAuth(header)`, `parseAuthority(value)`, `BASIC_AUTH_HEADER_RE`: HTTP proxy Basic authorization header parser and CONNECT target authority splitters.
   - `mediaOriginFor(target, allowedHosts)`: Pure URL origin extractor with SSRF allowlist hostname validation.
   - `resolveSlowSourceThresholdMs(raw, fallback)`, `parseFeedPrefetchPaths(raw, dedupeFn)`, `parseBooleanOption(raw, fallback)`: Gateway configuration primitive parsers — bounded slow-source threshold resolution, comma-delimited feed path list parser with dedup, and boolean string/flag normalizer.

@@ -2227,6 +2227,86 @@ export function isBrowserFetchTarget(url, hosts = BROWSER_FETCH_HOSTS) {
   return browserFetchHost(url, hosts);
 }
 
+export function createRequestService({
+  sourceConfig = {},
+  client,
+  fetchImpl,
+  egressPool,
+  browserFetch,
+  fetchdFetch,
+  fetchExternal,
+  fetchRssHub,
+  logger = createLogger(),
+  createUpstreamClientImpl,
+  createBrowserFetchClientImpl,
+} = {}) {
+  const upstreamClient = client || (createUpstreamClientImpl
+    ? createUpstreamClientImpl({ sourceConfig, fetchImpl, egressPool })
+    : null);
+  const browser = browserFetch || (createBrowserFetchClientImpl
+    ? createBrowserFetchClientImpl()
+    : null);
+  const resolvedFetchdFetch = fetchdFetch || browser?.fetchdFetch;
+  const resolvedFetchExternal = fetchExternal || ((url, request) => upstreamClient?.fetchExternal(url, request));
+  const resolvedFetchRssHub = fetchRssHub || ((path, request) => upstreamClient?.fetchRssHub(path, undefined, request?.headers, request));
+
+  function fetchJsonViaFetchd(url, request) {
+    const startedAt = Date.now();
+    const host = safeHost(url);
+    return fetchdJson(resolvedFetchdFetch, url, request).catch((error) => {
+      logger.debug('request_json_failed', { host, error: error.message, durationMs: Date.now() - startedAt });
+      throw error;
+    });
+  }
+
+  function fetchExternalInstrumented(url, request) {
+    const startedAt = Date.now();
+    const host = safeHost(url);
+    if (browserFetchHost(url, BROWSER_FETCH_HOSTS)) {
+      let allowed = false;
+      try {
+        allowed = isAllowedTarget(url);
+      } catch {
+        allowed = false;
+      }
+      if (!allowed) return Promise.reject(new Error('external target is not allowed'));
+      const browserRequest = { ...(request || {}), redirect: 'follow' };
+      return browser.fetch(url, browserRequest).then((response) => {
+        logger.debug('request_external_browser', { host, status: response?.status, durationMs: Date.now() - startedAt });
+        return response;
+      }).catch((error) => {
+        logger.warn('request_external_browser_fallback', { host, error: error.message });
+        return resolvedFetchExternal(url, request).then((response) => {
+          logger.debug('request_external', { host, status: response?.status, durationMs: Date.now() - startedAt });
+          return response;
+        });
+      });
+    }
+    return resolvedFetchExternal(url, request).then((response) => {
+      logger.debug('request_external', { host, status: response?.status, durationMs: Date.now() - startedAt });
+      return response;
+    });
+  }
+
+  function fetchRssHubInstrumented(path, request) {
+    const startedAt = Date.now();
+    return resolvedFetchRssHub(path, request).then((response) => {
+      logger.debug('request_rsshub', { path, status: response?.status, durationMs: Date.now() - startedAt });
+      return response;
+    });
+  }
+
+  return {
+    client: upstreamClient,
+    browserFetch: browser,
+    fetchdFetch: resolvedFetchdFetch,
+    fetchExternal: fetchExternalInstrumented,
+    fetchRssHub: fetchRssHubInstrumented,
+    fetchJsonViaFetchd,
+    openCircuits: () => upstreamClient?.openCircuits?.(),
+  };
+}
+
 export const BASIC_AUTH_HEADER_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
 
 export function parseProxyAuth(header) {
