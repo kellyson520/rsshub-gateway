@@ -2063,6 +2063,16 @@ export function positiveNumber(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+export function sourceHeaders(url, sources = {}, { includeCredentials = false, credentials, adapterFor = () => ({ headers: () => ({}) }) } = {}) {
+  const adapter = adapterFor(url);
+  const referer = refererFor(url);
+  return {
+    'user-agent': 'rsshub-gateway/0.1',
+    ...(referer ? { referer } : {}),
+    ...adapter.headers(credentials ?? sources[adapter.name], { includeCredentials }),
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

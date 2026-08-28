@@ -18,18 +18,13 @@ import {
   refererFor,
   responseWithLease,
   sleep as defaultSleep,
+  sourceHeaders as baseSourceHeaders,
   upstreamRetryDelay as retryDelay,
   withoutCredentials,
 } from './http-utils.js';
 
 function sourceHeaders(url, sources = {}, { includeCredentials = false, credentials } = {}) {
-  const adapter = adapterForUrl(url);
-  const referer = refererFor(url);
-  return {
-    'user-agent': 'rsshub-gateway/0.1',
-    ...(referer ? { referer } : {}),
-    ...adapter.headers(credentials ?? sources[adapter.name], { includeCredentials }),
-  };
+  return baseSourceHeaders(url, sources, { includeCredentials, credentials, adapterFor: adapterForUrl });
 }
 
 export function createUpstreamClient({
