@@ -1,5 +1,4 @@
 import * as cheerio from 'cheerio';
-import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import {
   cdata,
   decodeEntity,
@@ -7,7 +6,9 @@ import {
   escapeHtml,
   escapeXml,
   isValidXmlCodePoint,
+  matchesFeedFilters,
   normalizeNumericEntities,
+  signedGatewayUrl,
   XML_NAMED_ENTITIES,
   XML_NAMED_ENTITIES as NAMED_ENTITIES,
 } from './http-utils.js';
@@ -22,6 +23,7 @@ export {
   NAMED_ENTITIES,
   normalizeNumericEntities,
   XML_NAMED_ENTITIES,
+  matchesFeedFilters,
 };
 
 function setCdata($, element, content) {
@@ -29,13 +31,7 @@ function setCdata($, element, content) {
 }
 
 function localUrl(baseUrl, kind, target, options) {
-  if (!isAllowedTarget(target)) {
-    return target;
-  }
-  const token = kind === 'media'
-    ? createMediaSignedTarget(target, options.secret, options.now, options.signedTargetMetadata)
-    : createSignedTarget(target, options.secret, options.ttlSeconds, options.now, options.signedTargetMetadata);
-  return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
+  return signedGatewayUrl(baseUrl, kind, target, options);
 }
 
 function rewriteHtml(html, options) {
@@ -136,32 +132,10 @@ function rewriteEntry($, entry, options) {
 }
 
 function matchesFilters($, entry, filters = {}) {
-  if (!filters || typeof filters !== 'object') return false;
-
-  // 1. Keyword blacklist on title and description
-  if (Array.isArray(filters.keywordBlacklist) && filters.keywordBlacklist.length > 0) {
-    const title = $(entry).children('title').first().text().toLowerCase();
-    const desc = $(entry).children('description,content,content\\:encoded').first().text().toLowerCase();
-    for (const rawKw of filters.keywordBlacklist) {
-      const kw = String(rawKw).trim().toLowerCase();
-      if (kw && (title.includes(kw) || desc.includes(kw))) {
-        return true; // Match filter -> should be dropped
-      }
-    }
-  }
-
-  // 2. Author blacklist
-  if (Array.isArray(filters.authorBlacklist) && filters.authorBlacklist.length > 0) {
-    const author = $(entry).children('author,dc\\:creator').first().text().trim().toLowerCase();
-    for (const rawAuthor of filters.authorBlacklist) {
-      const blAuthor = String(rawAuthor).trim().toLowerCase();
-      if (blAuthor && author === blAuthor) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  const title = $(entry).children('title').first().text();
+  const description = $(entry).children('description,content,content\\:encoded').first().text();
+  const author = $(entry).children('author,dc\\:creator').first().text();
+  return matchesFeedFilters({ title, description, author }, filters);
 }
 
 export {

@@ -985,6 +985,46 @@ test('image variant helpers and gallery benchmark url extractors parse and valid
   assert.equal(BENCHMARK_LOCAL_HOSTS.has('127.0.0.1'), true);
 });
 
+test('createSignedTarget, createMediaSignedTarget, verifySignedTarget, signedGatewayUrl, resolveGatewayUrl and matchesFeedFilters operate cleanly', async () => {
+  const {
+    createSignedTarget,
+    createMediaSignedTarget,
+    verifySignedTarget,
+    signedGatewayUrl,
+    resolveGatewayUrl,
+    matchesFeedFilters,
+  } = await import('../src/http-utils.js');
+
+  const secret = 'super-secret-key-123';
+  const url = 'https://x.com/demo/status/1';
+
+  const token = createSignedTarget(url, secret);
+  assert.equal(typeof token, 'string');
+  const verified = verifySignedTarget(token, secret);
+  assert.equal(verified.url, url);
+
+  const mediaToken = createMediaSignedTarget('https://twimg.com/media/test.jpg', secret);
+  assert.equal(typeof mediaToken, 'string');
+  const mediaVerified = verifySignedTarget(mediaToken, secret);
+  assert.equal(mediaVerified.url, 'https://twimg.com/media/test.jpg');
+
+  const gwItemUrl = signedGatewayUrl('http://127.0.0.1:1300', 'item', url, { secret });
+  assert.ok(gwItemUrl.startsWith('http://127.0.0.1:1300/_gateway/item/'));
+
+  const gwMediaUrl = signedGatewayUrl('http://127.0.0.1:1300', 'media', 'https://twimg.com/media/test.jpg', secret);
+  assert.ok(gwMediaUrl.startsWith('http://127.0.0.1:1300/_gateway/media/'));
+
+  const resolved = resolveGatewayUrl('http://127.0.0.1:1300', 'item', '/status/2', 'https://x.com/status/1', { secret });
+  assert.ok(resolved.startsWith('http://127.0.0.1:1300/_gateway/item/'));
+
+  assert.equal(resolveGatewayUrl('http://127.0.0.1:1300', 'item', '', 'https://x.com'), '');
+
+  assert.equal(matchesFeedFilters({ title: 'Ad: Buy now', description: 'good' }, { keywordBlacklist: ['ad:'] }), true);
+  assert.equal(matchesFeedFilters({ title: 'Normal post', author: 'spammer' }, { authorBlacklist: ['spammer'] }), true);
+  assert.equal(matchesFeedFilters({ title: 'Normal post', author: 'alice' }, { keywordBlacklist: ['ad:'], authorBlacklist: ['spammer'] }), false);
+  assert.equal(matchesFeedFilters(null, null), false);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

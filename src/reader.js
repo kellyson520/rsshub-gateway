@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
-import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 import {
   clamp,
@@ -9,10 +8,13 @@ import {
   EH_IMAGE_PATH,
   EH_METADATA_LABELS,
   escapeHtml,
+  isAllowedTarget,
   isEhentaiPage,
   mediaSrcset,
   nonNegativeInteger,
   numericStyle,
+  resolveGatewayUrl as gatewayUrl,
+  signedGatewayUrl as localUrl,
   tileImage,
   tileStyle,
 } from './http-utils.js';
@@ -67,23 +69,6 @@ video{background:#111}
 @media (max-width:620px){.reader{padding:16px 12px 34px}.eh-gallery-info{grid-template-columns:1fr}.eh-cover{justify-self:center}}
 @media (max-width:460px){.eh-grid{grid-template-columns:200px}}
 `;
-
-function localUrl(baseUrl, kind, target, secret, signedTargetMetadata) {
-  if (!isAllowedTarget(target)) return target;
-  const token = kind === 'media'
-    ? createMediaSignedTarget(target, secret, undefined, signedTargetMetadata)
-    : createSignedTarget(target, secret, undefined, undefined, signedTargetMetadata);
-  return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
-}
-
-function gatewayUrl(baseUrl, kind, value, sourceUrl, secret, signedTargetMetadata) {
-  try {
-    const target = new URL(value, sourceUrl).toString();
-    return isAllowedTarget(target) ? localUrl(baseUrl, kind, target, secret, signedTargetMetadata) : '';
-  } catch {
-    return '';
-  }
-}
 
 function renderDocument(title, content, preloadImages = []) {
   const preloads = [...new Map(preloadImages.filter(Boolean).map((value) => {

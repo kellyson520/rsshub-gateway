@@ -831,6 +831,93 @@ export function isTargetSignatureValid(token, secret) {
   return isSignatureMatch(signature, hmacSha256(payload, secret));
 }
 
+export function createSignedTarget(url, secret, ttlSeconds = DEFAULT_TTL_SECONDS, now = Math.floor(Date.now() / 1000), metadata = {}) {
+  const target = new URL(url);
+  if (!isAllowedTarget(target)) {
+    throw new Error('target host is not allowed');
+  }
+  const payload = base64UrlEncode(JSON.stringify({ url: target.toString(), exp: now + ttlSeconds, ...routeMetadata(metadata) }));
+  const signature = hmacSha256(payload, secret, 'base64url');
+  return `${payload}.${signature}`;
+}
+
+export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now() / 1000), metadata = {}) {
+  const expiresAt = (Math.floor(now / MEDIA_CACHE_TTL_SECONDS) + 1) * MEDIA_CACHE_TTL_SECONDS;
+  return createSignedTarget(url, secret, expiresAt - now, now, metadata);
+}
+
+export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000)) {
+  const [payload, signature] = String(token).split('.');
+  if (!payload || !signature) {
+    throw new Error('malformed target token');
+  }
+  if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
+    throw new Error('invalid target signature');
+  }
+  const data = safeJsonParse(base64UrlDecode(payload), null);
+  if (!data || typeof data !== 'object'
+    || Object.keys(data).some((key) => !['url', 'exp', 'egressScope', 'source'].includes(key))
+    || !Number.isInteger(data.exp) || data.exp <= now || !isAllowedTarget(data.url)) {
+    throw new Error('target expired or disallowed');
+  }
+  return { url: new URL(data.url).toString(), exp: data.exp, ...routeMetadata(data) };
+}
+
+export function signedGatewayUrl(baseUrl, kind, target, opts = {}, extraSignedMetadata) {
+  let secret;
+  let ttlSeconds = DEFAULT_TTL_SECONDS;
+  let now = Math.floor(Date.now() / 1000);
+  let signedTargetMetadata = extraSignedMetadata;
+  if (typeof opts === 'string') {
+    secret = opts;
+  } else if (opts && typeof opts === 'object') {
+    secret = opts.secret;
+    if (opts.ttlSeconds !== undefined) ttlSeconds = opts.ttlSeconds;
+    if (opts.now !== undefined) now = opts.now;
+    if (opts.signedTargetMetadata !== undefined) signedTargetMetadata = opts.signedTargetMetadata;
+  }
+  if (!isAllowedTarget(target)) return String(target ?? '');
+  const token = kind === 'media'
+    ? createMediaSignedTarget(target, secret, now, signedTargetMetadata)
+    : createSignedTarget(target, secret, ttlSeconds, now, signedTargetMetadata);
+  return `${String(baseUrl || '').replace(/\/$/, '')}/_gateway/${kind}/${token}`;
+}
+
+export function resolveGatewayUrl(baseUrl, kind, value, sourceUrl, opts, extraSignedMetadata) {
+  if (!value) return '';
+  try {
+    const target = new URL(value, sourceUrl);
+    return signedGatewayUrl(baseUrl, kind, target.toString(), opts, extraSignedMetadata);
+  } catch {
+    return '';
+  }
+}
+
+export function matchesFeedFilters(item = {}, filters = {}) {
+  if (!filters || typeof filters !== 'object' || !item || typeof item !== 'object') return false;
+  const { title = '', description = '', author = '' } = item;
+  if (Array.isArray(filters.keywordBlacklist) && filters.keywordBlacklist.length > 0) {
+    const t = String(title || '').toLowerCase();
+    const d = String(description || '').toLowerCase();
+    for (const rawKw of filters.keywordBlacklist) {
+      const kw = String(rawKw || '').trim().toLowerCase();
+      if (kw && (t.includes(kw) || d.includes(kw))) {
+        return true;
+      }
+    }
+  }
+  if (Array.isArray(filters.authorBlacklist) && filters.authorBlacklist.length > 0) {
+    const a = String(author || '').trim().toLowerCase();
+    for (const rawAuthor of filters.authorBlacklist) {
+      const blAuthor = String(rawAuthor || '').trim().toLowerCase();
+      if (blAuthor && a === blAuthor) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function constantTimeEquals(left, right) {
   try {
     const leftBuf = Buffer.isBuffer(left) ? left : Buffer.from(String(left ?? ''));

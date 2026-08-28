@@ -387,6 +387,9 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `createSignedTarget(url, secret, ttl, now, meta)`, `createMediaSignedTarget(url, secret, now, meta)`, `verifySignedTarget(token, secret, now)`: Cryptographic HMAC URL target token generators and tamper-proof signature verifiers.
+  - `signedGatewayUrl(base, kind, target, opts)`, `resolveGatewayUrl(base, kind, val, src, opts)`: Universal signed proxy route builders with host allowlist guarding and source resolution.
+  - `matchesFeedFilters(item, filters)`: Feed transformation keyword and author blacklist filtering evaluator.
   - `normalizedImageContentType(type)`, `originalImageResult(body, type)`, `unsupportedImageVariantWidthError()`, `DEFAULT_WEBP_OPTIONS`: Responsive image variant transformation presets, content type normalizers, fallbacks and error constructors.
   - `localGatewayUrl(url, localHosts)`, `mediaUrls(html, baseUrl)`, `numericContentLength(res)`, `variantUrl(url, width)`, `BENCHMARK_LOCAL_HOSTS`, `DEFAULT_MEDIA_CONCURRENCY`, `DEFAULT_BENCHMARK_VARIANT_WIDTH`: Gateway gallery performance benchmarking URL extractors, local host validators and concurrency profiles.
   - `canonicalUrl(url)`, `normalizedNamespace(ns)`, `cacheKeyFor(url, kind, ns)`, `normalizeCacheHeaders(headers)`, `normalizeCacheBody(body)`, `resultFromCacheEntry(entry, body, state)`, `DEFAULT_CACHE_TTL_SECONDS`, `DEFAULT_CACHE_MAX_BYTES`, `DEFAULT_EVICTION_PRIORITY`: Deterministic tiered cache keying, namespace isolation, header filtering, memory body boxing and eviction priorities.
