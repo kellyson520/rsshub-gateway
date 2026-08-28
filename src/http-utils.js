@@ -2583,6 +2583,12 @@ export const PIXIV_DEFAULT_REFERER = 'https://www.pixiv.net/';
 export const PIXIV_MATCH_HOSTS = Object.freeze(['pixiv.net', 'pximg.net']);
 export const DEFAULT_PIXIV_UNAVAILABLE_MESSAGE = 'Pixiv 内容暂时无法读取，请稍后重试或打开原始来源。';
 
+export function pixivHeaders(config = {}, { includeCredentials = false, defaultReferer = PIXIV_DEFAULT_REFERER } = {}) {
+  const result = { referer: config?.referer || defaultReferer };
+  if (includeCredentials && config?.cookie) result.cookie = config.cookie;
+  return result;
+}
+
 export const DEFAULT_ADULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 export const DEFAULT_ADULT_ACCEPT_LANGUAGE = 'zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7';
 

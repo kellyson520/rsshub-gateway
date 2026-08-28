@@ -3,6 +3,7 @@ import {
   matchesHost,
   PIXIV_DEFAULT_REFERER as DEFAULT_REFERER,
   PIXIV_MATCH_HOSTS as MATCH_HOSTS,
+  pixivHeaders,
 } from '../http-utils.js';
 
 export const name = 'pixiv';
@@ -12,6 +13,7 @@ export {
   DEFAULT_REFERER,
   MATCH_HOSTS,
   DEFAULT_UNAVAILABLE_MESSAGE,
+  pixivHeaders,
 };
 
 export function matches(hostname) {
@@ -19,9 +21,7 @@ export function matches(hostname) {
 }
 
 export function headers(config = {}, { includeCredentials = false } = {}) {
-  const result = { referer: config?.referer || DEFAULT_REFERER };
-  if (includeCredentials && config?.cookie) result.cookie = config.cookie;
-  return result;
+  return pixivHeaders(config, { includeCredentials });
 }
 
 export function readerTarget(url) {
