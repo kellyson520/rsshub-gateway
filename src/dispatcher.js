@@ -1,14 +1,18 @@
 import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
 import {
+  buildSidecarFetchPayload,
   compilePattern,
   cookiesObject,
   DEFAULT_ROUTES_FILE as BASE_DEFAULT_ROUTES_FILE,
   DEFAULT_SIDECAR_TIMEOUT_MS,
+  matchRouteList,
   matchSegments,
   normalizeRoute,
+  registerRouteEntries,
   resolveRedirect,
   sidecarUrl,
+  unregisterRouteEntries,
 } from './http-utils.js';
 
 const DEFAULT_ROUTES_FILE = process.env.GATEWAY_ROUTES_FILE || BASE_DEFAULT_ROUTES_FILE;
@@ -17,6 +21,10 @@ export {
   compilePattern,
   normalizeRoute,
   matchSegments,
+  matchRouteList,
+  registerRouteEntries,
+  unregisterRouteEntries,
+  buildSidecarFetchPayload,
   sidecarUrl,
   cookiesObject,
   resolveRedirect,
@@ -49,36 +57,15 @@ export function createDispatcher({
   }
 
   function registerRoutes(entries) {
-    let registered = 0;
-    let rejected = 0;
-    for (const raw of Array.isArray(entries) ? entries : []) {
-      const route = normalizeRoute(raw);
-      if (!route) {
-        rejected += 1;
-        continue;
-      }
-      runtimeRoutes.push(route);
-      registered += 1;
-    }
-    return { registered, rejected };
+    return registerRouteEntries(runtimeRoutes, entries);
   }
 
   function unregisterRoutes(routeIds) {
-    const wanted = new Set(Array.isArray(routeIds) ? routeIds.map(String) : []);
-    const before = runtimeRoutes.length;
-    for (let index = runtimeRoutes.length - 1; index >= 0; index -= 1) {
-      if (wanted.has(runtimeRoutes[index].routeId)) runtimeRoutes.splice(index, 1);
-    }
-    return { removed: before - runtimeRoutes.length };
+    return unregisterRouteEntries(runtimeRoutes, routeIds);
   }
 
   function match(pathname) {
-    const segments = String(pathname || '').split('/').filter(Boolean);
-    for (const route of [...routes, ...runtimeRoutes]) {
-      const params = matchSegments(route.pattern, segments);
-      if (params !== null) return { route, params };
-    }
-    return null;
+    return matchRouteList([...routes, ...runtimeRoutes], pathname);
   }
 
   async function callSidecar(route, params, { egressLane, cookies, cacheTtl, requestId } = {}) {
@@ -92,15 +79,7 @@ export function createDispatcher({
           'content-type': 'application/json',
           ...(requestId ? { 'x-request-id': requestId } : {}),
         },
-        body: JSON.stringify({
-          routeId: route.routeId,
-          params,
-          egressLane,
-          // Fetcher-API contract: cookies is an object; normalize the raw Cookie
-          // header the gateway may hand over so sidecars always get {name: value}.
-          cookies: cookiesObject(cookies),
-          cacheTtl: cacheTtl ?? route.cacheTtl,
-        }),
+        body: JSON.stringify(buildSidecarFetchPayload(route, params, { egressLane, cookies, cacheTtl })),
         signal: AbortSignal.timeout(sidecarTimeoutMs),
       });
     } catch (error) {

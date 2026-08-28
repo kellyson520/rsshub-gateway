@@ -3531,6 +3531,50 @@ export function matchSegments(pattern, segments) {
   return segmentIndex === segments.length ? params : null;
 }
 
+export function matchRouteList(routes, pathname) {
+  const segments = String(pathname || '').split('/').filter(Boolean);
+  for (const route of Array.isArray(routes) ? routes : []) {
+    if (!route || !route.pattern) continue;
+    const params = matchSegments(route.pattern, segments);
+    if (params !== null) return { route, params };
+  }
+  return null;
+}
+
+export function registerRouteEntries(targetList, entries) {
+  let registered = 0;
+  let rejected = 0;
+  for (const raw of Array.isArray(entries) ? entries : []) {
+    const route = normalizeRoute(raw);
+    if (!route) {
+      rejected += 1;
+      continue;
+    }
+    targetList.push(route);
+    registered += 1;
+  }
+  return { registered, rejected };
+}
+
+export function unregisterRouteEntries(targetList, routeIds) {
+  const wanted = new Set(Array.isArray(routeIds) ? routeIds.map(String) : []);
+  const before = targetList.length;
+  for (let index = targetList.length - 1; index >= 0; index -= 1) {
+    if (wanted.has(targetList[index]?.routeId)) targetList.splice(index, 1);
+  }
+  return { removed: before - targetList.length };
+}
+
+export function buildSidecarFetchPayload(route, params, { egressLane, cookies, cacheTtl } = {}) {
+  return {
+    routeId: route?.routeId,
+    params,
+    egressLane,
+    cookies: cookiesObject(cookies),
+    cacheTtl: cacheTtl ?? route?.cacheTtl,
+  };
+}
+
 export function sidecarUrl(backend) {
   if (typeof backend !== 'string' || !backend.startsWith('sidecar://')) return null;
   const hostPort = backend.slice('sidecar://'.length).replace(/\/$/, '');
