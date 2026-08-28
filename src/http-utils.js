@@ -1647,6 +1647,91 @@ export async function pumpResumableRange({
   return { written, resumed };
 }
 
+export const DEFAULT_RENDER_URL = '';
+export const DEFAULT_RENDER_TIMEOUT_MS = 30_000;
+export const MIN_RENDER_TIMEOUT_MS = 5_000;
+export const RENDER_HEALTH_TIMEOUT_MS = 3_000;
+export const RENDER_BUFFER_TIMEOUT_MS = 10_000;
+
+export function createBrowserRenderClient({
+  renderUrl = DEFAULT_RENDER_URL,
+  fetchImpl = fetch,
+  defaultTimeoutMs = DEFAULT_RENDER_TIMEOUT_MS,
+} = {}) {
+  async function fetchRenderedHtml(url, { timeoutMs } = {}) {
+    const base = String(renderUrl || '').replace(/\/$/, '');
+    if (!base) return null;
+    const budget = Math.max(MIN_RENDER_TIMEOUT_MS, Number(timeoutMs) || defaultTimeoutMs);
+    let response;
+    try {
+      response = await fetchImpl(`${base}/render`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: String(url), timeoutMs: budget }),
+        signal: AbortSignal.timeout(budget + RENDER_BUFFER_TIMEOUT_MS),
+      });
+    } catch {
+      return null;
+    }
+    if (!response.ok) return null;
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      return null;
+    }
+    if (typeof payload?.html !== 'string') return null;
+    return {
+      html: payload.html,
+      finalUrl: String(payload.finalUrl || url),
+      status: Number(payload.status) || 200,
+    };
+  }
+
+  async function health() {
+    const base = String(renderUrl || '').replace(/\/$/, '');
+    if (!base) return { ok: false, renderUrl: '' };
+    try {
+      const response = await fetchImpl(`${base}/healthz`, { signal: AbortSignal.timeout(RENDER_HEALTH_TIMEOUT_MS) });
+      return { ok: response.ok, renderUrl: base };
+    } catch {
+      return { ok: false, renderUrl: base };
+    }
+  }
+
+  return { fetchRenderedHtml, health };
+}
+
+export const DEFAULT_PYTHON_BIN = 'python3';
+export const DEFAULT_IMPERSONATE = 'chrome131';
+export const DEFAULT_MAX_BODY = 4 * 1024 * 1024;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+export const MAX_REQUEST_TIMEOUT_MS = 65_000;
+export const REQUEST_TIMEOUT_SLACK_MS = 5_000;
+
+export function browserFetchLineError(message, { code = 'FETCHD_UNAVAILABLE', status = 502 } = {}) {
+  return new GatewayUpstreamError(message, { code, source: 'fetchd', status, attempts: 1 });
+}
+
+export function browserRequestTimeoutMs(timeout) {
+  return Math.min(
+    Number.isFinite(timeout) ? timeout + REQUEST_TIMEOUT_SLACK_MS : DEFAULT_REQUEST_TIMEOUT_MS + REQUEST_TIMEOUT_SLACK_MS,
+    MAX_REQUEST_TIMEOUT_MS,
+  );
+}
+
+export function messageToResponse(message) {
+  const body = message?.body ? Buffer.from(message.body, 'base64') : Buffer.alloc(0);
+  return {
+    status: Number(message?.status) || 502,
+    headers: new Headers(message?.headers || {}),
+    body,
+    ok: Number(message?.status) >= 200 && Number(message?.status) < 300,
+    json: async () => JSON.parse(body.toString('utf8')),
+    text: async () => body.toString('utf8'),
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

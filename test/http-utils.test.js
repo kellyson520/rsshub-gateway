@@ -1358,6 +1358,57 @@ test('egress policies and resumable range stream pump operate accurately', async
   assert.equal(Buffer.concat(chunks).toString('utf8'), 'hello range');
 });
 
+test('browser render client and browser fetch message adapter helpers function correctly', async () => {
+  const {
+    createBrowserRenderClient,
+    browserFetchLineError,
+    browserRequestTimeoutMs,
+    messageToResponse,
+    DEFAULT_RENDER_TIMEOUT_MS,
+    DEFAULT_PYTHON_BIN,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_RENDER_TIMEOUT_MS, 30000);
+  assert.equal(DEFAULT_PYTHON_BIN, 'python3');
+
+  const err = browserFetchLineError('test fail', { code: 'TEST_ERR', status: 504 });
+  assert.equal(err.message, 'test fail');
+  assert.equal(err.status, 504);
+  assert.equal(err.code, 'TEST_ERR');
+  assert.equal(err.source, 'fetchd');
+
+  assert.equal(browserRequestTimeoutMs(10000), 15000);
+  assert.equal(browserRequestTimeoutMs(100000), 65000);
+
+  const res = messageToResponse({
+    status: 200,
+    headers: { 'content-type': 'text/plain' },
+    body: Buffer.from('hello browser fetch').toString('base64'),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.ok, true);
+  assert.equal(await res.text(), 'hello browser fetch');
+
+  // Test createBrowserRenderClient
+  const client = createBrowserRenderClient({
+    renderUrl: 'http://127.0.0.1:9999',
+    fetchImpl: async (url) => {
+      if (url.endsWith('/healthz')) {
+        return { ok: true, json: async () => ({ status: 'pass' }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ html: '<html><body>Rendered</body></html>', status: 200 }),
+      };
+    },
+  });
+  const health = await client.health();
+  assert.equal(health.ok, true);
+  const rendered = await client.fetchRenderedHtml('https://example.com');
+  assert.equal(rendered.html, '<html><body>Rendered</body></html>');
+  assert.equal(rendered.status, 200);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
