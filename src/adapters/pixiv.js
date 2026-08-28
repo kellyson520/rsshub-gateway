@@ -1,10 +1,18 @@
-import { matchesHost } from '../http-utils.js';
+import {
+  DEFAULT_PIXIV_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
+  matchesHost,
+  PIXIV_DEFAULT_REFERER as DEFAULT_REFERER,
+  PIXIV_MATCH_HOSTS as MATCH_HOSTS,
+} from '../http-utils.js';
 
-export const DEFAULT_REFERER = 'https://www.pixiv.net/';
-export const MATCH_HOSTS = Object.freeze(['pixiv.net', 'pximg.net']);
-export const DEFAULT_UNAVAILABLE_MESSAGE = 'Pixiv 内容暂时无法读取，请稍后重试或打开原始来源。';
 export const name = 'pixiv';
 export const publiclyReadable = true;
+
+export {
+  DEFAULT_REFERER,
+  MATCH_HOSTS,
+  DEFAULT_UNAVAILABLE_MESSAGE,
+};
 
 export function matches(hostname) {
   return matchesHost(hostname, MATCH_HOSTS);

@@ -1579,6 +1579,54 @@ test('canonical system gateway configuration default constants are defined and e
   assert.equal(DEFAULT_REGISTER_RETRY_DELAY_MS, 2000);
   assert.equal(DEFAULT_ROUTES_FILE, 'gateway-routes.yaml');
   assert.equal(DEFAULT_SIDECAR_TIMEOUT_MS, 60000);
+
+  const {
+    DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE,
+    defaultAdapter,
+    resolveSourceMode,
+    X_MATCH_HOSTS,
+    DEFAULT_X_UNAVAILABLE_MESSAGE,
+    X_AUTH_FLOW_LOGIN_PATTERN,
+    INSTAGRAM_MATCH_HOSTS,
+    DEFAULT_INSTAGRAM_UNAVAILABLE_MESSAGE,
+    INSTAGRAM_AUTH_LOGIN_PATTERN,
+    TELEGRAM_MATCH_HOSTS,
+    DEFAULT_TELEGRAM_UNAVAILABLE_MESSAGE,
+    isTelegramChannelPostUrl,
+    PIXIV_DEFAULT_REFERER,
+    PIXIV_MATCH_HOSTS,
+    DEFAULT_PIXIV_UNAVAILABLE_MESSAGE,
+    DEFAULT_ADULT_USER_AGENT,
+    DEFAULT_ADULT_ACCEPT_LANGUAGE,
+    ADULT_DOMAINS,
+    DEFAULT_ADULT_UNAVAILABLE_MESSAGE,
+    isAdultMediaChallenge,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(typeof DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE, 'string');
+  assert.equal(defaultAdapter.name, 'unknown');
+  assert.equal(defaultAdapter.unavailableMessage(), DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE);
+
+  assert.equal(resolveSourceMode('iwara', { cookie: 'c' }), 'authenticated');
+  assert.equal(resolveSourceMode('iwara', {}), 'public');
+  assert.equal(resolveSourceMode('x', { authToken: 't' }), 'authenticated');
+  assert.equal(resolveSourceMode('x', {}), 'public');
+  assert.equal(resolveSourceMode('instagram', { cookie: 'c' }), 'authenticated');
+  assert.equal(resolveSourceMode('telegram', {}), 'public');
+
+  assert.ok(X_MATCH_HOSTS.includes('x.com'));
+  assert.equal(X_AUTH_FLOW_LOGIN_PATTERN.test('/i/flow/login'), true);
+  assert.ok(INSTAGRAM_MATCH_HOSTS.includes('instagram.com'));
+  assert.equal(INSTAGRAM_AUTH_LOGIN_PATTERN.test('/accounts/login'), true);
+  assert.ok(TELEGRAM_MATCH_HOSTS.includes('t.me'));
+  assert.equal(isTelegramChannelPostUrl('https://t.me/durov/123'), true);
+  assert.equal(isTelegramChannelPostUrl('https://t.me/durov'), false);
+  assert.equal(PIXIV_DEFAULT_REFERER, 'https://www.pixiv.net/');
+  assert.ok(PIXIV_MATCH_HOSTS.includes('pixiv.net'));
+  assert.ok(ADULT_DOMAINS.includes('jable.tv'));
+  assert.equal(isAdultMediaChallenge({ status: 403 }), true);
+  assert.equal(isAdultMediaChallenge({ status: 200, body: '<html>Just a moment...</html>' }), true);
+  assert.equal(isAdultMediaChallenge({ status: 200, body: '<html>Normal page content</html>' }), false);
 });
 
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {

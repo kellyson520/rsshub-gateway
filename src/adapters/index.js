@@ -7,23 +7,19 @@ import * as pixiv from './pixiv.js';
 import * as linuxdo from './linuxdo.js';
 import * as adultMedia from './adult-media.js';
 
-import { safeHost } from '../http-utils.js';
+import {
+  DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
+  defaultAdapter,
+  resolveSourceMode as resolveMode,
+  safeHost,
+} from '../http-utils.js';
 
 export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
 
-export const DEFAULT_UNAVAILABLE_MESSAGE = '该来源暂时无法读取，请稍后重试或打开原始来源。';
-
-export const defaultAdapter = {
-  name: 'unknown',
-  publiclyReadable: false,
-  headers: () => ({}),
-  isAuthenticationChallenge: () => false,
-  readerTarget: (url) => String(url),
-  isGalleryUrl: () => false,
-  galleryPageUrls: () => [],
-  imagePageUrls: () => [],
-  firstImagePageUrl: () => '',
-  unavailableMessage: () => DEFAULT_UNAVAILABLE_MESSAGE,
+export {
+  DEFAULT_UNAVAILABLE_MESSAGE,
+  defaultAdapter,
+  resolveMode,
 };
 
 export function adapterForUrl(url) {
@@ -41,11 +37,4 @@ export function getSupportedSourceNames() {
 export function isKnownSourceUrl(url) {
   const adapter = adapterForUrl(url);
   return adapter && adapter.name !== 'unknown';
-}
-
-export function resolveMode(source, config = {}) {
-  if (source === 'iwara') return config.cookie ? 'authenticated' : 'public';
-  if (source === 'x') return config.authToken ? 'authenticated' : 'public';
-  if (source === 'instagram') return config.cookie ? 'authenticated' : 'public';
-  return 'public';
 }

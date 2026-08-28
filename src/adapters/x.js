@@ -1,12 +1,19 @@
 import * as cheerio from 'cheerio';
-import { matchesHost } from '../http-utils.js';
+import {
+  DEFAULT_X_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
+  matchesHost,
+  X_AUTH_FLOW_LOGIN_PATTERN as AUTH_FLOW_LOGIN_PATTERN,
+  X_MATCH_HOSTS as MATCH_HOSTS,
+} from '../http-utils.js';
 
 export const name = 'x';
 export const publiclyReadable = true;
 
-export const MATCH_HOSTS = Object.freeze(['x.com', 'twitter.com', 'twimg.com']);
-export const DEFAULT_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
-export const AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
+export {
+  MATCH_HOSTS,
+  DEFAULT_UNAVAILABLE_MESSAGE,
+  AUTH_FLOW_LOGIN_PATTERN,
+};
 
 export function matches(hostname) {
   return matchesHost(hostname, MATCH_HOSTS);

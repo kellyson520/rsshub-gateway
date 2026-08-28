@@ -1923,6 +1923,100 @@ export const DEFAULT_UNREGISTER_TIMEOUT_MS = 3000;
 export const DEFAULT_ROUTES_FILE = 'gateway-routes.yaml';
 export const DEFAULT_SIDECAR_TIMEOUT_MS = 60_000;
 
+export const DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE = '该来源暂时无法读取，请稍后重试或打开原始来源。';
+
+export const defaultAdapter = {
+  name: 'unknown',
+  publiclyReadable: false,
+  headers: () => ({}),
+  isAuthenticationChallenge: () => false,
+  readerTarget: (url) => String(url),
+  isGalleryUrl: () => false,
+  galleryPageUrls: () => [],
+  imagePageUrls: () => [],
+  firstImagePageUrl: () => '',
+  unavailableMessage: () => DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE,
+};
+
+export function resolveSourceMode(source, config = {}) {
+  if (source === 'iwara') return config.cookie ? 'authenticated' : 'public';
+  if (source === 'x') return config.authToken ? 'authenticated' : 'public';
+  if (source === 'instagram') return config.cookie ? 'authenticated' : 'public';
+  return 'public';
+}
+
+export const X_MATCH_HOSTS = Object.freeze(['x.com', 'twitter.com', 'twimg.com']);
+export const DEFAULT_X_UNAVAILABLE_MESSAGE = 'X 内容暂时无法读取。公开内容可能受登录或访问限制。';
+export const X_AUTH_FLOW_LOGIN_PATTERN = /\/i\/flow\/login(?:[/?#]|$)/i;
+
+export const INSTAGRAM_MATCH_HOSTS = Object.freeze(['instagram.com', 'cdninstagram.com', 'fbcdn.net']);
+export const DEFAULT_INSTAGRAM_UNAVAILABLE_MESSAGE = 'Instagram 内容暂时无法读取。公开内容可能受登录或访问限制。';
+export const INSTAGRAM_AUTH_LOGIN_PATTERN = /\/(?:accounts\/login|login)(?:[/?#]|$)/i;
+
+export const TELEGRAM_MATCH_HOSTS = Object.freeze(['t.me']);
+export const DEFAULT_TELEGRAM_UNAVAILABLE_MESSAGE = 'Telegram 内容暂时无法读取，请稍后重试或打开原始来源。';
+
+export function isTelegramChannelPostUrl(value, matchHosts = TELEGRAM_MATCH_HOSTS) {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split('/').filter(Boolean);
+    return matchesHost(url.hostname, matchHosts) && parts.length === 2 && /^\d+$/.test(parts[1]);
+  } catch {
+    return false;
+  }
+}
+
+export const PIXIV_DEFAULT_REFERER = 'https://www.pixiv.net/';
+export const PIXIV_MATCH_HOSTS = Object.freeze(['pixiv.net', 'pximg.net']);
+export const DEFAULT_PIXIV_UNAVAILABLE_MESSAGE = 'Pixiv 内容暂时无法读取，请稍后重试或打开原始来源。';
+
+export const DEFAULT_ADULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+export const DEFAULT_ADULT_ACCEPT_LANGUAGE = 'zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7';
+
+export const ADULT_DOMAINS = Object.freeze([
+  'jable.tv',
+  'missav.ws',
+  'missav.ai',
+  'missav.com',
+  'missav.live',
+  'javbus.com',
+  'javbus.one',
+  'javdb.com',
+  'airav.wiki',
+  'airav.io',
+  'ggjav.com',
+  'ggjav.tv',
+  'wnacg.com',
+  'wnacg.org',
+  'chikubi.jp',
+  'skeb.jp',
+  'fanbox.cc',
+  'kemono.su',
+  'kemono.party',
+  'kemono.cr',
+  'coomer.su',
+  'coomer.party',
+  'coomer.st',
+  'sehuatang.net',
+  'uraaka-joshi.com',
+  'netflav.com',
+  '91porn.com',
+]);
+
+export const DEFAULT_ADULT_UNAVAILABLE_MESSAGE = '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';
+export const ADULT_CHALLENGE_SUBSTRINGS = Object.freeze([
+  'Just a moment...',
+  'cf-challenge',
+  'ddos-guard',
+  'cloudflare-static',
+]);
+
+export function isAdultMediaChallenge({ status, headers, body } = {}) {
+  if (status === 401 || status === 403) return true;
+  if (status < 200 || status >= 300 || typeof body !== 'string') return false;
+  return ADULT_CHALLENGE_SUBSTRINGS.some((substr) => body.includes(substr));
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

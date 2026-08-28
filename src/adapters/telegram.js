@@ -1,22 +1,24 @@
-import { matchesHost } from '../http-utils.js';
+import {
+  DEFAULT_TELEGRAM_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
+  isTelegramChannelPostUrl as baseIsTelegramChannelPostUrl,
+  matchesHost,
+  TELEGRAM_MATCH_HOSTS as MATCH_HOSTS,
+} from '../http-utils.js';
 
 export const name = 'telegram';
 export const publiclyReadable = true;
-export const MATCH_HOSTS = Object.freeze(['t.me']);
-export const DEFAULT_UNAVAILABLE_MESSAGE = 'Telegram 内容暂时无法读取，请稍后重试或打开原始来源。';
+
+export {
+  MATCH_HOSTS,
+  DEFAULT_UNAVAILABLE_MESSAGE,
+};
 
 export function matches(hostname) {
   return matchesHost(hostname, MATCH_HOSTS);
 }
 
 export function isTelegramChannelPostUrl(value) {
-  try {
-    const url = new URL(value);
-    const parts = url.pathname.split('/').filter(Boolean);
-    return matches(url.hostname) && parts.length === 2 && /^\d+$/.test(parts[1]);
-  } catch {
-    return false;
-  }
+  return baseIsTelegramChannelPostUrl(value, MATCH_HOSTS);
 }
 
 export function headers(_config = {}, _options = {}) {

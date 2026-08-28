@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `resolveSourceMode(source, config)`, `defaultAdapter`, `isTelegramChannelPostUrl(url, hosts)`, `isAdultMediaChallenge(res)`: Universal multi-source adapter mode resolver, default fallback adapter, Telegram channel post URL checker, and adult media Cloudflare challenge detector.
   - `DEFAULT_CACHE_ROOT`, `DEFAULT_EH_PREFETCH_CONCURRENCY`, `DEFAULT_EGRESS_MIN_CONCURRENCY_PER_LANE`, `DEFAULT_MEDIA_CACHE_MAX_FILE_BYTES`, `DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES`, `DEFAULT_SLOW_SOURCE_THRESHOLD_MS`: Unified gateway configuration and cache storage default constants.
   - `browserFetchHost(url, hosts)`, `parseBrowserFetchHosts(envVal, fallback)`, `DEFAULT_BROWSER_FETCH_HOSTS`: Browser-fingerprint WAF bypass target matcher and host list parser.
   - `parseProxyAuth(header)`, `parseAuthority(value)`, `BASIC_AUTH_HEADER_RE`: HTTP proxy Basic authorization header parser and CONNECT target authority splitters.
