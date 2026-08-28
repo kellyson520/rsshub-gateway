@@ -8,6 +8,7 @@ import {
   EH_IMAGE_PATH,
   EH_METADATA_LABELS,
   escapeHtml,
+  extractEhGalleryTitle,
   isAllowedTarget,
   isEhentaiPage,
   mediaSrcset,
@@ -84,12 +85,7 @@ function renderDocument(title, content, preloadImages = []) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}</style></head><body>${content}</body></html>`;
 }
 
-export { cleanText };
-
-export function extractEhGalleryTitle({ url, html }) {
-  const $ = cheerio.load(String(html || ''), { decodeEntities: false });
-  return cleanText($('#gn').first().text()) || cleanText($('title').first().text()) || url;
-}
+export { cleanText, extractEhGalleryTitle };
 
 function renderMetadata($) {
   const rows = $('#gdd tr').map((_, row) => {
