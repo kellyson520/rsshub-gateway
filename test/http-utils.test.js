@@ -796,6 +796,54 @@ test('publicLeaseView, isChunkSignatureValid and DEFAULT_LEASE constants project
   assert.equal(DEFAULT_LEASE_TTL_MS, 1800000);
 });
 
+test('encodeTextResponse, encodeHtmlResponse and HTTP compression helpers compress payloads safely', async () => {
+  const {
+    encodeTextResponse,
+    encodeHtmlResponse,
+    isCompressibleContentType,
+    acceptsCoding,
+    acceptsBrotli,
+    acceptsGzip,
+    withVary,
+    COMPRESSIBLE_CONTENT_TYPES,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isCompressibleContentType('text/html; charset=utf-8'), true);
+  assert.equal(isCompressibleContentType('application/json'), true);
+  assert.equal(isCompressibleContentType('image/jpeg'), false);
+
+  assert.equal(acceptsCoding('gzip, deflate, br', 'br'), true);
+  assert.equal(acceptsCoding('gzip, deflate', 'br'), false);
+  assert.equal(acceptsCoding('gzip;q=0, br;q=0.5', 'gzip'), false);
+  assert.equal(acceptsBrotli('gzip, br'), true);
+  assert.equal(acceptsGzip('gzip, br'), true);
+
+  assert.equal(withVary({}), 'Accept-Encoding');
+  assert.equal(withVary({ vary: 'Origin' }), 'Origin, Accept-Encoding');
+  assert.equal(withVary({ vary: 'Accept-Encoding' }), 'Accept-Encoding');
+
+  const largeText = 'Hello RSSHub Gateway! '.repeat(200);
+  const textRes = encodeTextResponse({
+    body: largeText,
+    contentType: 'text/plain',
+    acceptEncoding: 'br, gzip',
+    minBytes: 100,
+  });
+  assert.equal(textRes.encoding, 'br');
+  assert.equal(textRes.headers['content-encoding'], 'br');
+  assert.ok(Number(textRes.headers['content-length']) < Buffer.byteLength(largeText));
+
+  const htmlRes = encodeHtmlResponse({
+    body: `<html><body>${largeText}</body></html>`,
+    contentType: 'text/html',
+    acceptEncoding: 'gzip',
+    minBytes: 100,
+  });
+  assert.equal(htmlRes.headers['content-encoding'], 'gzip');
+  assert.ok(Number(htmlRes.headers['content-length']) > 0);
+  assert.equal(COMPRESSIBLE_CONTENT_TYPES.length > 0, true);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
