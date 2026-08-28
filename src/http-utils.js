@@ -2249,6 +2249,24 @@ export const DEFAULT_IMAGE_VARIANT_CONCURRENCY = 2;
 export const DEFAULT_LEASE_BACKFILL_CONCURRENCY = 2;
 export const DEFAULT_SLOW_SOURCE_THRESHOLD_MS = 5_000;
 
+export function resolveSlowSourceThresholdMs(raw, fallback = DEFAULT_SLOW_SOURCE_THRESHOLD_MS) {
+  const value = Number(raw ?? fallback);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : Math.floor(Number(fallback));
+}
+
+export function parseFeedPrefetchPaths(raw, dedupeFn = dedupe) {
+  const list = Array.isArray(raw)
+    ? raw.map(String).filter(Boolean)
+    : String(raw ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  return typeof dedupeFn === 'function' ? dedupeFn(list) : list;
+}
+
+export function parseBooleanOption(raw, fallback = true) {
+  if (raw === undefined || raw === null) return fallback;
+  if (typeof raw === 'boolean') return raw;
+  return String(raw).toLowerCase() !== 'false';
+}
+
 export const DEFAULT_EGRESS_SUCCESS_RAMP_AFTER = 6;
 export const DEFAULT_EGRESS_COOLDOWN_MS = 500;
 export const DEFAULT_EGRESS_BACKGROUND_RESERVE_PER_LANE = 1;

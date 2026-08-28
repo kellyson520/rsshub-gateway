@@ -33,11 +33,14 @@ import {
   DEFAULT_VIDEO_CACHE_MAX_FILE_BYTES,
   DEFAULT_VIDEO_PREFETCH_CONCURRENCY,
   dedupe,
+  parseBooleanOption,
+  parseFeedPrefetchPaths,
   parseHostList,
   parseProbeTargets,
   parseStatusList,
   readSecret,
   readSources,
+  resolveSlowSourceThresholdMs,
 } from './http-utils.js';
 import { DEFAULT_BLOCKED_STATUSES } from './upstream-errors.js';
 import { DEFAULT_HTML_BROTLI_MIN_BYTES, DEFAULT_HTML_BROTLI_QUALITY } from './http-encoding.js';
@@ -76,6 +79,9 @@ export {
   DEFAULT_LEASE_MAX_BYTES,
   DEFAULT_LEASE_MAX_CONCURRENCY,
   DEFAULT_SLOW_SOURCE_THRESHOLD_MS,
+  parseFeedPrefetchPaths,
+  parseBooleanOption,
+  resolveSlowSourceThresholdMs,
 };
 
 export function resolveGatewayOptions(options = {}, env = process.env) {
@@ -223,9 +229,10 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     1,
     24,
   );
-  const ehColdStartEnabled = String(
-    options.ehColdStartEnabled ?? env.EH_COLD_START_ENABLED ?? 'true',
-  ).toLowerCase() !== 'false';
+  const ehColdStartEnabled = parseBooleanOption(
+    options.ehColdStartEnabled ?? env.EH_COLD_START_ENABLED,
+    true,
+  );
   const ehFirstDetailBudgetMs = boundedInteger(
     options.ehFirstDetailBudgetMs ?? env.EH_FIRST_DETAIL_BUDGET_MS,
     DEFAULT_FIRST_DETAIL_BUDGET_MS,
@@ -275,9 +282,10 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     11,
   );
   const imageVariantLimiter = createConcurrencyLimiter(imageVariantConcurrency);
-  const leaseBackfillEnabled = String(
-    options.leaseBackfillEnabled ?? env.GATEWAY_LEASE_BACKFILL ?? 'true',
-  ).toLowerCase() !== 'false';
+  const leaseBackfillEnabled = parseBooleanOption(
+    options.leaseBackfillEnabled ?? env.GATEWAY_LEASE_BACKFILL,
+    true,
+  );
   const leaseBackfillConcurrency = boundedInteger(
     options.leaseBackfillConcurrency ?? env.GATEWAY_LEASE_BACKFILL_CONCURRENCY,
     2,
@@ -305,11 +313,10 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
     1024 * 1024,
     64 * 1024 ** 3,
   );
-  const slowSourceThresholdMs = (() => {
-    const raw = options.slowSourceThresholdMs ?? env.GATEWAY_SLOW_SOURCE_MS ?? 5000;
-    const value = Number(raw);
-    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 5000;
-  })();
+  const slowSourceThresholdMs = resolveSlowSourceThresholdMs(
+    options.slowSourceThresholdMs ?? env.GATEWAY_SLOW_SOURCE_MS,
+    DEFAULT_SLOW_SOURCE_THRESHOLD_MS,
+  );
   const leaseMaxConcurrency = boundedInteger(
     options.leaseMaxConcurrency ?? env.GATEWAY_LEASE_MAX_CONCURRENCY,
     8,
@@ -320,21 +327,19 @@ export function resolveGatewayOptions(options = {}, env = process.env) {
   const sessionAffinityRoot = options.sessionAffinityRoot || env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT;
   const sessionAffinityFile = options.sessionAffinityFile || env.SESSION_AFFINITY_FILE;
   const downloadSessionFile = options.downloadSessionFile || env.GATEWAY_DOWNLOAD_SESSION_FILE;
-  const videoPrefetchEnabled = options.videoPrefetchEnabled !== false
-    && String(env.GATEWAY_VIDEO_PREFETCH ?? '').toLowerCase() !== 'false';
+  const videoPrefetchEnabled = parseBooleanOption(
+    options.videoPrefetchEnabled ?? env.GATEWAY_VIDEO_PREFETCH,
+    true,
+  );
   const videoPrefetchConcurrency = boundedInteger(
     options.videoPrefetchConcurrency ?? env.GATEWAY_VIDEO_PREFETCH_CONCURRENCY,
     DEFAULT_VIDEO_PREFETCH_CONCURRENCY,
     1,
     8,
   );
-  const feedPrefetchPaths = dedupe(
-    Array.isArray(options.feedPrefetchPaths)
-      ? options.feedPrefetchPaths.map(String).filter(Boolean)
-      : String(options.feedPrefetchPaths ?? env.GATEWAY_FEED_PREFETCH_PATHS ?? '')
-          .split(',')
-          .map((value) => value.trim())
-          .filter(Boolean),
+  const feedPrefetchPaths = parseFeedPrefetchPaths(
+    options.feedPrefetchPaths ?? env.GATEWAY_FEED_PREFETCH_PATHS,
+    dedupe,
   );
   const feedPrefetchIntervalMs = boundedInteger(
     options.feedPrefetchIntervalMs ?? env.GATEWAY_FEED_PREFETCH_INTERVAL_MS,
