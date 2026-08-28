@@ -4,7 +4,7 @@ import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
 import { Readable } from 'node:stream';
-import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import * as cheerio from 'cheerio';
 import sharp from 'sharp';
@@ -4497,6 +4497,118 @@ export const DEFAULT_LEASE_FAILURES_CAP = 10_000;
 export const DEFAULT_LEASE_FAILURE_WINDOW_MS = 60_000;
 export const DEFAULT_LEASE_FAILURE_THRESHOLD = 8;
 export const DEFAULT_LEASE_HANDSHAKE_MAX_BYTES = 64 * 1024;
+
+export function createLeaseStore({ now = Date.now, randomIdFn } = {}) {
+  const leases = new Map();
+
+  function randomToken(bytes) {
+    if (typeof randomIdFn === 'function') return randomIdFn(bytes);
+    return randomBytes(bytes).toString('base64url');
+  }
+
+  function createLease({
+    targetUrl,
+    resolvedUrl,
+    allowHosts,
+    ttlMs = DEFAULT_LEASE_TTL_MS,
+    maxBytes = DEFAULT_LEASE_MAX_BYTES,
+    maxConcurrency = DEFAULT_LEASE_MAX_CONCURRENCY,
+    metadata = {},
+  }) {
+    const createdAt = typeof now === 'function' ? now() : Date.now();
+    const lease = {
+      username: randomToken(12),
+      password: randomToken(18),
+      targetUrl: String(targetUrl),
+      resolvedUrl: String(resolvedUrl || targetUrl),
+      allowHosts: dedupe((allowHosts || []).map((host) => String(host).toLowerCase())),
+      createdAt,
+      expiresAt: createdAt + ttlMs,
+      maxBytes: Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : DEFAULT_LEASE_MAX_BYTES,
+      maxConcurrency: Number.isInteger(maxConcurrency) && maxConcurrency >= 1 && maxConcurrency <= 32
+        ? maxConcurrency
+        : DEFAULT_LEASE_MAX_CONCURRENCY,
+      usedBytes: 0,
+      activeConnections: 0,
+      completedConnections: 0,
+      revoked: false,
+      source: metadata.source || 'unknown',
+    };
+    leases.set(lease.username, lease);
+    return lease;
+  }
+
+  function verify(username, password) {
+    const currentNow = typeof now === 'function' ? now() : Date.now();
+    const lease = leases.get(String(username));
+    if (!lease || lease.revoked || currentNow >= lease.expiresAt) {
+      return null;
+    }
+    if (!constantTimeEquals(password, lease.password)) {
+      return null;
+    }
+    return lease;
+  }
+
+  function revoke(username) {
+    const lease = leases.get(String(username));
+    if (lease) lease.revoked = true;
+    return lease || null;
+  }
+
+  function revokeExpired() {
+    const currentNow = typeof now === 'function' ? now() : Date.now();
+    const expired = [];
+    for (const lease of leases.values()) {
+      if (lease.revoked || currentNow >= lease.expiresAt) {
+        leases.delete(lease.username);
+        expired.push(lease.username);
+      }
+    }
+    return expired;
+  }
+
+  function get(username) {
+    return leases.get(String(username)) || null;
+  }
+
+  function activeCount() {
+    return leases.size;
+  }
+
+  function stats() {
+    let active = 0;
+    let expired = 0;
+    let revoked = 0;
+    const currentNow = typeof now === 'function' ? now() : Date.now();
+    for (const lease of leases.values()) {
+      if (lease.revoked) revoked += 1;
+      else if (currentNow >= lease.expiresAt) expired += 1;
+      else active += 1;
+    }
+    return {
+      leases: leases.size,
+      active,
+      expired,
+      revoked,
+    };
+  }
+
+  function publicView(lease, options = {}) {
+    return publicLeaseView(lease, options, now);
+  }
+
+  return {
+    createLease,
+    verify,
+    revoke,
+    revokeExpired,
+    get,
+    activeCount,
+    stats,
+    publicView,
+  };
+}
 
 export function isLeaseComplete(lease) {
   if (!lease || typeof lease !== 'object') return false;
