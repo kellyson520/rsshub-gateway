@@ -2073,6 +2073,25 @@ export function sourceHeaders(url, sources = {}, { includeCredentials = false, c
   };
 }
 
+export function parseThumbnailTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata, { gatewayUrl = resolveGatewayUrl } = {}) {
+  const value = String(style || '');
+  const image = value.match(/url\(\s*["']?([^"')]+)["']?\s*\)/i)?.[1];
+  const media = gatewayUrl(baseUrl, 'media', image, sourceUrl, secret, signedTargetMetadata);
+  if (!media) return null;
+  const position = value.match(/\)\s*(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)(px)?/i);
+  const x = Number(position?.[1] || 0);
+  const y = position?.[3] || Number(position?.[2]) === 0 ? Number(position?.[2] || 0) : 0;
+  const width = numericStyle(value, 'width', 200);
+  const height = numericStyle(value, 'height', 289);
+  return {
+    media,
+    x: Number.isFinite(x) ? Math.max(Math.min(Math.round(x), 0), -5000) : 0,
+    y: Number.isFinite(y) ? Math.max(Math.min(Math.round(y), 0), -5000) : 0,
+    width,
+    height,
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

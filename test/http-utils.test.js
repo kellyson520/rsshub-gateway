@@ -1683,7 +1683,7 @@ test('canonical system gateway configuration default constants are defined and e
 });
 
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
-  const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
+  const { tileStyle, tileImage, parseThumbnailTile, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
   const tile = { width: 200, height: 289, x: -10, y: -20, media: 'https://example.com/sprite.jpg' };
   assert.equal(tileStyle(tile), 'width:200px;height:289px;overflow:hidden');
@@ -1692,6 +1692,20 @@ test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles 
   const img = tileImage(tile, 'eh-thumb-tile', 'Page 1', 'lazy');
   assert.equal(img, '<img class="eh-thumb-tile" src="https://example.com/sprite.jpg" alt="Page 1" loading="lazy" style="transform:translate(-10px,-20px)">');
   assert.equal(tileImage(null), '');
+
+  const parsed = parseThumbnailTile(
+    'background: transparent url(https://e-hentai.org/t.jpg) -20px -40px no-repeat; width: 100px; height: 150px;',
+    'https://e-hentai.org/g/1/2/',
+    'https://gateway.local',
+    'secret',
+    {},
+  );
+  assert.ok(parsed);
+  assert.equal(parsed.x, -20);
+  assert.equal(parsed.y, -40);
+  assert.equal(parsed.width, 100);
+  assert.equal(parsed.height, 150);
+  assert.ok(parsed.media.includes('/_gateway/media/'));
 
   assert.equal(EH_METADATA_LABELS.Posted, '发布');
   assert.equal(EH_METADATA_LABELS.Language, '语言');

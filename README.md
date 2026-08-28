@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `parseThumbnailTile(style, sourceUrl, baseUrl, secret, meta, opts)`, `tileStyle(tile)`, `tileImage(tile, cls, alt, loading)`: Sprite thumbnail position parser and responsive HTML image emitter.
   - `sourceHeaders(url, sources, opts)`, `positiveNumber(val, fallback)`: Canonical upstream request headers builder with multi-source adapter injection and positive float bounds clamper.
   - `sliceRanges(start, end, size, opts)`, `SLICE_ALIGN`, `DEFAULT_SLICE_SIZE`, `DEFAULT_SLICE_LOOKAHEAD_BYTES`: Video byte-range slice and prefetch window slice plan calculator.
   - `writeEncodedText(res, req, status, body, contentType, headers)`, `DEFAULT_PREFETCH_WAIT_MS`, `MAX_PREFETCH_WAIT_MS`: Edge-compressed text response emitter with HEAD preview support and prefetch wait timeouts.

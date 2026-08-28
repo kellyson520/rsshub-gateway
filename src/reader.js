@@ -13,6 +13,7 @@ import {
   mediaSrcset,
   nonNegativeInteger,
   numericStyle,
+  parseThumbnailTile as parseTile,
   resolveGatewayUrl as gatewayUrl,
   signedGatewayUrl as localUrl,
   tileImage,
@@ -88,25 +89,6 @@ export { cleanText };
 export function extractEhGalleryTitle({ url, html }) {
   const $ = cheerio.load(String(html || ''), { decodeEntities: false });
   return cleanText($('#gn').first().text()) || cleanText($('title').first().text()) || url;
-}
-
-function parseTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata) {
-  const value = String(style || '');
-  const image = value.match(/url\(\s*["']?([^"')]+)["']?\s*\)/i)?.[1];
-  const media = gatewayUrl(baseUrl, 'media', image, sourceUrl, secret, signedTargetMetadata);
-  if (!media) return null;
-  const position = value.match(/\)\s*(-?\d+(?:\.\d+)?)px\s+(-?\d+(?:\.\d+)?)(px)?/i);
-  const x = Number(position?.[1] || 0);
-  const y = position?.[3] || Number(position?.[2]) === 0 ? Number(position?.[2] || 0) : 0;
-  const width = numericStyle(value, 'width', 200);
-  const height = numericStyle(value, 'height', 289);
-  return {
-    media,
-    x: Number.isFinite(x) ? Math.max(Math.min(Math.round(x), 0), -5000) : 0,
-    y: Number.isFinite(y) ? Math.max(Math.min(Math.round(y), 0), -5000) : 0,
-    width,
-    height,
-  };
 }
 
 function renderMetadata($) {
