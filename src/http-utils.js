@@ -1802,6 +1802,21 @@ export const EGRESS_POLICIES = Object.freeze({
   STICKY: 'sticky',
 });
 
+export function resolveEgressPublicHosts(envValue, fallback = DEFAULT_PUBLIC_HOSTS) {
+  return Object.freeze(dedupe([
+    ...fallback,
+    ...parseHostList(envValue),
+  ]));
+}
+
+export function resolveEgressPublicRequestHosts(envRequestValue, envPublicValue, fallback = DEFAULT_PUBLIC_REQUEST_HOSTS) {
+  return Object.freeze(dedupe([
+    ...fallback,
+    ...parseHostList(envRequestValue),
+    ...parseHostList(envPublicValue),
+  ]));
+}
+
 export function isPublicEgressTarget(value, publicHosts = DEFAULT_PUBLIC_HOSTS) {
   const hostname = safeHost(value, '');
   return Boolean(hostname) && matchesHost(hostname, publicHosts);
