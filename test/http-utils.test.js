@@ -1025,6 +1025,49 @@ test('createSignedTarget, createMediaSignedTarget, verifySignedTarget, signedGat
   assert.equal(matchesFeedFilters(null, null), false);
 });
 
+test('GatewayUpstreamError and reader manifest lifecycle helpers construct and merge manifests cleanly', async () => {
+  const {
+    GatewayUpstreamError,
+    DEFAULT_UPSTREAM_ERROR_STATUS,
+    DEFAULT_UPSTREAM_SOURCE,
+    createInitialReaderManifest,
+    mergeResolvedPage,
+    isManifestComplete,
+    DEFAULT_PAGE_STATE_DEFERRED,
+    DEFAULT_PAGE_STATE_RESOLVED,
+    DEFAULT_FIRST_DETAIL_BUDGET_MS,
+    withForegroundDeadline,
+  } = await import('../src/http-utils.js');
+
+  const err = new GatewayUpstreamError('Upstream timeout', { code: 'ETIMEDOUT', source: 'iwara', status: 504, attempts: 2 });
+  assert.equal(err.name, 'GatewayUpstreamError');
+  assert.equal(err.code, 'ETIMEDOUT');
+  assert.equal(err.source, 'iwara');
+  assert.equal(err.status, 504);
+  assert.equal(err.attempts, 2);
+
+  const defaultErr = new GatewayUpstreamError('Failed');
+  assert.equal(defaultErr.status, DEFAULT_UPSTREAM_ERROR_STATUS);
+  assert.equal(defaultErr.source, DEFAULT_UPSTREAM_SOURCE);
+
+  const manifest = createInitialReaderManifest({ imageUrls: ['https://example.com/p1.jpg', 'https://example.com/p2.jpg'] });
+  assert.equal(manifest.totalPages, 2);
+  assert.equal(manifest.complete, false);
+  assert.equal(manifest.pages[0].state, DEFAULT_PAGE_STATE_DEFERRED);
+  assert.equal(isManifestComplete(manifest), false);
+
+  const merged = mergeResolvedPage(manifest, { pageNumber: 1, detailTarget: 'https://example.com/p1.jpg', mediaTarget: 'https://example.com/p1_full.jpg' });
+  assert.equal(merged.pages[0].state, DEFAULT_PAGE_STATE_RESOLVED);
+  assert.equal(merged.pages[0].mediaTarget, 'https://example.com/p1_full.jpg');
+  assert.equal(isManifestComplete(merged), false);
+
+  const fullyMerged = mergeResolvedPage(merged, { pageNumber: 2, detailTarget: 'https://example.com/p2.jpg', mediaTarget: 'https://example.com/p2_full.jpg' });
+  assert.equal(isManifestComplete(fullyMerged), true);
+
+  assert.equal(DEFAULT_FIRST_DETAIL_BUDGET_MS, 1200);
+  assert.equal(typeof withForegroundDeadline, 'function');
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
