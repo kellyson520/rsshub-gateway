@@ -2205,6 +2205,57 @@ export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1
   return data;
 }
 
+export const DOWNLOAD_SESSION_VERSION = 1;
+
+export function buildDownloadSession({ id, target, size, chunkSize, chunks, now = Date.now(), ttlMs = DEFAULT_DOWNLOAD_SESSION_TTL_MS }) {
+  const timestamp = Number.isFinite(now) ? now : Date.now();
+  const session = {
+    id: String(id || ''),
+    target: String(target || ''),
+    size: Number(size),
+    chunkSize: Number(chunkSize),
+    createdAt: timestamp,
+    expiresAt: timestamp + ttlMs,
+    doneBytes: 0,
+    chunks: (Array.isArray(chunks) ? chunks : []).map((chunk) => ({
+      index: Number(chunk.index),
+      start: Number(chunk.start),
+      end: Number(chunk.end),
+      size: Number(chunk.size),
+      url: String(chunk.url || ''),
+      status: 'pending',
+      updatedAt: timestamp,
+    })),
+  };
+  if (!session.id) throw new Error('download session id is required');
+  return session;
+}
+
+export function restoreDownloadSessionRecord(record) {
+  if (!record || typeof record !== 'object') return null;
+  const rawChunks = Array.isArray(record.chunks) ? record.chunks : [];
+  return {
+    id: record.id,
+    target: record.target,
+    size: record.size,
+    chunkSize: record.chunkSize,
+    createdAt: record.createdAt,
+    expiresAt: record.expiresAt,
+    doneBytes: rawChunks
+      .filter((chunk) => chunk?.status === 'done')
+      .reduce((total, chunk) => total + (Number(chunk?.size) || 0), 0),
+    chunks: rawChunks.map((chunk) => ({
+      index: chunk?.index,
+      start: chunk?.start,
+      end: chunk?.end,
+      size: chunk?.size,
+      url: chunk?.url,
+      status: chunk?.status,
+      updatedAt: chunk?.updatedAt,
+    })),
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

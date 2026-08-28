@@ -3,21 +3,25 @@ import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import {
   atomicWriteJson,
+  buildDownloadSession,
   CHUNK_STATUSES,
   DEFAULT_DOWNLOAD_SESSION_TTL_MS as DEFAULT_TTL_MS,
   DEFAULT_MAX_DOWNLOAD_SESSIONS as DEFAULT_MAX_SESSIONS,
+  DOWNLOAD_SESSION_VERSION as VERSION,
   isValidChunkRecord as validChunk,
   isValidSessionRecord as validSession,
+  restoreDownloadSessionRecord,
   safeJsonParse,
 } from './http-utils.js';
-
-const VERSION = 1;
 
 export {
   validChunk,
   validSession,
   DEFAULT_TTL_MS,
   DEFAULT_MAX_SESSIONS,
+  VERSION,
+  buildDownloadSession,
+  restoreDownloadSessionRecord,
 };
 
 export function createDownloadSessionStore({
@@ -64,26 +68,8 @@ export function createDownloadSessionStore({
     const current = now();
     for (const record of payload.sessions) {
       if (!validSession(record, current)) continue;
-      sessions.set(record.id, {
-        id: record.id,
-        target: record.target,
-        size: record.size,
-        chunkSize: record.chunkSize,
-        createdAt: record.createdAt,
-        expiresAt: record.expiresAt,
-        doneBytes: record.chunks
-          .filter((chunk) => chunk.status === 'done')
-          .reduce((total, chunk) => total + chunk.size, 0),
-        chunks: record.chunks.map((chunk) => ({
-          index: chunk.index,
-          start: chunk.start,
-          end: chunk.end,
-          size: chunk.size,
-          url: chunk.url,
-          status: chunk.status,
-          updatedAt: chunk.updatedAt,
-        })),
-      });
+      const restored = restoreDownloadSessionRecord(record);
+      if (restored) sessions.set(restored.id, restored);
     }
   }
 
@@ -93,25 +79,7 @@ export function createDownloadSessionStore({
     await ready;
     purgeExpired();
     const timestamp = now();
-    const session = {
-      id: String(id || ''),
-      target: String(target || ''),
-      size: Number(size),
-      chunkSize: Number(chunkSize),
-      createdAt: timestamp,
-      expiresAt: timestamp + ttlMs,
-      doneBytes: 0,
-      chunks: chunks.map((chunk) => ({
-        index: Number(chunk.index),
-        start: Number(chunk.start),
-        end: Number(chunk.end),
-        size: Number(chunk.size),
-        url: String(chunk.url || ''),
-        status: 'pending',
-        updatedAt: timestamp,
-      })),
-    };
-    if (!session.id) throw new Error('download session id is required');
+    const session = buildDownloadSession({ id, target, size, chunkSize, chunks, now: timestamp, ttlMs });
     sessions.set(session.id, session);
     while (sessions.size > maxSessions) {
       const oldest = [...sessions.values()].sort((left, right) => left.createdAt - right.createdAt)[0];

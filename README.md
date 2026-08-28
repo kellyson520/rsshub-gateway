@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `buildDownloadSession(opts)`, `restoreDownloadSessionRecord(record)`, `DOWNLOAD_SESSION_VERSION`: Pure state multi-threaded download session builder, deserializer and persistence projection.
   - `createSignedChunk(opts)`, `verifySignedChunk(token, secret, now, opts)`, `CHUNK_METADATA_KEYS`: Cryptographic HMAC download lease chunk token signers, range verifiers and allowed metadata key sets.
   - `isBrowserFetchTarget(url, hosts)`, `BROWSER_FETCH_HOSTS`: Dynamic and environment-driven browser-fingerprint WAF bypass target predicates and host list frozen sets.
   - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`, `isIwaraVideoTarget(url)`, `iwaraVideoId(url)`, `selectIwaraVariant(variants)`: Discourse forum topic target URL matchers and Iwara video stream bitrate selectors.

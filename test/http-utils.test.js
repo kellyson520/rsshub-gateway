@@ -948,6 +948,32 @@ test('cache helpers and download session record validators normalize and validat
   assert.equal(isValidSessionRecord({ ...validSession, expiresAt: Date.now() - 1000 }, Date.now()), false);
   assert.equal(isValidSessionRecord(null), false);
 
+  const { buildDownloadSession, restoreDownloadSessionRecord, DOWNLOAD_SESSION_VERSION } = await import('../src/http-utils.js');
+  assert.equal(DOWNLOAD_SESSION_VERSION, 1);
+  const builtSession = buildDownloadSession({
+    id: 'sess-abc',
+    target: 'https://example.com/v.mp4',
+    size: 2048,
+    chunkSize: 1024,
+    chunks: [
+      { index: 0, start: 0, end: 1023, size: 1024, url: 'https://example.com/c0' },
+      { index: 1, start: 1024, end: 2047, size: 1024, url: 'https://example.com/c1' },
+    ],
+  });
+  assert.equal(builtSession.id, 'sess-abc');
+  assert.equal(builtSession.chunks.length, 2);
+  assert.equal(builtSession.chunks[0].status, 'pending');
+
+  const restored = restoreDownloadSessionRecord({
+    ...builtSession,
+    chunks: [
+      { ...builtSession.chunks[0], status: 'done' },
+      builtSession.chunks[1],
+    ],
+  });
+  assert.equal(restored.doneBytes, 1024);
+  assert.equal(restored.chunks[0].status, 'done');
+
   assert.equal(DEFAULT_CACHE_TTL_SECONDS.rss, 300);
   assert.equal(DEFAULT_CACHE_MAX_BYTES > 0, true);
   assert.equal(CHUNK_STATUSES.has('pending'), true);
