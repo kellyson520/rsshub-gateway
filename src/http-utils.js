@@ -2513,6 +2513,14 @@ export const DEFAULT_KNOWN_SIZE_TTL_MS = 24 * 60 * 60_000;
 export const DEFAULT_KNOWN_SIZE_CAP = 10_000;
 export const DEFAULT_PREFETCH_STATES_CAP = 1000;
 
+export function defaultSessionNamespace(session) {
+  return session?.fingerprint ? `session:${session.fingerprint}` : `session:${session?.id || 'unknown'}`;
+}
+
+export function defaultNamespaceFor(scope, session, sessionNamespaceFn = defaultSessionNamespace) {
+  return scope === 'session' ? sessionNamespaceFn(session) : scope;
+}
+
 export function sliceRanges(start, end, size, {
   sliceSize = DEFAULT_SLICE_SIZE,
   lookahead = DEFAULT_SLICE_LOOKAHEAD_BYTES,
