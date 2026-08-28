@@ -1837,6 +1837,60 @@ export const MAX_FEED_PREFETCH_CONCURRENCY = 8;
 export const MAX_FEED_PREFETCH_RETRIES = 5;
 export const MAX_FEED_PREFETCH_INTERVAL_CAP_MS = 4 * 60 * 60_000;
 
+export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
+  'javbus.com',
+  'javdb.com',
+  'airav.wiki',
+  'airav.io',
+  'jable.tv',
+  'missav.ws',
+  'missav.ai',
+  'missav.com',
+  'missav.live',
+  'ggjav.com',
+  'ggjav.tv',
+  'wnacg.com',
+  'wnacg.org',
+  'chikubi.jp',
+  'skeb.jp',
+  'fanbox.cc',
+  'kemono.su',
+  'kemono.cr',
+  'coomer.su',
+  'coomer.st',
+  'sehuatang.net',
+  'linux.do',
+]);
+
+export function parseBrowserFetchHosts(envValue, fallback = DEFAULT_BROWSER_FETCH_HOSTS) {
+  if (!envValue) return [...fallback];
+  const list = parseHostList(envValue);
+  return list.length > 0 ? list : [...fallback];
+}
+
+export function browserFetchHost(url, hosts = DEFAULT_BROWSER_FETCH_HOSTS) {
+  const host = safeHost(url, '');
+  return Boolean(host) && matchesHost(host, hosts);
+}
+
+export const BASIC_AUTH_HEADER_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
+
+export function parseProxyAuth(header) {
+  if (!header) return null;
+  const match = String(header).match(BASIC_AUTH_HEADER_RE);
+  if (!match) return null;
+  const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+  const separator = decoded.indexOf(':');
+  if (separator < 0) return null;
+  return { username: decoded.slice(0, separator), password: decoded.slice(separator + 1) };
+}
+
+export function parseAuthority(value) {
+  const match = String(value || '').match(/^([^:]+):(\d+)$/);
+  if (!match) return null;
+  return { hostname: match[1].toLowerCase(), port: positiveInteger(match[2], 0) };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

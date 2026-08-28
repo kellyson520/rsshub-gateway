@@ -3,51 +3,25 @@ import { createUpstreamClient } from '../upstream.js';
 import { createBrowserFetchClient } from '../browser-fetch.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
-import { matchesHost, parseHostList, safeHost } from '../http-utils.js';
+import {
+  browserFetchHost as baseBrowserFetchHost,
+  DEFAULT_BROWSER_FETCH_HOSTS,
+  parseBrowserFetchHosts,
+  safeHost,
+} from '../http-utils.js';
 
-export { safeHost };
+export {
+  safeHost,
+  DEFAULT_BROWSER_FETCH_HOSTS,
+  parseBrowserFetchHosts,
+};
 
-export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
-  'javbus.com',
-  'javdb.com',
-  'airav.wiki',
-  'airav.io',
-  'jable.tv',
-  'missav.ws',
-  'missav.ai',
-  'missav.com',
-  'missav.live',
-  'ggjav.com',
-  'ggjav.tv',
-  'wnacg.com',
-  'wnacg.org',
-  'chikubi.jp',
-  'skeb.jp',
-  'fanbox.cc',
-  'kemono.su',
-  'kemono.cr',
-  'coomer.su',
-  'coomer.st',
-  'sehuatang.net',
-  'linux.do',
-]);
-
-export function parseBrowserFetchHosts(envValue, fallback = DEFAULT_BROWSER_FETCH_HOSTS) {
-  if (!envValue) return [...fallback];
-  const list = parseHostList(envValue);
-  return list.length > 0 ? list : [...fallback];
-}
-
-// 站点 WAF 只放行浏览器 TLS 指纹（javbus/javdb 页面无 Referer/UA 也 403，
-// 封面路径例外）。对这些主机，fetchExternal 走 browser-fetch（curl_cffi）
-// 指纹传输；worker 不可用时回退普通 undici 客户端。
 export const BROWSER_FETCH_HOSTS = Object.freeze(
   parseBrowserFetchHosts(process.env.GATEWAY_BROWSER_FETCH_HOSTS),
 );
 
 export function browserFetchHost(url) {
-  const host = safeHost(url, '');
-  return Boolean(host) && matchesHost(host, BROWSER_FETCH_HOSTS);
+  return baseBrowserFetchHost(url, BROWSER_FETCH_HOSTS);
 }
 
 /**

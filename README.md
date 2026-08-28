@@ -387,6 +387,8 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `browserFetchHost(url, hosts)`, `parseBrowserFetchHosts(envVal, fallback)`, `DEFAULT_BROWSER_FETCH_HOSTS`: Browser-fingerprint WAF bypass target matcher and host list parser.
+  - `parseProxyAuth(header)`, `parseAuthority(value)`, `BASIC_AUTH_HEADER_RE`: HTTP proxy Basic authorization header parser and CONNECT target authority splitters.
   - `mediaOriginFor(target, allowedHosts)`: Pure URL origin extractor with SSRF allowlist hostname validation.
   - `DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY`, `DEFAULT_MEDIA_PREFETCH_MIN_CONCURRENCY`, `DEFAULT_MEDIA_PREFETCH_MAX_CONCURRENCY`, `DEFAULT_MEDIA_PREFETCH_PER_ORIGIN_CONCURRENCY`, `DEFAULT_FEED_PREFETCH_INTERVAL_MS`, `DEFAULT_FEED_PREFETCH_CONCURRENCY`: Media prefetch and RSS feed warmup queue concurrency and interval constants.
   - `laneId(index)`, `laneGroup(index)`, `sessionLaneId(index)`, `sessionLaneGroup(index)`, `listenerUrl(baseUrl, index, port)`: Egress lane slot identifier generators and local proxy listener URL builders.

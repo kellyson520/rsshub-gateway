@@ -1483,6 +1483,38 @@ test('media prefetch and feed prefetch constants and origin extraction function 
   assert.equal(mediaOriginFor('not-a-url'), '');
 });
 
+test('browser fetch hosts matching and proxy basic auth authority parsers work reliably', async () => {
+  const {
+    DEFAULT_BROWSER_FETCH_HOSTS,
+    parseBrowserFetchHosts,
+    browserFetchHost,
+    parseProxyAuth,
+    parseAuthority,
+  } = await import('../src/http-utils.js');
+
+  assert.ok(Array.isArray(DEFAULT_BROWSER_FETCH_HOSTS));
+  assert.ok(DEFAULT_BROWSER_FETCH_HOSTS.includes('javbus.com'));
+
+  assert.deepEqual(parseBrowserFetchHosts('a.com, b.com'), ['a.com', 'b.com']);
+  assert.deepEqual(parseBrowserFetchHosts('', ['fallback.com']), ['fallback.com']);
+
+  assert.equal(browserFetchHost('https://javbus.com/ABC-123'), true);
+  assert.equal(browserFetchHost('https://normal-domain.com/path'), false);
+
+  const auth = parseProxyAuth(`Basic ${Buffer.from('admin:secret123').toString('base64')}`);
+  assert.deepEqual(auth, { username: 'admin', password: 'secret123' });
+  assert.equal(parseProxyAuth('Invalid header'), null);
+  assert.equal(parseProxyAuth(null), null);
+
+  const authNoColon = parseProxyAuth(`Basic ${Buffer.from('nocolon').toString('base64')}`);
+  assert.equal(authNoColon, null);
+
+  const authority = parseAuthority('sub.domain.com:8080');
+  assert.deepEqual(authority, { hostname: 'sub.domain.com', port: 8080 });
+  assert.equal(parseAuthority('invalid-authority'), null);
+  assert.equal(parseAuthority(null), null);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

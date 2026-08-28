@@ -1,34 +1,13 @@
 import http from 'node:http';
 import net from 'node:net';
-import { positiveInteger, safeEvent, writeText } from './http-utils.js';
+import {
+  parseAuthority,
+  parseProxyAuth,
+  positiveInteger,
+  safeEvent,
+  writeText,
+} from './http-utils.js';
 
-const AUTH_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
-
-function parseProxyAuth(header) {
-  if (!header) return null;
-  const match = String(header).match(AUTH_RE);
-  if (!match) return null;
-  const decoded = Buffer.from(match[1], 'base64').toString('utf8');
-  const separator = decoded.indexOf(':');
-  if (separator < 0) return null;
-  return { username: decoded.slice(0, separator), password: decoded.slice(separator + 1) };
-}
-
-function parseAuthority(value) {
-  const match = String(value || '').match(/^([^:]+):(\d+)$/);
-  if (!match) return null;
-  return { hostname: match[1].toLowerCase(), port: positiveInteger(match[2], 0) };
-}
-
-/**
- * One-time download lease proxy.
- *
- * Listens on a dedicated port and answers HTTP CONNECT with Basic-auth lease
- * credentials. Allowed targets are restricted to the lease's allowlist; bytes
- * and concurrency are capped; the lease is revoked when the session completes.
- * Tunnels are chained through the mihomo mixed proxy so egress follows the
- * same rules as gateway fetches (for example iwara.tv -> sticky lanes).
- */
 export {
   parseProxyAuth,
   parseAuthority,
