@@ -387,7 +387,8 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
-  - `GatewayUpstreamError`, `DEFAULT_UPSTREAM_ERROR_STATUS`, `DEFAULT_UPSTREAM_SOURCE`: Typed upstream exception hierarchy with HTTP status, source identifier, retry attempts, and retry-after headers.
+  - `responseWithLease(res, lease)`, `parseRetryAfter(res, max)`, `upstreamRetryDelay(attempt, first, rest)`: Stream body lease lifecycle wrappers, RFC Retry-After response header bounds clampers, and step-retry backoff calculators.
+  - `GatewayUpstreamError`, `DEFAULT_UPSTREAM_ERROR_STATUS`, `DEFAULT_UPSTREAM_SOURCE`, `DEFAULT_UPSTREAM_PROXY`, `DEFAULT_UPSTREAM_TIMEOUT`, `DEFAULT_UPSTREAM_MAX_ATTEMPTS`, `DEFAULT_MAX_REDIRECTS`: Typed upstream exception hierarchy with HTTP status, source identifier, retry attempts, retry-after headers, upstream timeouts and proxy limits.
   - `createInitialReaderManifest(opts)`, `mergeResolvedPage(manifest, page)`, `isManifestComplete(manifest)`, `DEFAULT_PAGE_STATE_DEFERRED`, `DEFAULT_PAGE_STATE_RESOLVED`, `DEFAULT_FIRST_DETAIL_BUDGET_MS`: Pure reader manifest lifecycle constructors, immutable page resolver merges and completion guards.
   - `createSignedTarget(url, secret, ttl, now, meta)`, `createMediaSignedTarget(url, secret, now, meta)`, `verifySignedTarget(token, secret, now)`: Cryptographic HMAC URL target token generators and tamper-proof signature verifiers.
   - `signedGatewayUrl(base, kind, target, opts)`, `resolveGatewayUrl(base, kind, val, src, opts)`: Universal signed proxy route builders with host allowlist guarding and source resolution.

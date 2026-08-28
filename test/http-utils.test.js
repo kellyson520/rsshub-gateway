@@ -1068,6 +1068,47 @@ test('GatewayUpstreamError and reader manifest lifecycle helpers construct and m
   assert.equal(typeof withForegroundDeadline, 'function');
 });
 
+test('parseRetryAfter, upstreamRetryDelay, responseWithLease and upstream constants format and handle responses correctly', async () => {
+  const {
+    parseRetryAfter,
+    upstreamRetryDelay,
+    responseWithLease,
+    DEFAULT_UPSTREAM_PROXY,
+    DEFAULT_UPSTREAM_TIMEOUT,
+    DEFAULT_UPSTREAM_MAX_ATTEMPTS,
+    DEFAULT_MAX_REDIRECTS,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_UPSTREAM_PROXY, 'http://127.0.0.1:7890');
+  assert.equal(DEFAULT_UPSTREAM_TIMEOUT, 30000);
+  assert.equal(DEFAULT_UPSTREAM_MAX_ATTEMPTS, 3);
+  assert.equal(DEFAULT_MAX_REDIRECTS, 5);
+
+  assert.equal(upstreamRetryDelay(1), 250);
+  assert.equal(upstreamRetryDelay(2), 750);
+  assert.equal(upstreamRetryDelay(3), 750);
+
+  assert.equal(parseRetryAfter({ headers: { get: (k) => k === 'retry-after' ? '10' : null } }), 10);
+  assert.equal(parseRetryAfter({ headers: { 'retry-after': '120' } }), 60); // Clamped to 60
+  assert.equal(parseRetryAfter({ headers: {} }), undefined);
+  assert.equal(parseRetryAfter(null), undefined);
+
+  let releasedResult = null;
+  const fakeLease = {
+    release: (res) => {
+      releasedResult = res;
+    },
+  };
+  const streamRes = new Response('stream body', { status: 200 });
+  const wrapped = responseWithLease(streamRes, fakeLease);
+  const text = await wrapped.text();
+  assert.equal(text, 'stream body');
+  assert.deepEqual(releasedResult, { status: 200 });
+
+  const nullLeaseRes = new Response('test');
+  assert.equal(responseWithLease(nullLeaseRes, null), nullLeaseRes);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

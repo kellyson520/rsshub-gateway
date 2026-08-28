@@ -1,5 +1,11 @@
-import { createMediaSignedTarget } from '../signed-target.js';
-import { cdata, escapeXml, jwtExpiryMs, matchesHost, nonNegativeInteger } from '../http-utils.js';
+import {
+  cdata,
+  createMediaSignedTarget,
+  escapeXml,
+  jwtExpiryMs,
+  matchesHost,
+  nonNegativeInteger,
+} from '../http-utils.js';
 
 export {
   API_BASE,

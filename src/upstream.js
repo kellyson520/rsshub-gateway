@@ -1,23 +1,26 @@
 import { ProxyAgent } from 'undici';
-import { isAllowedTarget } from './signed-target.js';
 import { adapterForUrl } from './adapters/index.js';
 import { CircuitBreaker } from './circuit-breaker.js';
-import { GatewayUpstreamError, isRetryableStatus } from './upstream-errors.js';
 import { egressPolicyForRequest } from './egress-policy.js';
 import {
   clamp,
+  DEFAULT_MAX_REDIRECTS as MAX_REDIRECTS_PER_ATTEMPT,
+  DEFAULT_UPSTREAM_MAX_ATTEMPTS as DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_UPSTREAM_PROXY as DEFAULT_PROXY,
+  DEFAULT_UPSTREAM_TIMEOUT as DEFAULT_TIMEOUT,
+  GatewayUpstreamError,
   HOTLINK_REFERERS,
+  isAllowedTarget,
   isAuthenticationChallenge,
   isAuthenticationRedirect,
+  isRetryableStatus,
+  parseRetryAfter as retryAfter,
   refererFor,
+  responseWithLease,
   sleep as defaultSleep,
+  upstreamRetryDelay as retryDelay,
   withoutCredentials,
 } from './http-utils.js';
-
-const DEFAULT_PROXY = 'http://127.0.0.1:7890';
-const DEFAULT_TIMEOUT = 30_000;
-const DEFAULT_MAX_ATTEMPTS = 3;
-const MAX_REDIRECTS_PER_ATTEMPT = 5;
 
 function sourceHeaders(url, sources = {}, { includeCredentials = false, credentials } = {}) {
   const adapter = adapterForUrl(url);
@@ -27,46 +30,6 @@ function sourceHeaders(url, sources = {}, { includeCredentials = false, credenti
     ...(referer ? { referer } : {}),
     ...adapter.headers(credentials ?? sources[adapter.name], { includeCredentials }),
   };
-}
-
-function responseWithLease(response, lease) {
-  if (!lease) return response;
-  let released = false;
-  const release = (result = {}) => {
-    if (released) return;
-    released = true;
-    lease.release({ status: response.status, ...result });
-  };
-  if (!response.body) {
-    release();
-    return response;
-  }
-  const reader = response.body.getReader();
-  const body = new ReadableStream({
-    async pull(controller) {
-      try {
-        const item = await reader.read();
-        if (item.done) {
-          release();
-          controller.close();
-          return;
-        }
-        controller.enqueue(item.value);
-      } catch (error) {
-        release({ error });
-        controller.error(error);
-      }
-    },
-    async cancel(reason) {
-      await reader.cancel(reason).catch(() => {});
-      release({ error: reason });
-    },
-  });
-  return new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
 }
 
 export function createUpstreamClient({
@@ -88,17 +51,6 @@ export function createUpstreamClient({
 
   function sourceName(url) {
     return new URL(url).hostname.toLowerCase();
-  }
-
-  function retryDelay(attempt) {
-    return attempt === 1 ? 250 : 750;
-  }
-
-  function retryAfter(response) {
-    const value = response.headers.get('retry-after');
-    if (value === null || value === undefined || value === '') return undefined;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? clamp(parsed, 0, 60) : undefined;
   }
 
   async function requestWithPolicy(url, {
@@ -394,4 +346,7 @@ export {
   withoutCredentials,
   isAuthenticationRedirect,
   isAuthenticationChallenge,
+  responseWithLease,
+  retryDelay,
+  retryAfter,
 };

@@ -954,6 +954,61 @@ export const withForegroundDeadline = withDeadline;
 
 export const DEFAULT_UPSTREAM_ERROR_STATUS = 502;
 export const DEFAULT_UPSTREAM_SOURCE = 'unknown';
+export const DEFAULT_UPSTREAM_PROXY = 'http://127.0.0.1:7890';
+export const DEFAULT_UPSTREAM_TIMEOUT = 30_000;
+export const DEFAULT_UPSTREAM_MAX_ATTEMPTS = 3;
+export const DEFAULT_MAX_REDIRECTS = 5;
+
+export function parseRetryAfter(response, defaultMax = 60) {
+  const value = response?.headers?.get?.('retry-after') ?? response?.headers?.['retry-after'];
+  if (value === null || value === undefined || value === '') return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? clamp(parsed, 0, defaultMax) : undefined;
+}
+
+export function upstreamRetryDelay(attempt, first = 250, rest = 750) {
+  return attempt === 1 ? first : rest;
+}
+
+export function responseWithLease(response, lease) {
+  if (!lease) return response;
+  let released = false;
+  const release = (result = {}) => {
+    if (released) return;
+    released = true;
+    lease.release({ status: response.status, ...result });
+  };
+  if (!response.body) {
+    release();
+    return response;
+  }
+  const reader = response.body.getReader();
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        const item = await reader.read();
+        if (item.done) {
+          release();
+          controller.close();
+          return;
+        }
+        controller.enqueue(item.value);
+      } catch (error) {
+        release({ error });
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      await reader.cancel(reason).catch(() => {});
+      release({ error: reason });
+    },
+  });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
 
 export class GatewayUpstreamError extends Error {
   constructor(message, { code, source = DEFAULT_UPSTREAM_SOURCE, status = DEFAULT_UPSTREAM_ERROR_STATUS, attempts = 0, retryAfter } = {}) {

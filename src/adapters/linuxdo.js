@@ -1,7 +1,10 @@
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
-import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from '../signed-target.js';
-import { escapeHtml, matchesHost } from '../http-utils.js';
+import {
+  escapeHtml,
+  matchesHost,
+  signedGatewayUrl,
+} from '../http-utils.js';
 
 export const name = 'linuxdo';
 export const publiclyReadable = true;
@@ -67,11 +70,7 @@ export async function fetchLinuxdoTopicDetail(fetchJson, topicId) {
 }
 
 function localUrl(baseUrl, kind, target, secret, metadata = { egressScope: 'public', source: 'linuxdo' }) {
-  if (!isAllowedTarget(target)) return target;
-  const token = kind === 'media'
-    ? createMediaSignedTarget(target, secret, undefined, metadata)
-    : createSignedTarget(target, secret, undefined, undefined, metadata);
-  return `${baseUrl.replace(/\/$/, '')}/_gateway/${kind}/${token}`;
+  return signedGatewayUrl(baseUrl, kind, target, { secret, signedTargetMetadata: metadata });
 }
 
 function rewriteCookedHtml(html, { baseUrl, secret }) {

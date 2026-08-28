@@ -860,7 +860,8 @@ test('keeps requested session media variants private', async () => {
     assert.equal(body, 'private-variant');
     assert.equal(response.headers.get('cache-control'), 'private, max-age=300');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await rm(root, { recursive: true, force: true }).catch(() => {});
   }
 });
 
