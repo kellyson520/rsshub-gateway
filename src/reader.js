@@ -2,12 +2,14 @@ import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
-import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
 import {
   clamp,
   cleanText,
+  EH_GALLERY_PATH,
+  EH_IMAGE_PATH,
   EH_METADATA_LABELS,
   escapeHtml,
+  isEhentaiPage,
   mediaSrcset,
   nonNegativeInteger,
   numericStyle,
@@ -94,15 +96,6 @@ function renderDocument(title, content, preloadImages = []) {
     })
     .join('');
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}</style></head><body>${content}</body></html>`;
-}
-
-function isEhentaiPage(url, pattern) {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname === 'e-hentai.org' && pattern.test(parsed.pathname);
-  } catch {
-    return false;
-  }
 }
 
 export { cleanText };

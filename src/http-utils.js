@@ -402,15 +402,21 @@ export function numericStyle(style, property, fallback) {
   return Number.isFinite(value) ? clamp(Math.round(value), 1, 5000) : fallback;
 }
 
-export function isEhImagePageTarget(value) {
+export const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
+export const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
+
+export function isEhentaiPage(value, pattern) {
   try {
-    const target = new URL(value);
-    return target.protocol === 'https:'
-      && target.hostname === 'e-hentai.org'
-      && /^\/s\/[^/]+\/[^/]+\/?$/.test(target.pathname);
+    const parsed = new URL(value);
+    const regex = pattern instanceof RegExp ? pattern : EH_GALLERY_PATH;
+    return parsed.hostname === 'e-hentai.org' && regex.test(parsed.pathname);
   } catch {
     return false;
   }
+}
+
+export function isEhImagePageTarget(value) {
+  return isEhentaiPage(value, EH_IMAGE_PATH);
 }
 
 export function parseByteRange(value, size) {

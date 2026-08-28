@@ -52,9 +52,14 @@ test('documentCacheKind maps e-hentai image pages to eh-image', () => {
   assert.equal(documentCacheKind('https://e-hentai.org/s/abc/123-1', 'rss'), 'rss');
 });
 
-test('isEhImagePageTarget and imageVariantCacheUrl', () => {
+test('isEhImagePageTarget, isEhentaiPage, EH_GALLERY_PATH, EH_IMAGE_PATH and imageVariantCacheUrl', async () => {
+  const { isEhImagePageTarget, isEhentaiPage, EH_GALLERY_PATH, EH_IMAGE_PATH, imageVariantCacheUrl } = await import('../src/http-utils.js');
   assert.equal(isEhImagePageTarget('https://e-hentai.org/s/abc/123-1'), true);
   assert.equal(isEhImagePageTarget('https://e-hentai.org/g/123/'), false);
+  assert.equal(isEhentaiPage('https://e-hentai.org/g/123/456/', EH_GALLERY_PATH), true);
+  assert.equal(isEhentaiPage('https://e-hentai.org/s/123/456-1', EH_IMAGE_PATH), true);
+  assert.equal(isEhentaiPage('https://other.org/g/123/456/', EH_GALLERY_PATH), false);
+  assert.equal(isEhentaiPage(null, EH_GALLERY_PATH), false);
   assert.equal(imageVariantCacheUrl('https://example.com/i.png', 1920), 'https://example.com/i.png#rsshub-gateway-v1-w1920');
 });
 

@@ -1,5 +1,13 @@
 import * as cheerio from 'cheerio';
-import { asDate, cdata, escapeXml, matchesHost } from '../http-utils.js';
+import {
+  asDate,
+  cdata,
+  EH_GALLERY_PATH,
+  EH_IMAGE_PATH,
+  escapeXml,
+  isEhentaiPage,
+  matchesHost,
+} from '../http-utils.js';
 
 const RANKING_PERIODS = Object.freeze({
   day: { query: '15', label: '昨日热度' },
@@ -10,8 +18,6 @@ const RANKING_PERIODS = Object.freeze({
 
 const MAX_ITEMS = 50;
 const MATCH_HOSTS = Object.freeze(['e-hentai.org', 'ehgt.org']);
-const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
-const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 const DEFAULT_UNAVAILABLE_MESSAGE = 'E-Hentai 内容暂时无法读取，请稍后重试或打开原始来源。';
 
 export {
@@ -40,17 +46,6 @@ export function headers() {
 
 export function readerTarget(url) {
   return String(url);
-}
-
-function isEhentaiPage(value, pattern) {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:'
-      && parsed.hostname === 'e-hentai.org'
-      && pattern.test(parsed.pathname);
-  } catch {
-    return false;
-  }
 }
 
 export function isGalleryUrl(value) {
