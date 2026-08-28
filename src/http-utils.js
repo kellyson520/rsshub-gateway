@@ -1516,6 +1516,112 @@ export function rewriteFeedHtml(html, options = {}, cheerioParser) {
   return $.root().html() ?? '';
 }
 
+export function setCdata($, element, content) {
+  $(element).html(cdata(content));
+}
+
+export function rewriteEntry($, entry, options, cheerioParser = cheerio) {
+  const link = $(entry).children('link').first();
+  if (link.length) {
+    const value = link.attr('href') || link.text();
+    if (value) {
+      try {
+        const rewritten = signedGatewayUrl(options.baseUrl, 'item', new URL(value).toString(), options);
+        if (link.attr('href')) link.attr('href', rewritten);
+        else link.text(rewritten);
+      } catch {
+        // Preserve entries with non-URL links.
+      }
+    }
+  }
+  const guid = $(entry).children('guid').first();
+  if (guid.length) {
+    const value = guid.text().trim();
+    try {
+      if (value) guid.text(signedGatewayUrl(options.baseUrl, 'item', new URL(value).toString(), options));
+    } catch {
+      // Preserve non-URL GUID values.
+    }
+  }
+  $(entry).find('link').each((_, element) => {
+    if ($(element).attr('rel') !== 'enclosure') return;
+    const href = $(element).attr('href');
+    try {
+      if (href) $(element).attr('href', signedGatewayUrl(options.baseUrl, 'media', new URL(href).toString(), options));
+    } catch {
+      // Preserve malformed Atom enclosure links.
+    }
+  });
+  $(entry).find('*').each((_, child) => {
+    if (!['enclosure', 'media:content', 'media:thumbnail'].includes(child.name)) return;
+    for (const attribute of ['url', 'cover']) {
+      const value = $(child).attr(attribute);
+      if (!value) continue;
+      try {
+        $(child).attr(attribute, signedGatewayUrl(options.baseUrl, 'media', new URL(value).toString(), options));
+      } catch {
+        // Preserve malformed attachment URLs.
+      }
+    }
+  });
+  $(entry).children().each((_, child) => {
+    if (!['description', 'content', 'content:encoded'].includes(child.name)) return;
+    const text = $(child).text();
+    const hasCdata = $(child).contents().toArray().some((node) => node.type === 'cdata');
+    const content = hasCdata ? decodeTextEntities(text) : text;
+    if (/<[a-z][\s\S]*>/i.test(content)) setCdata($, child, rewriteFeedHtml(content, options, cheerioParser));
+  });
+}
+
+export function matchesFilters($, entry, filters = {}) {
+  const title = $(entry).children('title').first().text();
+  const description = $(entry).children('description,content,content\\:encoded').first().text();
+  const author = $(entry).children('author,dc\\:creator').first().text();
+  return matchesFeedFilters({ title, description, author }, filters);
+}
+
+export function transformFeed(xml, options = {}, cheerioParser = cheerio) {
+  if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
+    return '';
+  }
+  const $ = cheerioParser.load(xml, { xmlMode: true, decodeEntities: true });
+  
+  if (options.filters) {
+    $('item,entry').each((_, entry) => {
+      if (matchesFilters($, entry, options.filters)) {
+        $(entry).remove();
+      }
+    });
+  }
+
+  $('item,entry').each((_, entry) => rewriteEntry($, entry, options, cheerioParser));
+  $('channel > image > url, feed > logo').each((_, element) => {
+    const value = $(element).text().trim();
+    try {
+      if (value) $(element).text(signedGatewayUrl(options.baseUrl, 'media', new URL(value).toString(), options));
+    } catch {
+      // Preserve non-URL channel artwork values.
+    }
+  });
+  $('channel > image > link').each((_, element) => {
+    const value = $(element).text().trim();
+    try {
+      if (value) $(element).text(signedGatewayUrl(options.baseUrl, 'item', new URL(value).toString(), options));
+    } catch {
+      // Preserve non-URL channel links.
+    }
+  });
+  if (options.selfUrl) {
+    $('channel,feed').children().each((_, child) => {
+      const element = $(child);
+      if (child.name === 'atom:link' || element.attr('rel') === 'self') {
+        if (element.attr('href')) element.attr('href', options.selfUrl);
+      }
+    });
+  }
+  return normalizeNumericEntities($.xml());
+}
+
 export const DEFAULT_PAGE_STATE_DEFERRED = 'deferred';
 export const DEFAULT_PAGE_STATE_RESOLVED = 'resolved';
 export const DEFAULT_FIRST_DETAIL_BUDGET_MS = 1_200;
@@ -6337,6 +6443,138 @@ export function isValidAffinityRecord(record, now = Date.now(), maxAgeMs = DEFAU
     && record.updatedAt <= now
     && now - record.updatedAt <= maxAgeMs,
   );
+}
+
+export function createSessionAffinity({
+  root = process.env.GATEWAY_CACHE_DIR || DEFAULT_CACHE_ROOT,
+  file = process.env.SESSION_AFFINITY_FILE,
+  secret,
+  laneIds = [],
+  now = () => Date.now(),
+  maxAgeMs = DEFAULT_SESSION_AFFINITY_MAX_AGE_MS,
+} = {}) {
+  if (!secret) throw new Error('session affinity secret is required');
+  const targetFile = path.resolve(file || path.join(root, 'session-affinity.json'));
+  const records = new Map();
+  const unhealthyLanes = new Set();
+  let configuredLaneIds = normalizedLaneIds(laneIds);
+  let persistChain = Promise.resolve();
+
+  function activeLaneIds() {
+    return normalizedLaneIds(typeof laneIds === 'function' ? laneIds() : configuredLaneIds);
+  }
+
+  async function writeRecords() {
+    try {
+      await atomicWriteJson(targetFile, { version: DEFAULT_SESSION_AFFINITY_VERSION, records: [...records.values()] }, { mode: 0o600, dirMode: 0o700 });
+    } catch {
+      // Best-effort persistence.
+    }
+  }
+
+  function persist() {
+    persistChain = persistChain.then(writeRecords, writeRecords);
+    return persistChain;
+  }
+
+  async function load() {
+    let payload;
+    try {
+      const content = await fsp.readFile(targetFile, 'utf8');
+      payload = safeJsonParse(content, null);
+    } catch {
+      return;
+    }
+    if (payload?.version !== DEFAULT_SESSION_AFFINITY_VERSION || !Array.isArray(payload.records)) return;
+    const current = now();
+    for (const record of payload.records) {
+      if (!isValidAffinityRecord(record, current, maxAgeMs)) continue;
+      records.set(record.fingerprint, {
+        fingerprint: record.fingerprint,
+        source: record.source,
+        laneId: record.laneId,
+        proxyIdentityHash: typeof record.proxyIdentityHash === 'string' ? record.proxyIdentityHash : '',
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      });
+    }
+  }
+
+  const ready = load();
+
+  function publicRecord(record) {
+    return {
+      fingerprint: record.fingerprint,
+      laneId: record.laneId,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  async function resolve(source, credentials, { proxyIdentity } = {}) {
+    await ready;
+    const normalizedSource = String(source || '').trim().toLowerCase();
+    if (!normalizedSource) throw new Error('session affinity source is required');
+    const fingerprint = fingerprintFor(normalizedSource, credentials, secret);
+    const lanes = activeLaneIds();
+    const existing = records.get(fingerprint);
+    const current = now();
+    const canRetain = existing
+      && existing.source === normalizedSource
+      && lanes.includes(existing.laneId)
+      && !unhealthyLanes.has(existing.laneId);
+    if (canRetain) return publicRecord(existing);
+
+    const record = {
+      fingerprint,
+      source: normalizedSource,
+      laneId: chooseLane(fingerprint, lanes, unhealthyLanes),
+      proxyIdentityHash: proxyIdentityHash(proxyIdentity),
+      createdAt: existing?.createdAt || current,
+      updatedAt: current,
+    };
+    records.set(fingerprint, record);
+    await persist();
+    return publicRecord(record);
+  }
+
+  async function markLaneUnhealthy(laneId) {
+    await ready;
+    const normalizedLaneId = String(laneId || '').trim();
+    if (!normalizedLaneId) return 0;
+    unhealthyLanes.add(normalizedLaneId);
+    const lanes = activeLaneIds();
+    const current = now();
+    let migrated = 0;
+    for (const record of records.values()) {
+      if (record.laneId !== normalizedLaneId) continue;
+      let replacement;
+      try {
+        replacement = chooseLane(record.fingerprint, lanes, unhealthyLanes);
+      } catch {
+        // No healthy lane remains: stop instead of leaving the table half-migrated.
+        break;
+      }
+      if (replacement === record.laneId) continue;
+      record.laneId = replacement;
+      record.updatedAt = current;
+      migrated += 1;
+    }
+    if (migrated) await persist();
+    return migrated;
+  }
+
+  function setLaneIds(nextLaneIds) {
+    configuredLaneIds = normalizedLaneIds(nextLaneIds);
+  }
+
+  return {
+    resolve,
+    markLaneUnhealthy,
+    setLaneIds,
+    flush: () => persistChain,
+    file: targetFile,
+  };
 }
 
 export const DEFAULT_POLLER_INTERVAL_MS = 60_000;

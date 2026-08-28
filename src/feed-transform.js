@@ -7,9 +7,12 @@ import {
   escapeXml,
   isValidXmlCodePoint,
   matchesFeedFilters,
+  matchesFilters,
   normalizeNumericEntities,
+  rewriteEntry,
   rewriteFeedHtml,
   signedGatewayUrl,
+  transformFeed as baseTransformFeed,
   XML_NAMED_ENTITIES,
   XML_NAMED_ENTITIES as NAMED_ENTITIES,
 } from './http-utils.js';
@@ -25,130 +28,14 @@ export {
   normalizeNumericEntities,
   XML_NAMED_ENTITIES,
   matchesFeedFilters,
+  matchesFilters,
+  rewriteEntry,
 };
 
-function setCdata($, element, content) {
-  $(element).html(cdata(content));
-}
-
-function localUrl(baseUrl, kind, target, options) {
-  return signedGatewayUrl(baseUrl, kind, target, options);
-}
-
-function rewriteHtml(html, options) {
+export function rewriteHtml(html, options) {
   return rewriteFeedHtml(html, options, cheerio);
 }
 
-function rewriteEntry($, entry, options) {
-  const link = $(entry).children('link').first();
-  if (link.length) {
-    const value = link.attr('href') || link.text();
-    if (value) {
-      try {
-        const rewritten = localUrl(options.baseUrl, 'item', new URL(value).toString(), options);
-        if (link.attr('href')) link.attr('href', rewritten);
-        else link.text(rewritten);
-      } catch {
-        // Preserve entries with non-URL links.
-      }
-    }
-  }
-  const guid = $(entry).children('guid').first();
-  if (guid.length) {
-    const value = guid.text().trim();
-    try {
-      if (value) guid.text(localUrl(options.baseUrl, 'item', new URL(value).toString(), options));
-    } catch {
-      // Preserve non-URL GUID values.
-    }
-  }
-  $(entry).find('link').each((_, element) => {
-    if ($(element).attr('rel') !== 'enclosure') return;
-    const href = $(element).attr('href');
-    try {
-      if (href) $(element).attr('href', localUrl(options.baseUrl, 'media', new URL(href).toString(), options));
-    } catch {
-      // Preserve malformed Atom enclosure links.
-    }
-  });
-  $(entry).find('*').each((_, child) => {
-    if (!['enclosure', 'media:content', 'media:thumbnail'].includes(child.name)) return;
-    for (const attribute of ['url', 'cover']) {
-      const value = $(child).attr(attribute);
-      if (!value) continue;
-      try {
-        $(child).attr(attribute, localUrl(options.baseUrl, 'media', new URL(value).toString(), options));
-      } catch {
-        // Preserve malformed attachment URLs.
-      }
-    }
-  });
-  $(entry).children().each((_, child) => {
-    if (!['description', 'content', 'content:encoded'].includes(child.name)) return;
-    // cheerio (xmlMode, decodeEntities: true) already decoded ordinary text
-    // nodes once; CDATA content is NOT decoded by the parser, so decode it
-    // exactly once here. Decoding both would collapse literal entity text
-    // (e.g. "&amp;amp;" -> "&") and turn escaped markup text into live markup.
-    const text = $(child).text();
-    const hasCdata = $(child).contents().toArray().some((node) => node.type === 'cdata');
-    const content = hasCdata ? decodeTextEntities(text) : text;
-    if (/<[a-z][\s\S]*>/i.test(content)) setCdata($, child, rewriteHtml(content, options));
-  });
-}
-
-function matchesFilters($, entry, filters = {}) {
-  const title = $(entry).children('title').first().text();
-  const description = $(entry).children('description,content,content\\:encoded').first().text();
-  const author = $(entry).children('author,dc\\:creator').first().text();
-  return matchesFeedFilters({ title, description, author }, filters);
-}
-
-export {
-  rewriteHtml,
-  matchesFilters,
-};
-
 export function transformFeed(xml, options = {}) {
-  if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
-    return '';
-  }
-  const $ = cheerio.load(xml, { xmlMode: true, decodeEntities: true });
-  
-  // Apply filtering rules if specified in options.filters
-  if (options.filters) {
-    $('item,entry').each((_, entry) => {
-      if (matchesFilters($, entry, options.filters)) {
-        $(entry).remove();
-      }
-    });
-  }
-
-  $('item,entry').each((_, entry) => rewriteEntry($, entry, options));
-  $('channel > image > url, feed > logo').each((_, element) => {
-    const value = $(element).text().trim();
-    try {
-      if (value) $(element).text(localUrl(options.baseUrl, 'media', new URL(value).toString(), options));
-    } catch {
-      // Preserve non-URL channel artwork values.
-    }
-  });
-  $('channel > image > link').each((_, element) => {
-    const value = $(element).text().trim();
-    try {
-      if (value) $(element).text(localUrl(options.baseUrl, 'item', new URL(value).toString(), options));
-    } catch {
-      // Preserve non-URL channel links.
-    }
-  });
-  if (options.selfUrl) {
-    $('channel,feed').children().each((_, child) => {
-      const element = $(child);
-      if (child.name === 'atom:link' || element.attr('rel') === 'self') {
-        if (element.attr('href')) element.attr('href', options.selfUrl);
-      }
-    });
-  }
-  // cheerio re-serializes the document; keep the emitted XML declaration so
-  // output stays byte-compatible with RSSHub feeds (which always carry one).
-  return normalizeNumericEntities($.xml());
+  return baseTransformFeed(xml, options, cheerio);
 }
