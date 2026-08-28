@@ -1417,6 +1417,185 @@ export function createLogger({
   };
 }
 
+export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
+export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
+
+export function normalizedLaneIds(value) {
+  const items = (Array.isArray(value) ? value : [])
+    .map((laneId) => String(laneId || '').trim())
+    .filter(Boolean);
+  return dedupe(items).sort();
+}
+
+export function normalizedCredentials(credentials = {}) {
+  return canonicalHeadersString(credentials);
+}
+
+export function fingerprintFor(source, credentials, secret) {
+  return hmacSha256(
+    `${String(source || '').trim().toLowerCase()}\n${normalizedCredentials(credentials)}`,
+    secret,
+    'hex',
+  );
+}
+
+export function proxyIdentityHash(value) {
+  return value ? sha256Hex(value) : '';
+}
+
+export function chooseLane(fingerprint, laneIds, unhealthyLanes = new Set()) {
+  const candidates = laneIds.filter((laneId) => !unhealthyLanes.has(laneId));
+  if (!candidates.length) {
+    const error = new Error('no healthy session lane is available');
+    error.code = 'SESSION_LANE_UNAVAILABLE';
+    throw error;
+  }
+  return candidates.reduce((best, laneId) => {
+    if (!best) return laneId;
+    const laneScore = sha256Hex(`${fingerprint}\n${laneId}`);
+    const bestScore = sha256Hex(`${fingerprint}\n${best}`);
+    return laneScore > bestScore ? laneId : best;
+  }, '');
+}
+
+export function isValidAffinityRecord(record, now = Date.now(), maxAgeMs = DEFAULT_SESSION_AFFINITY_MAX_AGE_MS) {
+  return Boolean(
+    record
+    && isSha256Hex(record.fingerprint)
+    && typeof record.source === 'string'
+    && record.source
+    && typeof record.laneId === 'string'
+    && record.laneId
+    && Number.isFinite(record.createdAt)
+    && Number.isFinite(record.updatedAt)
+    && record.updatedAt <= now
+    && now - record.updatedAt <= maxAgeMs,
+  );
+}
+
+export const DEFAULT_POLLER_INTERVAL_MS = 60_000;
+export const DEFAULT_POLLER_JITTER_RATIO = 0.2;
+export const MIN_TASK_INTERVAL_MS = 10;
+export const MAX_JITTER_RATIO = 0.5;
+
+export function createPoller({
+  intervalMs = DEFAULT_POLLER_INTERVAL_MS,
+  jitterRatio = DEFAULT_POLLER_JITTER_RATIO,
+  now = () => Date.now(),
+  logger = { debug() {}, info() {}, warn() {}, error() {} },
+} = {}) {
+  const tasks = new Map();
+  let running = false;
+  let timer;
+
+  function register(name, fn, { interval: taskIntervalMs, runImmediately = false } = {}) {
+    if (tasks.has(name)) return tasks.get(name);
+    const task = {
+      name: String(name),
+      fn,
+      intervalMs: Math.max(MIN_TASK_INTERVAL_MS, Number(taskIntervalMs) || intervalMs),
+      jitterRatio: clamp(Number(jitterRatio) || 0, 0, MAX_JITTER_RATIO),
+      runImmediately: Boolean(runImmediately),
+      lastRunAt: 0,
+      lastDurationMs: 0,
+      failures: 0,
+      consecutiveFailures: 0,
+      ticks: 0,
+    };
+    tasks.set(task.name, task);
+    return task;
+  }
+
+  async function runTask(task) {
+    const startedAt = now();
+    try {
+      await task.fn();
+      task.consecutiveFailures = 0;
+    } catch (error) {
+      task.failures += 1;
+      task.consecutiveFailures += 1;
+      logger?.warn?.('poller_task_failed', { task: task.name, failures: task.failures, error: error?.message });
+    }
+    task.lastRunAt = now();
+    task.lastDurationMs = task.lastRunAt - startedAt;
+    task.ticks += 1;
+  }
+
+  function scheduleNext() {
+    if (!running) return;
+    const scheduled = [...tasks.values()];
+    if (!scheduled.length) return;
+    const timestamp = now();
+    const earliest = Math.min(...scheduled.map((task) => (
+      task.lastRunAt > 0 ? task.lastRunAt + task.intervalMs - timestamp : task.intervalMs
+    )));
+    const base = Math.max(10, earliest);
+    const jitter = base * jitterRatio;
+    const delay = Math.max(10, base + Math.random() * jitter);
+    timer = setTimeout(() => {
+      timer = undefined;
+      tick().finally(scheduleNext);
+    }, delay);
+    timer.unref?.();
+  }
+
+  async function tick() {
+    const timestamp = now();
+    for (const task of tasks.values()) {
+      if (!running) return;
+      if (timestamp - task.lastRunAt < task.intervalMs) continue;
+      try {
+        await runTask(task);
+      } catch {
+        // runTask already captures failures; never let one task stop the loop.
+      }
+    }
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    for (const task of tasks.values()) {
+      if (task.runImmediately && !task.lastRunAt) {
+        runTask(task).catch(() => {});
+      }
+    }
+    scheduleNext();
+  }
+
+  function stop() {
+    running = false;
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  }
+
+  function unregister(name) {
+    const deleted = tasks.delete(String(name));
+    if (!tasks.size && running) {
+      stop();
+    }
+    return deleted;
+  }
+
+  function stats() {
+    return {
+      running,
+      tasks: [...tasks.values()].map((task) => ({
+        name: task.name,
+        ticks: task.ticks,
+        failures: task.failures,
+        consecutiveFailures: task.consecutiveFailures,
+        lastRunAt: task.lastRunAt,
+        lastDurationMs: task.lastDurationMs,
+      })),
+    };
+  }
+
+  return { register, unregister, start, stop, tick, stats };
+}
+
 export function constantTimeEquals(left, right) {
   try {
     const leftBuf = Buffer.isBuffer(left) ? left : Buffer.from(String(left ?? ''));

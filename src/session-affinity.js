@@ -4,67 +4,16 @@ import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
 import {
   atomicWriteJson,
-  canonicalHeadersString,
-  dedupe,
-  hmacSha256,
-  isSha256Hex,
+  chooseLane,
+  DEFAULT_SESSION_AFFINITY_MAX_AGE_MS as DEFAULT_MAX_AGE_MS,
+  DEFAULT_SESSION_AFFINITY_VERSION as VERSION,
+  fingerprintFor,
+  isValidAffinityRecord as validRecord,
+  normalizedCredentials,
+  normalizedLaneIds,
+  proxyIdentityHash,
   safeJsonParse,
-  sha256Hex,
 } from './http-utils.js';
-
-const VERSION = 1;
-const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
-
-function normalizedLaneIds(value) {
-  const items = (Array.isArray(value) ? value : [])
-    .map((laneId) => String(laneId || '').trim())
-    .filter(Boolean);
-  return dedupe(items).sort();
-}
-
-function normalizedCredentials(credentials = {}) {
-  return canonicalHeadersString(credentials);
-}
-
-function fingerprintFor(source, credentials, secret) {
-  return hmacSha256(
-    `${String(source || '').trim().toLowerCase()}\n${normalizedCredentials(credentials)}`,
-    secret,
-    'hex',
-  );
-}
-
-function proxyIdentityHash(value) {
-  return value ? sha256Hex(value) : '';
-}
-
-function chooseLane(fingerprint, laneIds, unhealthyLanes) {
-  const candidates = laneIds.filter((laneId) => !unhealthyLanes.has(laneId));
-  if (!candidates.length) {
-    const error = new Error('no healthy session lane is available');
-    error.code = 'SESSION_LANE_UNAVAILABLE';
-    throw error;
-  }
-  return candidates.reduce((best, laneId) => {
-    if (!best) return laneId;
-    const laneScore = sha256Hex(`${fingerprint}\n${laneId}`);
-    const bestScore = sha256Hex(`${fingerprint}\n${best}`);
-    return laneScore > bestScore ? laneId : best;
-  }, '');
-}
-
-function validRecord(record, now, maxAgeMs) {
-  return record
-    && isSha256Hex(record.fingerprint)
-    && typeof record.source === 'string'
-    && record.source
-    && typeof record.laneId === 'string'
-    && record.laneId
-    && Number.isFinite(record.createdAt)
-    && Number.isFinite(record.updatedAt)
-    && record.updatedAt <= now
-    && now - record.updatedAt <= maxAgeMs;
-}
 
 export {
   VERSION,

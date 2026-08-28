@@ -1233,6 +1233,65 @@ test('createSiteFailureTracker, adaptive chunk planners and structured logger op
   assert.doesNotThrow(() => noopLogger.child().error('ignore'));
 });
 
+test('session affinity helpers and background poller service orchestrate tasks cleanly', async () => {
+  const {
+    fingerprintFor,
+    normalizedLaneIds,
+    normalizedCredentials,
+    chooseLane,
+    proxyIdentityHash,
+    isValidAffinityRecord,
+    createPoller,
+    DEFAULT_POLLER_INTERVAL_MS,
+    DEFAULT_SESSION_AFFINITY_VERSION,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(DEFAULT_SESSION_AFFINITY_VERSION, 1);
+  assert.deepEqual(normalizedLaneIds(['lane-b', 'lane-a', 'lane-a', '']), ['lane-a', 'lane-b']);
+  assert.equal(normalizedCredentials({ b: 2, a: 1 }), 'a=1\nb=2');
+
+  const fp = fingerprintFor('x', { token: 'abc' }, 'secret-key');
+  assert.equal(typeof fp, 'string');
+  assert.equal(fp.length, 64);
+
+  const lane = chooseLane(fp, ['lane-1', 'lane-2'], new Set(['lane-1']));
+  assert.equal(lane, 'lane-2');
+
+  assert.throws(() => chooseLane(fp, ['lane-1'], new Set(['lane-1'])), /no healthy session lane/);
+
+  assert.equal(proxyIdentityHash('http://127.0.0.1:7890').length, 64);
+  assert.equal(proxyIdentityHash(''), '');
+
+  const validRec = {
+    fingerprint: 'a'.repeat(64),
+    source: 'x',
+    laneId: 'lane-1',
+    createdAt: 1000,
+    updatedAt: 2000,
+  };
+  assert.equal(isValidAffinityRecord(validRec, 3000, 10000), true);
+  assert.equal(isValidAffinityRecord({ ...validRec, updatedAt: 5000 }, 3000, 10000), false);
+
+  assert.equal(DEFAULT_POLLER_INTERVAL_MS, 60000);
+
+  let runCount = 0;
+  const poller = createPoller({
+    intervalMs: 10,
+    jitterRatio: 0,
+    now: () => Date.now(),
+  });
+  poller.register('test-task', async () => { runCount += 1; }, { interval: 10 });
+  poller.start();
+  await poller.tick();
+  assert.equal(runCount, 1);
+  const st = poller.stats();
+  assert.equal(st.tasks.length, 1);
+  assert.equal(st.tasks[0].ticks, 1);
+  poller.stop();
+  poller.unregister('test-task');
+  assert.equal(poller.stats().tasks.length, 0);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
