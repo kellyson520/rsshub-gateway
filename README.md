@@ -362,7 +362,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `safeHost(url, fallback)`, `isHostOrSubdomain(hostname, base)`, `matchesHost(hostname, hosts)`, `parseHostList(value)`, `parseStatusList(value, fallback)`: Safe URL host normalizer, subdomain matchers, JSON/CSV host list and HTTP status code parser.
   - `browserFetchHost(url)`: TLS browser fingerprint route classifier.
 - **Dynamic Microservice Frameworks, Gateways & Server Utilities (`src/fetcher-server.js`, `src/server.js`, `src/request-handler.js`, `src/gallery-benchmark.js`, `src/http-utils.js`)**:
-  - `DEFAULT_FETCHER_PORT`, `DEFAULT_FETCHER_HOST`: Sidecar standalone server defaults (`8000` / `0.0.0.0`).
+  - `DEFAULT_FETCHER_PORT`, `DEFAULT_FETCHER_HOST`, `createFetcherServer(opts)`, `listenFetcher(server, port, host, name)`: Sidecar standalone server factory, defaults (`8000` / `0.0.0.0`) and lifecycle listener.
   - `registerDispatcherRoutes(opts)`, `unregisterDispatcherRoutes(opts)`: Sidecar lifecycle self-registration and teardown with backoff.
   - `HttpError`, `readRequestBody(req)`, `readJsonBody(req)`: Standard HTTP status error wrapper and raw/JSON payload buffer readers.
   - `isBearerAuthorized(reqOrHeader, token)`: Constant-time Bearer token authorization validator.
