@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `feedPrefetchBackoffMultiplier(failures)`, `feedPrefetchEffectiveInterval(base, mult, maxCap)`, `feedPrefetchRetryDelay(attempts, backoffMs)`, `initialFeedPathStats(paused)`: RSS feed prefetch exponential backoff algorithm, adaptive interval scaler, and per-path execution state model.
   - `mediaPrefetchRetryDelay(attempts, jitter)`, `isValidMediaPrefetchRecord(rec, now, ttl)`, `calculateCacheHeadroom(stats, budget)`, `MEDIA_PREFETCH_QUEUE_VERSION`: Exponential media prefetch retry delay calculator, queue persistence validator, and cache headroom analyzer.
   - `isLeaseComplete(lease)`, `rejectConnect(socket, status, msg)`, `formatConnectHeader(host, port)`, `DEFAULT_LEASE_UPSTREAM_PROXY_HOST`, `DEFAULT_LEASE_UPSTREAM_PROXY_PORT`, `DEFAULT_LEASE_FAILURES_CAP`: One-time download lease CONNECT tunnel state checker, HTTP 405/407/502 rejection formatter, and upstream proxy handshake limits.
   - `createImageVariant(opts)`, `encodeWebp(opts)`, `DEFAULT_WEBP_OPTIONS`, `IMAGE_VARIANT_WIDTHS`: High-performance WebP image downscaling and lossless compression engine with animated multi-page GIF bypass protection.

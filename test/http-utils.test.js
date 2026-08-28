@@ -1580,6 +1580,10 @@ test('media prefetch and feed prefetch constants and origin extraction function 
     DEFAULT_FEED_PREFETCH_INTERVAL_MS,
     DEFAULT_FEED_PREFETCH_CONCURRENCY,
     DEFAULT_FEED_PREFETCH_MAX_RETRIES,
+    feedPrefetchBackoffMultiplier,
+    feedPrefetchEffectiveInterval,
+    feedPrefetchRetryDelay,
+    initialFeedPathStats,
   } = await import('../src/http-utils.js');
 
   assert.equal(DEFAULT_MEDIA_PREFETCH_INITIAL_CONCURRENCY, 6);
@@ -1588,6 +1592,20 @@ test('media prefetch and feed prefetch constants and origin extraction function 
   assert.equal(DEFAULT_FEED_PREFETCH_INTERVAL_MS, 900000);
   assert.equal(DEFAULT_FEED_PREFETCH_CONCURRENCY, 2);
   assert.equal(DEFAULT_FEED_PREFETCH_MAX_RETRIES, 2);
+
+  assert.equal(feedPrefetchBackoffMultiplier(0), 1);
+  assert.equal(feedPrefetchBackoffMultiplier(1), 2);
+  assert.equal(feedPrefetchBackoffMultiplier(3), 8);
+  assert.equal(feedPrefetchBackoffMultiplier(10), 16);
+
+  assert.equal(feedPrefetchEffectiveInterval(1000, 2), 2000);
+  assert.equal(feedPrefetchEffectiveInterval(1000, 1), 1000);
+  assert.equal(feedPrefetchRetryDelay(2, 5000), 10000);
+
+  const initialStats = initialFeedPathStats(true);
+  assert.equal(initialStats.queued, 0);
+  assert.equal(initialStats.paused, true);
+  assert.equal(initialStats.backoffMultiplier, 1);
 
   assert.equal(mediaOriginFor('https://e-hentai.org/g/1/2'), 'e-hentai.org');
   assert.equal(mediaOriginFor('https://not-allowed-domain.xyz/image.jpg'), '');

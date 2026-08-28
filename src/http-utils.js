@@ -2057,6 +2057,37 @@ export const MAX_FEED_PREFETCH_CONCURRENCY = 8;
 export const MAX_FEED_PREFETCH_RETRIES = 5;
 export const MAX_FEED_PREFETCH_INTERVAL_CAP_MS = 4 * 60 * 60_000;
 
+export function feedPrefetchBackoffMultiplier(consecutiveFailures) {
+  const failures = Math.max(0, Number(consecutiveFailures) || 0);
+  return Math.min(16, Math.pow(2, failures));
+}
+
+export function feedPrefetchEffectiveInterval(baseInterval, multiplier = 1, maxCap = MAX_FEED_PREFETCH_INTERVAL_CAP_MS) {
+  const interval = Number(baseInterval) || DEFAULT_FEED_PREFETCH_INTERVAL_MS;
+  const mult = Math.max(1, Number(multiplier) || 1);
+  return Math.min(interval * mult, maxCap);
+}
+
+export function feedPrefetchRetryDelay(attempts, backoffMs = DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS) {
+  const count = Math.max(1, Number(attempts) || 1);
+  return (Number(backoffMs) || DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS) * count;
+}
+
+export function initialFeedPathStats(paused = false) {
+  return {
+    queued: 0,
+    completed: 0,
+    failed: 0,
+    attempts: 0,
+    consecutiveFailures: 0,
+    backoffMultiplier: 1,
+    lastStatus: null,
+    lastAttemptAt: 0,
+    lastDurationMs: null,
+    paused: Boolean(paused),
+  };
+}
+
 export const DEFAULT_BROWSER_FETCH_HOSTS = Object.freeze([
   'javbus.com',
   'javdb.com',

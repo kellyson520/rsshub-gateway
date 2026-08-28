@@ -4,6 +4,10 @@ import {
   DEFAULT_FEED_PREFETCH_INTERVAL_MS,
   DEFAULT_FEED_PREFETCH_MAX_RETRIES,
   DEFAULT_FEED_PREFETCH_RETRY_BACKOFF_MS,
+  feedPrefetchBackoffMultiplier,
+  feedPrefetchEffectiveInterval,
+  feedPrefetchRetryDelay,
+  initialFeedPathStats,
   MAX_FEED_PREFETCH_CONCURRENCY,
   MAX_FEED_PREFETCH_INTERVAL_CAP_MS,
   MAX_FEED_PREFETCH_RETRIES,
@@ -18,6 +22,10 @@ export {
   MAX_FEED_PREFETCH_CONCURRENCY,
   MAX_FEED_PREFETCH_RETRIES,
   MAX_FEED_PREFETCH_INTERVAL_CAP_MS,
+  feedPrefetchBackoffMultiplier,
+  feedPrefetchEffectiveInterval,
+  feedPrefetchRetryDelay,
+  initialFeedPathStats,
 };
 
 /**
@@ -71,18 +79,7 @@ export function createFeedPrefetchQueue({
   }
 
   function record(path, patch) {
-    const entry = pathStats.get(path) || {
-      queued: 0,
-      completed: 0,
-      failed: 0,
-      attempts: 0,
-      consecutiveFailures: 0,
-      backoffMultiplier: 1,
-      lastStatus: null,
-      lastAttemptAt: 0,
-      lastDurationMs: null,
-      paused: false,
-    };
+    const entry = pathStats.get(path) || initialFeedPathStats();
     pathStats.set(path, { ...entry, ...patch, paused: pausedPaths.has(path) });
     return pathStats.get(path);
   }
@@ -103,8 +100,7 @@ export function createFeedPrefetchQueue({
 
   function effectiveInterval(key) {
     const entry = pathStats.get(key);
-    const multiplier = entry?.backoffMultiplier || 1;
-    return Math.min(interval * multiplier, MAX_FEED_PREFETCH_INTERVAL_CAP_MS);
+    return feedPrefetchEffectiveInterval(interval, entry?.backoffMultiplier);
   }
 
   function enqueue(path, { force = false } = {}) {
@@ -178,7 +174,7 @@ export function createFeedPrefetchQueue({
     if (item.attempts > retries) {
       failed += 1;
       const currentFailures = (pathStats.get(key)?.consecutiveFailures || 0) + 1;
-      const nextMultiplier = Math.min(16, Math.pow(2, currentFailures));
+      const nextMultiplier = feedPrefetchBackoffMultiplier(currentFailures);
       record(key, {
         failed: (pathStats.get(key)?.failed || 0) + 1,
         consecutiveFailures: currentFailures,
@@ -197,7 +193,7 @@ export function createFeedPrefetchQueue({
       notifyIdle();
       return;
     }
-    item.retryAt = now() + retryBackoffMs * item.attempts;
+    item.retryAt = now() + feedPrefetchRetryDelay(item.attempts, retryBackoffMs);
     pending.set(key, item);
   }
 
