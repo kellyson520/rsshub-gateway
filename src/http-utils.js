@@ -2155,6 +2155,56 @@ export function selectIwaraVariant(variants = []) {
   return source ? { url: source.startsWith('//') ? `https:${source}` : source } : null;
 }
 
+export const CHUNK_METADATA_KEYS = Object.freeze(new Set(['egressScope', 'source', 'sessionId', 'index']));
+
+export function createSignedChunk({ url, start, end, secret, now: nowValue = Math.floor(Date.now() / 1000), ttlSeconds = 24 * 60 * 60, metadata = {} }) {
+  const payload = base64UrlEncode(JSON.stringify({
+    url: new URL(url).toString(),
+    start: Number(start),
+    end: Number(end),
+    exp: nowValue + ttlSeconds,
+    ...metadata,
+  }));
+  const signature = hmacSha256(payload, secret, 'base64url');
+  return `${payload}.${signature}`;
+}
+
+export function verifySignedChunk(token, secret, now = Math.floor(Date.now() / 1000), {
+  allowedHosts = ALLOWED_HOSTS,
+  egressScopes = EGRESS_SCOPES,
+  isAllowed = isAllowedTarget,
+} = {}) {
+  const [payload, signature] = String(token).split('.');
+  if (!payload || !signature) throw new Error('malformed chunk token');
+  if (!isSignatureMatch(signature, hmacSha256(payload, secret))) {
+    throw new Error('invalid chunk signature');
+  }
+  const data = safeJsonParse(base64UrlDecode(payload), null);
+  if (!data || typeof data !== 'object' || !Number.isInteger(data.exp) || data.exp <= now) {
+    throw new Error('chunk expired or malformed');
+  }
+  if (!Number.isInteger(data.start) || !Number.isInteger(data.end) || data.start < 0 || data.end < data.start) {
+    throw new Error('invalid chunk range');
+  }
+  if (Object.keys(data).some((key) => !['url', 'exp', 'start', 'end', ...CHUNK_METADATA_KEYS].includes(key))) {
+    throw new Error('chunk metadata is not allowed');
+  }
+  if (data.egressScope !== undefined && !egressScopes.has(data.egressScope)) {
+    throw new Error('chunk egress scope is not allowed');
+  }
+  if (data.source !== undefined && !/^[a-z][a-z0-9_-]{0,31}$/.test(String(data.source))) {
+    throw new Error('chunk source is not allowed');
+  }
+  let targetAllowed = false;
+  try {
+    targetAllowed = isAllowed(data.url, allowedHosts);
+  } catch {
+    targetAllowed = false;
+  }
+  if (!targetAllowed) throw new Error('chunk target is not allowed');
+  return data;
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 

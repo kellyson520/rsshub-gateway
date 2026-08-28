@@ -918,6 +918,23 @@ test('cache helpers and download session record validators normalize and validat
   assert.equal(isValidChunkRecord({ ...validChunk, status: 'unknown' }), false);
   assert.equal(isValidChunkRecord(null), false);
 
+  const { createSignedChunk, verifySignedChunk, CHUNK_METADATA_KEYS } = await import('../src/http-utils.js');
+  const secretKey = 'test-secret';
+  const chunkToken = createSignedChunk({
+    url: 'https://x.com/demo.mp4',
+    start: 0,
+    end: 1024,
+    secret: secretKey,
+    metadata: { egressScope: 'public', source: 'x', sessionId: 'sess-1', index: 0 },
+  });
+  assert.ok(chunkToken.includes('.'));
+  const verifiedChunk = verifySignedChunk(chunkToken, secretKey);
+  assert.equal(verifiedChunk.url, 'https://x.com/demo.mp4');
+  assert.equal(verifiedChunk.start, 0);
+  assert.equal(verifiedChunk.end, 1024);
+  assert.equal(verifiedChunk.source, 'x');
+  assert.ok(CHUNK_METADATA_KEYS.has('egressScope'));
+
   const validSession = {
     id: 'session-123',
     target: 'https://example.com/video.mp4',
