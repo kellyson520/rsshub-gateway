@@ -3,6 +3,7 @@ import {
   isTelegramChannelPostUrl as baseIsTelegramChannelPostUrl,
   matchesHost,
   TELEGRAM_MATCH_HOSTS as MATCH_HOSTS,
+  telegramReaderTarget,
 } from '../http-utils.js';
 
 export const name = 'telegram';
@@ -26,15 +27,7 @@ export function headers(_config = {}, _options = {}) {
 }
 
 export function readerTarget(value) {
-  try {
-    const url = new URL(value);
-    if (isTelegramChannelPostUrl(url)) {
-      url.searchParams.set('embed', '1');
-    }
-    return url.toString();
-  } catch {
-    return String(value || '');
-  }
+  return telegramReaderTarget(value, MATCH_HOSTS);
 }
 
 export function unavailableMessage() {

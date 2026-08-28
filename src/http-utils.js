@@ -2522,6 +2522,30 @@ export const INSTAGRAM_MATCH_HOSTS = Object.freeze(['instagram.com', 'cdninstagr
 export const DEFAULT_INSTAGRAM_UNAVAILABLE_MESSAGE = 'Instagram 内容暂时无法读取。公开内容可能受登录或访问限制。';
 export const INSTAGRAM_AUTH_LOGIN_PATTERN = /\/(?:accounts\/login|login)(?:[/?#]|$)/i;
 
+export function isInstagramReaderUnavailable(html, cheerioParser) {
+  if (typeof html !== 'string' || !html) return false;
+  if (!cheerioParser) {
+    return !html.includes('<article')
+      && html.includes('name="username"')
+      && html.includes('name="password"');
+  }
+  const $ = cheerioParser.load(html);
+  return $('article').length === 0
+    && $('form input[name="username"], form input[name="password"]').length > 0;
+}
+
+export function telegramReaderTarget(value, matchHosts = TELEGRAM_MATCH_HOSTS) {
+  try {
+    const url = new URL(value);
+    if (isTelegramChannelPostUrl(url, matchHosts)) {
+      url.searchParams.set('embed', '1');
+    }
+    return url.toString();
+  } catch {
+    return String(value || '');
+  }
+}
+
 export const TELEGRAM_MATCH_HOSTS = Object.freeze(['t.me']);
 export const DEFAULT_TELEGRAM_UNAVAILABLE_MESSAGE = 'Telegram 内容暂时无法读取，请稍后重试或打开原始来源。';
 

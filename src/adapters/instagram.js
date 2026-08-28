@@ -3,6 +3,7 @@ import {
   DEFAULT_INSTAGRAM_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
   INSTAGRAM_AUTH_LOGIN_PATTERN as AUTH_LOGIN_PATTERN,
   INSTAGRAM_MATCH_HOSTS as MATCH_HOSTS,
+  isInstagramReaderUnavailable,
   matchesHost,
 } from '../http-utils.js';
 
@@ -32,9 +33,7 @@ export function unavailableMessage() {
 }
 
 export function isReaderUnavailable(html) {
-  const $ = cheerio.load(html);
-  return $('article').length === 0
-    && $('form input[name="username"], form input[name="password"]').length > 0;
+  return isInstagramReaderUnavailable(html, cheerio);
 }
 
 export function isAuthenticationChallenge({ status, headers, body } = {}) {
