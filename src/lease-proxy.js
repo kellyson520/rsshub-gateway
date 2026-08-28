@@ -1,9 +1,19 @@
 import http from 'node:http';
 import net from 'node:net';
 import {
+  DEFAULT_LEASE_FAILURE_THRESHOLD,
+  DEFAULT_LEASE_FAILURE_WINDOW_MS,
+  DEFAULT_LEASE_FAILURES_CAP,
+  DEFAULT_LEASE_HANDSHAKE_MAX_BYTES,
+  DEFAULT_LEASE_PROXY_HOST,
+  DEFAULT_LEASE_UPSTREAM_PROXY_HOST,
+  DEFAULT_LEASE_UPSTREAM_PROXY_PORT,
+  formatConnectHeader,
+  isLeaseComplete,
   parseAuthority,
   parseProxyAuth,
   positiveInteger,
+  rejectConnect,
   safeEvent,
   writeText,
 } from './http-utils.js';
@@ -11,13 +21,23 @@ import {
 export {
   parseProxyAuth,
   parseAuthority,
+  isLeaseComplete,
+  rejectConnect,
+  formatConnectHeader,
+  DEFAULT_LEASE_UPSTREAM_PROXY_HOST,
+  DEFAULT_LEASE_UPSTREAM_PROXY_PORT,
+  DEFAULT_LEASE_PROXY_HOST,
+  DEFAULT_LEASE_FAILURES_CAP,
+  DEFAULT_LEASE_FAILURE_WINDOW_MS,
+  DEFAULT_LEASE_FAILURE_THRESHOLD,
+  DEFAULT_LEASE_HANDSHAKE_MAX_BYTES,
 };
 
 export function createLeaseProxy({
   leaseStore,
-  upstreamProxyHost = '127.0.0.1',
-  upstreamProxyPort = 7890,
-  host = '0.0.0.0',
+  upstreamProxyHost = DEFAULT_LEASE_UPSTREAM_PROXY_HOST,
+  upstreamProxyPort = DEFAULT_LEASE_UPSTREAM_PROXY_PORT,
+  host = DEFAULT_LEASE_PROXY_HOST,
   port,
   onEvent = () => {},
 } = {}) {
@@ -30,29 +50,24 @@ export function createLeaseProxy({
   function recordFailure(ip) {
     const now = Date.now();
     const entry = failuresByIp.get(ip) || { count: 0, windowStart: now };
-    if (now - entry.windowStart > 60_000) {
+    if (now - entry.windowStart > DEFAULT_LEASE_FAILURE_WINDOW_MS) {
       entry.count = 0;
       entry.windowStart = now;
     }
     entry.count += 1;
     failuresByIp.set(ip, entry);
-    if (failuresByIp.size > 10_000) failuresByIp.clear();
+    if (failuresByIp.size > DEFAULT_LEASE_FAILURES_CAP) failuresByIp.clear();
     return entry.count;
   }
 
   function rateLimited(ip) {
     const entry = failuresByIp.get(ip);
     if (!entry) return false;
-    if (Date.now() - entry.windowStart > 60_000) {
+    if (Date.now() - entry.windowStart > DEFAULT_LEASE_FAILURE_WINDOW_MS) {
       failuresByIp.delete(ip);
       return false;
     }
-    return entry.count >= 8;
-  }
-
-  function rejectConnect(clientSocket, status, message) {
-    clientSocket.write(`HTTP/1.1 ${status}\r\nContent-Length: ${Buffer.byteLength(message)}\r\nConnection: close\r\n\r\n${message}`);
-    clientSocket.destroy();
+    return entry.count >= DEFAULT_LEASE_FAILURE_THRESHOLD;
   }
 
   function pipeTunnel(clientSocket, proxySocket, lease, onClose) {
@@ -90,11 +105,7 @@ export function createLeaseProxy({
   }
 
   function completeLease(lease, reason) {
-    // A one-time lease is spent once its established tunnels have all closed,
-    // even when no bytes flowed (idle/aborted tunnel): requiring usedBytes > 0
-    // left zero-byte sessions' credentials valid until TTL expiry.
-    const done = lease.revoked || (lease.activeConnections === 0 && (lease.usedBytes > 0 || lease.completedConnections > 0));
-    if (done) {
+    if (isLeaseComplete(lease)) {
       leaseStore.revoke(lease.username);
       safeEvent(onEvent, { event: 'lease_completed', username: lease.username, usedBytes: lease.usedBytes, reason });
     }
@@ -126,7 +137,7 @@ export function createLeaseProxy({
       return;
     }
     const proxySocket = net.connect(upstreamProxyPort, upstreamProxyHost, () => {
-      proxySocket.write(`CONNECT ${authority.hostname}:${authority.port} HTTP/1.1\r\nHost: ${authority.hostname}:${authority.port}\r\n\r\n`);
+      proxySocket.write(formatConnectHeader(authority.hostname, authority.port));
     });
     proxySocket.on('error', () => {
       if (!tunnelEstablished) rejectConnect(clientSocket, 502, 'upstream proxy unavailable\n');
@@ -142,7 +153,7 @@ export function createLeaseProxy({
     proxySocket.on('data', (chunk) => {
       if (handshakeDone) return;
       handshakeBuffer = Buffer.concat([handshakeBuffer, chunk]);
-      if (handshakeBuffer.length > 64 * 1024) {
+      if (handshakeBuffer.length > DEFAULT_LEASE_HANDSHAKE_MAX_BYTES) {
         proxySocket.destroy();
         if (!tunnelEstablished) rejectConnect(clientSocket, 502, 'upstream proxy handshake too large\n');
         return;
@@ -184,5 +195,5 @@ export function createLeaseProxy({
     return new Promise((resolve) => server.close(resolve));
   }
 
-  return { server, listen, close, failures: failuresByIp };
+  return { listen, close, server };
 }

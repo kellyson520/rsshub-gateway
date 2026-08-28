@@ -247,8 +247,21 @@ test('parseProxyAuth and parseAuthority handle invalid inputs gracefully', async
   proxy.close();
 });
 
-test('exports parseProxyAuth and parseAuthority parsing utilities', async () => {
-  const { parseProxyAuth, parseAuthority } = await import('../src/lease-proxy.js');
+test('exports parseProxyAuth, parseAuthority, isLeaseComplete and lease-proxy constants', async () => {
+  const {
+    parseProxyAuth,
+    parseAuthority,
+    isLeaseComplete,
+    rejectConnect,
+    formatConnectHeader,
+    DEFAULT_LEASE_UPSTREAM_PROXY_HOST,
+    DEFAULT_LEASE_UPSTREAM_PROXY_PORT,
+    DEFAULT_LEASE_PROXY_HOST,
+    DEFAULT_LEASE_FAILURES_CAP,
+    DEFAULT_LEASE_FAILURE_WINDOW_MS,
+    DEFAULT_LEASE_FAILURE_THRESHOLD,
+    DEFAULT_LEASE_HANDSHAKE_MAX_BYTES,
+  } = await import('../src/lease-proxy.js');
 
   const authHeader = `Basic ${Buffer.from('admin_user:secret_pass').toString('base64')}`;
   assert.deepEqual(parseProxyAuth(authHeader), {
@@ -264,4 +277,18 @@ test('exports parseProxyAuth and parseAuthority parsing utilities', async () => 
   });
   assert.equal(parseAuthority('invalid_authority'), null);
   assert.equal(parseAuthority(null), null);
+
+  assert.equal(DEFAULT_LEASE_UPSTREAM_PROXY_HOST, '127.0.0.1');
+  assert.equal(DEFAULT_LEASE_UPSTREAM_PROXY_PORT, 7890);
+  assert.equal(DEFAULT_LEASE_PROXY_HOST, '0.0.0.0');
+  assert.equal(DEFAULT_LEASE_FAILURES_CAP, 10000);
+  assert.equal(DEFAULT_LEASE_FAILURE_WINDOW_MS, 60000);
+  assert.equal(DEFAULT_LEASE_FAILURE_THRESHOLD, 8);
+  assert.equal(DEFAULT_LEASE_HANDSHAKE_MAX_BYTES, 65536);
+
+  assert.equal(formatConnectHeader('test.org', 443), 'CONNECT test.org:443 HTTP/1.1\r\nHost: test.org:443\r\n\r\n');
+  assert.equal(isLeaseComplete({ revoked: true }), true);
+  assert.equal(isLeaseComplete({ revoked: false, activeConnections: 0, usedBytes: 10 }), true);
+  assert.equal(isLeaseComplete({ revoked: false, activeConnections: 1, usedBytes: 10 }), false);
+  assert.equal(isLeaseComplete(null), false);
 });

@@ -3193,6 +3193,28 @@ export function tileImage(tile, className = '', alt = '', loading = 'lazy') {
 export const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000;
 export const DEFAULT_LEASE_MAX_BYTES = 2 * 1024 ** 3;
 export const DEFAULT_LEASE_MAX_CONCURRENCY = 8;
+export const DEFAULT_LEASE_UPSTREAM_PROXY_HOST = '127.0.0.1';
+export const DEFAULT_LEASE_UPSTREAM_PROXY_PORT = 7890;
+export const DEFAULT_LEASE_PROXY_HOST = '0.0.0.0';
+export const DEFAULT_LEASE_FAILURES_CAP = 10_000;
+export const DEFAULT_LEASE_FAILURE_WINDOW_MS = 60_000;
+export const DEFAULT_LEASE_FAILURE_THRESHOLD = 8;
+export const DEFAULT_LEASE_HANDSHAKE_MAX_BYTES = 64 * 1024;
+
+export function isLeaseComplete(lease) {
+  if (!lease || typeof lease !== 'object') return false;
+  return Boolean(lease.revoked || (lease.activeConnections === 0 && (lease.usedBytes > 0 || lease.completedConnections > 0)));
+}
+
+export function rejectConnect(clientSocket, status, message) {
+  if (!clientSocket || typeof clientSocket.write !== 'function') return;
+  clientSocket.write(`HTTP/1.1 ${status}\r\nContent-Length: ${Buffer.byteLength(message)}\r\nConnection: close\r\n\r\n${message}`);
+  clientSocket.destroy?.();
+}
+
+export function formatConnectHeader(hostname, port) {
+  return `CONNECT ${hostname}:${port} HTTP/1.1\r\nHost: ${hostname}:${port}\r\n\r\n`;
+}
 
 export function publicLeaseView(lease, { proxyHost, proxyPort, proxyUrl } = {}, now = Date.now) {
   if (!lease || typeof lease !== 'object') return null;
