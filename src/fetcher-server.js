@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readJsonBody, readRequestBody, sleep, writeJson } from './http-utils.js';
+import { HttpError, readJsonBody, readRequestBody, sleep, writeJson } from './http-utils.js';
 
 export const DEFAULT_FETCHER_PORT = 8000;
 export const DEFAULT_FETCHER_HOST = '0.0.0.0';
@@ -8,12 +8,9 @@ export const DEFAULT_REGISTER_RETRY_DELAY_MS = 2000;
 export const DEFAULT_REGISTER_TIMEOUT_MS = 5000;
 export const DEFAULT_UNREGISTER_TIMEOUT_MS = 3000;
 
-export class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
+export {
+  HttpError,
+};
 
 export function createFetcherServer({ fetcher, health = () => ({ ok: true }), name = 'fetcher' }) {
   return createServer(async (req, res) => {

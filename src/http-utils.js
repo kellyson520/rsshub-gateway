@@ -44,6 +44,14 @@ export function publicBaseUrl(req) {
   return `${scheme}://${req.headers.host || 'localhost:1300'}`;
 }
 
+export class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
 export function writeText(res, status, body, contentType = 'text/plain; charset=utf-8', headers = {}) {
   res.writeHead(status, { 'content-type': contentType, ...headers, 'content-length': Buffer.byteLength(body) });
   res.end(body);

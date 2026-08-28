@@ -126,6 +126,15 @@ test('mapWithConcurrency and durationCheckpoint run bounded tasks and compute la
   assert.equal(durationCheckpoint(null, 2), 0);
 });
 
+test('HttpError creates typed Error with status property', async () => {
+  const { HttpError } = await import('../src/http-utils.js');
+  const err = new HttpError(404, 'not found');
+  assert.ok(err instanceof Error);
+  assert.equal(err.name, 'HttpError');
+  assert.equal(err.status, 404);
+  assert.equal(err.message, 'not found');
+});
+
 test('writeJson writes status and json body', async () => {
   const server = http.createServer((req, res) => writeJson(res, 200, { ok: true }));
   server.listen(0, '127.0.0.1');
