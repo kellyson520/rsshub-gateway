@@ -3,62 +3,26 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_CACHE_ROOT } from './options.js';
-import { atomicWriteJson, isSha256Hex, positiveInteger, safeJsonParse, sha256Hex } from './http-utils.js';
-
-const DEFAULT_TTL_SECONDS = Object.freeze({
-  rss: 300,
-  html: 3 * 24 * 60 * 60,
-  'eh-image': 5 * 60,
-  media: 7 * 24 * 60 * 60,
-  'media-variant': 7 * 24 * 60 * 60,
-});
-const DEFAULT_MAX_BYTES = 5 * 1024 ** 3;
-const DEFAULT_EVICTION_PRIORITY = Object.freeze({
-  rss: 0,
-  html: 1,
-  media: 2,
-  'media-variant': 3,
-});
-const SAFE_HEADERS = new Set(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);
-
-function canonicalUrl(value) {
-  return new URL(value).toString();
-}
-
-function normalizedNamespace(value) {
-  return String(value || 'public').trim() || 'public';
-}
-
-function keyFor(url, kind, namespace = 'public') {
-  return sha256Hex(`${kind}\n${normalizedNamespace(namespace)}\n${canonicalUrl(url)}`);
-}
-
-function normalizedHeaders(headers) {
-  const entries = headers instanceof Headers
-    ? [...headers.entries()]
-    : Object.entries(headers || {});
-  return Object.fromEntries(entries
-    .map(([name, value]) => [String(name).toLowerCase(), String(value)])
-    .filter(([name, value]) => SAFE_HEADERS.has(name) && value));
-}
-
-function normalizeBody(body) {
-  if (typeof body === 'string') return { value: body, buffer: Buffer.from(body, 'utf8'), type: 'string' };
-  if (Buffer.isBuffer(body)) return { value: body, buffer: body, type: 'buffer' };
-  return null;
-}
+import {
+  atomicWriteJson,
+  CACHE_SAFE_HEADERS as SAFE_HEADERS,
+  cacheKeyFor as keyFor,
+  canonicalUrl,
+  DEFAULT_CACHE_MAX_BYTES as DEFAULT_MAX_BYTES,
+  DEFAULT_CACHE_TTL_SECONDS as DEFAULT_TTL_SECONDS,
+  DEFAULT_EVICTION_PRIORITY,
+  isSha256Hex,
+  normalizeCacheBody as normalizeBody,
+  normalizeCacheHeaders as normalizedHeaders,
+  normalizedNamespace,
+  positiveInteger,
+  resultFromCacheEntry as resultFromEntry,
+  safeJsonParse,
+  sha256Hex,
+} from './http-utils.js';
 
 function positiveNumber(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function resultFromEntry(entry, body, state) {
-  return {
-    state,
-    status: entry.status,
-    headers: { ...entry.headers },
-    body: entry.bodyType === 'string' ? body.toString('utf8') : body,
-  };
 }
 
 export {

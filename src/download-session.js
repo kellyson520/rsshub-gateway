@@ -1,46 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
-import { atomicWriteJson, safeJsonParse } from './http-utils.js';
+import {
+  atomicWriteJson,
+  CHUNK_STATUSES,
+  DEFAULT_DOWNLOAD_SESSION_TTL_MS as DEFAULT_TTL_MS,
+  DEFAULT_MAX_DOWNLOAD_SESSIONS as DEFAULT_MAX_SESSIONS,
+  isValidChunkRecord as validChunk,
+  isValidSessionRecord as validSession,
+  safeJsonParse,
+} from './http-utils.js';
 
 const VERSION = 1;
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_MAX_SESSIONS = 64;
-const CHUNK_STATUSES = new Set(['pending', 'done']);
-
-function validChunk(chunk) {
-  return Boolean(
-    chunk
-    && typeof chunk === 'object'
-    && Number.isInteger(chunk.index)
-    && chunk.index >= 0
-    && Number.isFinite(chunk.start)
-    && Number.isFinite(chunk.end)
-    && Number.isFinite(chunk.size)
-    && typeof chunk.url === 'string'
-    && CHUNK_STATUSES.has(chunk.status)
-    && Number.isFinite(chunk.updatedAt),
-  );
-}
-
-function validSession(session, now) {
-  return Boolean(
-    session
-    && typeof session === 'object'
-    && typeof session.id === 'string'
-    && session.id
-    && typeof session.target === 'string'
-    && session.target
-    && Number.isFinite(session.size)
-    && Number.isFinite(session.chunkSize)
-    && Number.isFinite(session.createdAt)
-    && Number.isFinite(session.expiresAt)
-    && session.expiresAt > now
-    && Array.isArray(session.chunks)
-    && session.chunks.length > 0
-    && session.chunks.every(validChunk),
-  );
-}
 
 export {
   validChunk,

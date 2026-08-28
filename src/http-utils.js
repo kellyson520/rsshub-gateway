@@ -199,7 +199,98 @@ export async function readBinaryLimited(response, limit) {
   return Buffer.concat(chunks);
 }
 
-const CACHE_RESPONSE_HEADERS = Object.freeze(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);
+export const DEFAULT_CACHE_TTL_SECONDS = Object.freeze({
+  rss: 300,
+  html: 3 * 24 * 60 * 60,
+  'eh-image': 5 * 60,
+  media: 7 * 24 * 60 * 60,
+  'media-variant': 7 * 24 * 60 * 60,
+});
+export const DEFAULT_CACHE_MAX_BYTES = 5 * 1024 ** 3;
+export const DEFAULT_EVICTION_PRIORITY = Object.freeze({
+  rss: 0,
+  html: 1,
+  media: 2,
+  'media-variant': 3,
+});
+export const CACHE_SAFE_HEADERS = Object.freeze(new Set(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']));
+
+export function canonicalUrl(value) {
+  return new URL(value).toString();
+}
+
+export function normalizedNamespace(value) {
+  return String(value || 'public').trim() || 'public';
+}
+
+export function cacheKeyFor(url, kind, namespace = 'public') {
+  return sha256Hex(`${kind}\n${normalizedNamespace(namespace)}\n${canonicalUrl(url)}`);
+}
+
+export function normalizeCacheHeaders(headers, safeHeaders = CACHE_SAFE_HEADERS) {
+  const entries = headers instanceof Headers
+    ? [...headers.entries()]
+    : Object.entries(headers || {});
+  return Object.fromEntries(entries
+    .map(([name, value]) => [String(name).toLowerCase(), String(value)])
+    .filter(([name, value]) => safeHeaders.has(name) && value));
+}
+
+export function normalizeCacheBody(body) {
+  if (typeof body === 'string') return { value: body, buffer: Buffer.from(body, 'utf8'), type: 'string' };
+  if (Buffer.isBuffer(body)) return { value: body, buffer: body, type: 'buffer' };
+  return null;
+}
+
+export function resultFromCacheEntry(entry, body, state) {
+  if (!entry) return null;
+  return {
+    state,
+    status: entry.status,
+    headers: { ...entry.headers },
+    body: entry.bodyType === 'string' ? body.toString('utf8') : body,
+  };
+}
+
+export const CHUNK_STATUSES = Object.freeze(new Set(['pending', 'done']));
+export const DEFAULT_DOWNLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_MAX_DOWNLOAD_SESSIONS = 64;
+
+export function isValidChunkRecord(chunk) {
+  return Boolean(
+    chunk
+    && typeof chunk === 'object'
+    && Number.isInteger(chunk.index)
+    && chunk.index >= 0
+    && Number.isFinite(chunk.start)
+    && Number.isFinite(chunk.end)
+    && Number.isFinite(chunk.size)
+    && typeof chunk.url === 'string'
+    && CHUNK_STATUSES.has(chunk.status)
+    && Number.isFinite(chunk.updatedAt),
+  );
+}
+
+export function isValidSessionRecord(session, now = Date.now()) {
+  return Boolean(
+    session
+    && typeof session === 'object'
+    && typeof session.id === 'string'
+    && session.id
+    && typeof session.target === 'string'
+    && session.target
+    && Number.isFinite(session.size)
+    && Number.isFinite(session.chunkSize)
+    && Number.isFinite(session.createdAt)
+    && Number.isFinite(session.expiresAt)
+    && session.expiresAt > now
+    && Array.isArray(session.chunks)
+    && session.chunks.length > 0
+    && session.chunks.every(isValidChunkRecord),
+  );
+}
+
+export const CACHE_RESPONSE_HEADERS = Object.freeze(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']);
 
 export function responseHeaders(response) {
   const headers = {};
@@ -1314,7 +1405,3 @@ export async function atomicWriteJson(targetFile, data, { mode = 0o600, dirMode 
     throw error;
   }
 }
-
-export {
-  CACHE_RESPONSE_HEADERS,
-};

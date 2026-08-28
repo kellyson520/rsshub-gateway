@@ -844,6 +844,99 @@ test('encodeTextResponse, encodeHtmlResponse and HTTP compression helpers compre
   assert.equal(COMPRESSIBLE_CONTENT_TYPES.length > 0, true);
 });
 
+test('cache helpers and download session record validators normalize and validate persistence structures', async () => {
+  const {
+    canonicalUrl,
+    normalizedNamespace,
+    cacheKeyFor,
+    normalizeCacheHeaders,
+    normalizeCacheBody,
+    resultFromCacheEntry,
+    isValidChunkRecord,
+    isValidSessionRecord,
+    DEFAULT_CACHE_TTL_SECONDS,
+    DEFAULT_CACHE_MAX_BYTES,
+    CHUNK_STATUSES,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(canonicalUrl('https://example.com/a/b?c=1'), 'https://example.com/a/b?c=1');
+  assert.equal(normalizedNamespace('  custom  '), 'custom');
+  assert.equal(normalizedNamespace(''), 'public');
+  assert.equal(normalizedNamespace(null), 'public');
+
+  const key1 = cacheKeyFor('https://example.com/test', 'html', 'public');
+  const key2 = cacheKeyFor('https://example.com/test', 'html', 'public');
+  assert.equal(key1, key2);
+  assert.equal(typeof key1, 'string');
+  assert.equal(key1.length, 64);
+
+  const headers = normalizeCacheHeaders({
+    'Content-Type': 'text/html',
+    'X-Custom': 'ignored',
+    etag: '"12345"',
+  });
+  assert.deepEqual(headers, {
+    'content-type': 'text/html',
+    etag: '"12345"',
+  });
+
+  assert.deepEqual(normalizeCacheBody('text body'), {
+    value: 'text body',
+    buffer: Buffer.from('text body', 'utf8'),
+    type: 'string',
+  });
+  assert.deepEqual(normalizeCacheBody(Buffer.from('binary')), {
+    value: Buffer.from('binary'),
+    buffer: Buffer.from('binary'),
+    type: 'buffer',
+  });
+  assert.equal(normalizeCacheBody(null), null);
+
+  const entry = {
+    status: 200,
+    headers: { 'content-type': 'text/html', etag: '"abc"' },
+    bodyType: 'string',
+    storedAt: Date.now() - 5000,
+    expiresAt: Date.now() + 60000,
+  };
+  const result = resultFromCacheEntry(entry, Buffer.from('hello'), 'HIT');
+  assert.equal(result.state, 'HIT');
+  assert.equal(result.body, 'hello');
+  assert.equal(result.headers['content-type'], 'text/html');
+  assert.equal(resultFromCacheEntry(null), null);
+
+  const validChunk = {
+    index: 0,
+    start: 0,
+    end: 1023,
+    size: 1024,
+    url: 'https://example.com/chunk-0',
+    status: 'pending',
+    updatedAt: Date.now(),
+  };
+  assert.equal(isValidChunkRecord(validChunk), true);
+  assert.equal(isValidChunkRecord({ ...validChunk, status: 'unknown' }), false);
+  assert.equal(isValidChunkRecord(null), false);
+
+  const validSession = {
+    id: 'session-123',
+    target: 'https://example.com/video.mp4',
+    size: 1024,
+    chunkSize: 1024,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 60000,
+    chunks: [validChunk],
+  };
+  assert.equal(isValidSessionRecord(validSession, Date.now()), true);
+  assert.equal(isValidSessionRecord({ ...validSession, expiresAt: Date.now() - 1000 }, Date.now()), false);
+  assert.equal(isValidSessionRecord(null), false);
+
+  assert.equal(DEFAULT_CACHE_TTL_SECONDS.rss, 300);
+  assert.equal(DEFAULT_CACHE_MAX_BYTES > 0, true);
+  assert.equal(CHUNK_STATUSES.has('pending'), true);
+  assert.equal(CHUNK_STATUSES.has('done'), true);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
