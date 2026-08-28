@@ -4,14 +4,19 @@ import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import {
   atomicWriteJson,
+  CACHE_BODY_PATTERN,
+  CACHE_INDEX_VERSION,
   CACHE_SAFE_HEADERS as SAFE_HEADERS,
+  cacheBodyFile,
   cacheKeyFor as keyFor,
   canonicalUrl,
   DEFAULT_CACHE_MAX_BYTES as DEFAULT_MAX_BYTES,
   DEFAULT_CACHE_ROOT,
   DEFAULT_CACHE_TTL_SECONDS as DEFAULT_TTL_SECONDS,
   DEFAULT_EVICTION_PRIORITY,
+  isCacheBodyFile,
   isSha256Hex,
+  isValidCacheIndexRecord,
   normalizeCacheBody as normalizeBody,
   normalizeCacheHeaders as normalizedHeaders,
   normalizedNamespace,
@@ -35,6 +40,10 @@ export {
   DEFAULT_MAX_BYTES,
   DEFAULT_EVICTION_PRIORITY,
   DEFAULT_CACHE_ROOT,
+  CACHE_INDEX_VERSION,
+  isValidCacheIndexRecord,
+  isCacheBodyFile,
+  cacheBodyFile,
 };
 
 export function createResponseCache({
@@ -73,7 +82,7 @@ export function createResponseCache({
 
   async function writeIndex() {
     try {
-      await atomicWriteJson(indexPath, { version: 1, entries: [...entries.values()] }, { mode: null, dirMode: 0o755 });
+      await atomicWriteJson(indexPath, { version: CACHE_INDEX_VERSION, entries: [...entries.values()] }, { mode: null, dirMode: 0o755 });
     } catch {
       // Best-effort index persistence.
     }
@@ -106,9 +115,7 @@ export function createResponseCache({
       ? parsed.entries
       : Object.values(parsed?.entries || {});
     for (const record of records) {
-      if (!record || !isSha256Hex(record.key) || record.file !== `${record.key}.body`
-        || !Number.isFinite(record.size) || record.size < 0
-        || !['string', 'buffer'].includes(record.bodyType)) continue;
+      if (!isValidCacheIndexRecord(record)) continue;
       try {
         const stat = await fsp.stat(path.join(cacheRoot, record.file));
         if (!stat.isFile() || stat.size !== record.size) continue;
@@ -121,7 +128,7 @@ export function createResponseCache({
     const knownFiles = new Set([...entries.values()].map((entry) => entry.file));
     const files = await fsp.readdir(cacheRoot).catch(() => []);
     for (const file of files) {
-      if (!/^[a-f0-9]{64}\.body$/.test(file) && !file.endsWith('.tmp')) continue;
+      if (!isCacheBodyFile(file) && !file.endsWith('.tmp')) continue;
       if (knownFiles.has(file)) continue;
       await fsp.rm(path.join(cacheRoot, file), { force: true }).catch(() => {});
     }
@@ -170,7 +177,7 @@ export function createResponseCache({
     await ready;
     await fsp.mkdir(cacheRoot, { recursive: true });
     const key = keyFor(url, kind, namespace);
-    const file = `${key}.body`;
+    const file = cacheBodyFile(key);
     const tempPath = path.join(cacheRoot, `${file}.${process.pid}.${randomUUID()}.tmp`);
     try {
       await fsp.writeFile(tempPath, body.buffer);

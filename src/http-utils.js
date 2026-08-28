@@ -217,6 +217,25 @@ export const DEFAULT_EVICTION_PRIORITY = Object.freeze({
   'media-variant': 3,
 });
 export const CACHE_SAFE_HEADERS = Object.freeze(new Set(['content-type', 'content-length', 'etag', 'last-modified', 'cache-control']));
+export const CACHE_INDEX_VERSION = 1;
+export const CACHE_BODY_EXTENSION = '.body';
+export const CACHE_BODY_PATTERN = /^[a-f0-9]{64}\.body$/;
+
+export function isCacheBodyFile(filename) {
+  return CACHE_BODY_PATTERN.test(String(filename || ''));
+}
+
+export function cacheBodyFile(key) {
+  return `${key}${CACHE_BODY_EXTENSION}`;
+}
+
+export function isValidCacheIndexRecord(record) {
+  if (!record || typeof record !== 'object') return false;
+  if (!isSha256Hex(record.key)) return false;
+  if (record.file !== cacheBodyFile(record.key)) return false;
+  if (!Number.isFinite(record.size) || record.size < 0) return false;
+  return ['string', 'buffer'].includes(record.bodyType);
+}
 
 export function canonicalUrl(value) {
   return new URL(value).toString();
