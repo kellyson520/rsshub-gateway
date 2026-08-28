@@ -1956,6 +1956,33 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 export const MAX_REQUEST_TIMEOUT_MS = 65_000;
 export const REQUEST_TIMEOUT_SLACK_MS = 5_000;
 
+export function buildBrowserFetchPayload(url, {
+  method = 'GET',
+  headers = {},
+  body,
+  timeout = 20_000,
+  impersonate: requestImpersonate,
+  redirect,
+  proxy,
+  maxBody: requestMaxBody,
+} = {}, defaultImpersonate = DEFAULT_IMPERSONATE, defaultMaxBody = DEFAULT_MAX_BODY) {
+  const payload = {
+    url: String(url),
+    method,
+    headers: Object.fromEntries(
+      Object.entries(headers || {}).map(([name, value]) => [String(name), String(value)]),
+    ),
+    timeout,
+    maxBody: requestMaxBody || defaultMaxBody,
+  };
+  if (body !== undefined) payload.body = typeof body === 'string' ? body : String(body);
+  if (requestImpersonate) payload.impersonate = requestImpersonate;
+  else payload.impersonate = defaultImpersonate;
+  if (redirect) payload.redirect = redirect;
+  if (proxy) payload.proxy = proxy;
+  return payload;
+}
+
 export function browserFetchLineError(message, { code = 'FETCHD_UNAVAILABLE', status = 502 } = {}) {
   return new GatewayUpstreamError(message, { code, source: 'fetchd', status, attempts: 1 });
 }

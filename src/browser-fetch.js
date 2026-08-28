@@ -4,6 +4,7 @@ import { createFetchdClient, fetchdJson } from './fetchd.js';
 import {
   browserFetchLineError as lineError,
   browserRequestTimeoutMs as requestTimeoutMs,
+  buildBrowserFetchPayload,
   DEFAULT_IMPERSONATE,
   DEFAULT_MAX_BODY,
   DEFAULT_PYTHON_BIN,
@@ -27,6 +28,7 @@ export {
   lineError,
   requestTimeoutMs,
   messageToResponse,
+  buildBrowserFetchPayload,
   DEFAULT_WORKER_PATH,
 };
 
@@ -164,31 +166,8 @@ export function createBrowserFetchClient({
     });
   }
 
-  function buildPayload(url, {
-    method = 'GET',
-    headers = {},
-    body,
-    timeout = 20_000,
-    impersonate: requestImpersonate,
-    redirect,
-    proxy,
-    maxBody: requestMaxBody,
-  } = {}) {
-    const payload = {
-      url: String(url),
-      method,
-      headers: Object.fromEntries(
-        Object.entries(headers || {}).map(([name, value]) => [String(name), String(value)]),
-      ),
-      timeout,
-      maxBody: requestMaxBody || maxBody,
-    };
-    if (body !== undefined) payload.body = typeof body === 'string' ? body : String(body);
-    if (requestImpersonate) payload.impersonate = requestImpersonate;
-    else payload.impersonate = impersonate;
-    if (redirect) payload.redirect = redirect;
-    if (proxy) payload.proxy = proxy;
-    return payload;
+  function buildPayload(url, options = {}) {
+    return buildBrowserFetchPayload(url, options, impersonate, maxBody);
   }
 
   async function fetchdFetch(url, options = {}) {
