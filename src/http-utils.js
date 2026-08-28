@@ -2741,6 +2741,90 @@ export function selectIwaraVariant(variants = []) {
   return source ? { url: source.startsWith('//') ? `https:${source}` : source } : null;
 }
 
+export function iwaraVideoPageUrl(video, siteBase = IWARA_SITE_BASE) {
+  return `${siteBase}/video/${video.id}/${video.slug || ''}`;
+}
+
+export async function fetchIwaraUser(fetchJson, username, { token, apiBase = IWARA_API_BASE } = {}) {
+  const headers = token ? { authorization: `Bearer ${token}` } : {};
+  let data = null;
+  try {
+    data = await fetchJson(`${apiBase}/profile/${encodeURIComponent(username)}`, { headers });
+  } catch (error) {
+    if (error?.status !== 404) throw error;
+  }
+  if (data?.user?.id) return data.user;
+  const needle = String(username).toLowerCase();
+  let results = [];
+  try {
+    const search = await fetchJson(`${apiBase}/autocomplete/users?query=${encodeURIComponent(username)}`, { headers });
+    results = Array.isArray(search?.results) ? search.results : [];
+  } catch {
+    return null;
+  }
+  return results.find((user) => user?.username && String(user.username).toLowerCase() === needle)
+    || results.find((user) => user?.name && String(user.name).trim().toLowerCase() === needle)
+    || null;
+}
+
+export async function fetchIwaraVideos(fetchJson, userId, { kind = 'video', token, apiBase = IWARA_API_BASE } = {}) {
+  const params = new URLSearchParams({ user: userId, limit: '32' });
+  const endpoint = kind === 'image' ? '/images' : '/videos';
+  const data = await fetchJson(`${apiBase}${endpoint}?${params}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  return Array.isArray(data?.results) ? data.results : [];
+}
+
+export async function fetchIwaraVideoDetail(fetchJson, videoId, { token, apiBase = IWARA_API_BASE } = {}) {
+  return fetchJson(`${apiBase}/video/${encodeURIComponent(videoId)}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+}
+
+export async function refreshIwaraAccessToken(fetchJson, refreshToken, { now = Date.now, apiBase = IWARA_API_BASE } = {}) {
+  if (!refreshToken) throw new Error('iwara refresh token is required');
+  const data = await fetchJson(`${apiBase}/user/token`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${refreshToken}`,
+      'content-type': 'application/json',
+    },
+    timeout: 15_000,
+  });
+  const token = data?.accessToken || data?.token;
+  if (!token) throw new Error('iwara refresh response missing access token');
+  let expiresMs = jwtExpiryMs(token, { now });
+  if (expiresMs == null) {
+    const expires = Number(data.expires);
+    if (Number.isFinite(expires)) {
+      if (expires >= 1e12) {
+        expiresMs = Math.max(0, expires - now());
+      } else if (expires >= 1e9) {
+        expiresMs = Math.max(0, expires * 1000 - now());
+      } else {
+        expiresMs = Math.max(0, expires * 1000);
+      }
+    }
+  }
+  return {
+    token: String(token),
+    refreshToken: data.refreshToken ? String(data.refreshToken) : String(refreshToken),
+    expiresMs: expiresMs || 60 * 60 * 1000,
+  };
+}
+
+export async function resolveIwaraVideoStream(fetchJson, detail) {
+  if (!detail?.fileUrl) return null;
+  const variants = await fetchJson(detail.fileUrl, { timeout: 25_000 });
+  const selected = selectIwaraVariant(Array.isArray(variants) ? variants : []);
+  if (!selected) return null;
+  return {
+    url: selected.url,
+    contentType: detail.file?.mime || 'video/mp4',
+  };
+}
+
 export const CHUNK_METADATA_KEYS = Object.freeze(new Set(['egressScope', 'source', 'sessionId', 'index']));
 
 export function createSignedChunk({ url, start, end, secret, now: nowValue = Math.floor(Date.now() / 1000), ttlSeconds = 24 * 60 * 60, metadata = {} }) {
