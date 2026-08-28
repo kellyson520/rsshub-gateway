@@ -2671,6 +2671,7 @@ export function parseThumbnailTile(style, sourceUrl, baseUrl, secret, signedTarg
 
 export const LINUXDO_MATCH_HOSTS = Object.freeze(['linux.do']);
 export const DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE = 'LINUX DO 话题内容暂时无法读取，请稍后重试或打开原始来源。';
+export const LINUXDO_SITE_BASE = 'https://linux.do';
 
 export function isLinuxdoTopicTarget(value) {
   try {
@@ -2686,6 +2687,22 @@ export function isLinuxdoTopicTarget(value) {
 export function linuxdoTopicId(value) {
   const match = String(value).match(/\/t\/(?:[^/]+\/)?(\d+)/);
   return match ? match[1] : '';
+}
+
+export function linuxdoTopicPageUrl(topicId, slug = 'topic', siteBase = LINUXDO_SITE_BASE) {
+  return `${siteBase}/t/${slug}/${topicId}`;
+}
+
+export async function fetchLinuxdoTopicDetail(fetchJson, topicId, siteBase = LINUXDO_SITE_BASE) {
+  const cleanId = String(topicId).replace(/\.json$/, '');
+  return fetchJson(`${siteBase}/t/${encodeURIComponent(cleanId)}.json`, {
+    headers: {
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      referer: `${siteBase}/`,
+    },
+    timeout: 25_000,
+  });
 }
 
 export const IWARA_API_BASE = 'https://api.iwara.tv';

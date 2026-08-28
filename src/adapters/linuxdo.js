@@ -3,9 +3,12 @@ import sanitizeHtml from 'sanitize-html';
 import {
   DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
   escapeHtml,
+  fetchLinuxdoTopicDetail,
   isLinuxdoTopicTarget,
   LINUXDO_MATCH_HOSTS as MATCH_HOSTS,
+  LINUXDO_SITE_BASE as SITE_BASE,
   linuxdoTopicId,
+  linuxdoTopicPageUrl,
   matchesHost,
   signedGatewayUrl,
 } from '../http-utils.js';
@@ -13,13 +16,13 @@ import {
 export const name = 'linuxdo';
 export const publiclyReadable = true;
 
-const SITE_BASE = 'https://linux.do';
-
 export {
   MATCH_HOSTS,
   DEFAULT_UNAVAILABLE_MESSAGE,
   isLinuxdoTopicTarget,
   linuxdoTopicId,
+  linuxdoTopicPageUrl,
+  fetchLinuxdoTopicDetail,
 };
 
 export function matches(hostname) {
@@ -44,22 +47,6 @@ export function isAuthenticationChallenge({ status, headers, body } = {}) {
   if (status === 401 || status === 403) return true;
   if (status < 200 || status >= 300 || typeof body !== 'string') return false;
   return body.includes('Just a moment...') || body.includes('cf-challenge');
-}
-
-export function linuxdoTopicPageUrl(topicId, slug = 'topic') {
-  return `${SITE_BASE}/t/${slug}/${topicId}`;
-}
-
-export async function fetchLinuxdoTopicDetail(fetchJson, topicId) {
-  const cleanId = String(topicId).replace(/\.json$/, '');
-  return fetchJson(`${SITE_BASE}/t/${encodeURIComponent(cleanId)}.json`, {
-    headers: {
-      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      referer: 'https://linux.do/',
-    },
-    timeout: 25_000,
-  });
 }
 
 function localUrl(baseUrl, kind, target, secret, metadata = { egressScope: 'public', source: 'linuxdo' }) {

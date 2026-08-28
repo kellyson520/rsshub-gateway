@@ -398,7 +398,8 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `buildDownloadSession(opts)`, `restoreDownloadSessionRecord(record)`, `DOWNLOAD_SESSION_VERSION`: Pure state multi-threaded download session builder, deserializer and persistence projection.
   - `createSignedChunk(opts)`, `verifySignedChunk(token, secret, now, opts)`, `CHUNK_METADATA_KEYS`: Cryptographic HMAC download lease chunk token signers, range verifiers and allowed metadata key sets.
   - `isBrowserFetchTarget(url, hosts)`, `BROWSER_FETCH_HOSTS`: Dynamic and environment-driven browser-fingerprint WAF bypass target predicates and host list frozen sets.
-  - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`, `isIwaraVideoTarget(url)`, `iwaraVideoId(url)`, `selectIwaraVariant(variants)`: Discourse forum topic target URL matchers and Iwara video stream bitrate selectors.
+  - `isLinuxdoTopicTarget(url)`, `linuxdoTopicId(url)`, `linuxdoTopicPageUrl(id, slug, base)`, `fetchLinuxdoTopicDetail(fetchJson, id, base)`, `LINUXDO_MATCH_HOSTS`, `LINUXDO_SITE_BASE`, `DEFAULT_LINUXDO_UNAVAILABLE_MESSAGE`: Discourse topic target matching, JSON detail fetch pipeline and URL builders.
+  - `isIwaraVideoTarget(url)`, `iwaraVideoId(url)`, `selectIwaraVariant(variants)`: Iwara video stream target matchers and bitrate selectors.
   - `parseThumbnailTile(style, sourceUrl, baseUrl, secret, meta, opts)`, `tileStyle(tile)`, `tileImage(tile, cls, alt, loading)`: Sprite thumbnail position parser and responsive HTML image emitter.
   - `sourceHeaders(url, sources, opts)`, `positiveNumber(val, fallback)`: Canonical upstream request headers builder with multi-source adapter injection and positive float bounds clamper.
   - `defaultSessionNamespace(session)`, `defaultNamespaceFor(scope, session, sessionNamespaceFn)`: Standardized session cache namespace resolvers (`session:<fingerprint>` / `session:<id>`).
