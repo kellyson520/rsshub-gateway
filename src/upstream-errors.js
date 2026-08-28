@@ -1,7 +1,13 @@
+import {
+  DEFAULT_BLOCKED_STATUSES,
+  isClientAbortError,
+  isRetryableStatus,
+  isSuccessfulStatus,
+  RETRYABLE_STATUSES,
+} from './http-utils.js';
+
 export const DEFAULT_UPSTREAM_ERROR_STATUS = 502;
 export const DEFAULT_UPSTREAM_SOURCE = 'unknown';
-export const RETRYABLE_STATUSES = new Set([408, 425, 429]);
-export const DEFAULT_BLOCKED_STATUSES = new Set([401, 403, 407, 429]);
 
 export class GatewayUpstreamError extends Error {
   constructor(message, { code, source = DEFAULT_UPSTREAM_SOURCE, status = DEFAULT_UPSTREAM_ERROR_STATUS, attempts = 0, retryAfter } = {}) {
@@ -15,21 +21,10 @@ export class GatewayUpstreamError extends Error {
   }
 }
 
-export function isClientAbortError(error) {
-  if (!error) return false;
-  const message = String(error.message || '').toLowerCase();
-  const code = String(error.code || '').toUpperCase();
-  return code === 'ECONNRESET'
-    || code === 'ERR_STREAM_PREMATURE_CLOSE'
-    || code === 'ABORT_ERR'
-    || message.includes('client response closed')
-    || message.includes('aborted');
-}
-
-export function isRetryableStatus(status) {
-  return Number.isInteger(status) && (RETRYABLE_STATUSES.has(status) || (status >= 500 && status <= 599));
-}
-
-export function isSuccessfulStatus(status) {
-  return Number.isInteger(status) && status >= 200 && status <= 299;
-}
+export {
+  DEFAULT_BLOCKED_STATUSES,
+  isClientAbortError,
+  isRetryableStatus,
+  isSuccessfulStatus,
+  RETRYABLE_STATUSES,
+};

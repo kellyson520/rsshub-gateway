@@ -549,6 +549,28 @@ export async function isAuthenticationChallenge(response, url, callback) {
   }
 }
 
+export const RETRYABLE_STATUSES = Object.freeze(new Set([408, 425, 429]));
+export const DEFAULT_BLOCKED_STATUSES = Object.freeze(new Set([401, 403, 407, 429]));
+
+export function isRetryableStatus(status) {
+  return Number.isInteger(status) && (RETRYABLE_STATUSES.has(status) || (status >= 500 && status <= 599));
+}
+
+export function isSuccessfulStatus(status) {
+  return Number.isInteger(status) && status >= 200 && status <= 299;
+}
+
+export function isClientAbortError(error) {
+  if (!error) return false;
+  const message = String(error.message || '').toLowerCase();
+  const code = String(error.code || '').toUpperCase();
+  return code === 'ECONNRESET'
+    || code === 'ERR_STREAM_PREMATURE_CLOSE'
+    || code === 'ABORT_ERR'
+    || message.includes('client response closed')
+    || message.includes('aborted');
+}
+
 export function durationCheckpoint(results = [], count = 0) {
   const safeCount = Number.isInteger(count) ? count : 0;
   if (!safeCount || !Array.isArray(results) || !results.length) return 0;

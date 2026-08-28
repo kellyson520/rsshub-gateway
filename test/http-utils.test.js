@@ -342,6 +342,40 @@ test('HOTLINK_REFERERS and refererFor correctly identify hotlinking-protected up
   assert.ok(Object.isFrozen(HOTLINK_REFERERS));
 });
 
+test('isRetryableStatus, isSuccessfulStatus and isClientAbortError handle status codes and network disconnections', async () => {
+  const {
+    isRetryableStatus,
+    isSuccessfulStatus,
+    isClientAbortError,
+    RETRYABLE_STATUSES,
+    DEFAULT_BLOCKED_STATUSES,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(isRetryableStatus(429), true);
+  assert.equal(isRetryableStatus(503), true);
+  assert.equal(isRetryableStatus('500'), false);
+  assert.equal(isRetryableStatus(404), false);
+  assert.equal(isRetryableStatus(200), false);
+  assert.equal(isRetryableStatus(null), false);
+
+  assert.equal(isSuccessfulStatus(200), true);
+  assert.equal(isSuccessfulStatus(204), true);
+  assert.equal(isSuccessfulStatus('206'), false);
+  assert.equal(isSuccessfulStatus(302), false);
+  assert.equal(isSuccessfulStatus(500), false);
+
+  assert.equal(isClientAbortError(new Error('Premature close')), false);
+  assert.equal(isClientAbortError({ code: 'ECONNRESET' }), true);
+  assert.equal(isClientAbortError({ code: 'ERR_STREAM_PREMATURE_CLOSE' }), true);
+  assert.equal(isClientAbortError({ code: 'ABORT_ERR' }), true);
+  assert.equal(isClientAbortError(new Error('request was aborted')), true);
+  assert.equal(isClientAbortError(new Error('client response closed')), true);
+  assert.equal(isClientAbortError(null), false);
+
+  assert.ok(RETRYABLE_STATUSES.has(429));
+  assert.ok(DEFAULT_BLOCKED_STATUSES.has(403));
+});
+
 test('safeJsonParse parses valid json safely and returns fallback for corrupt payloads', async () => {
   const { safeJsonParse } = await import('../src/http-utils.js');
 

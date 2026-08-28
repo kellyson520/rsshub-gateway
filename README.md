@@ -356,6 +356,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `encode(value)`, `decode(value)`: High-performance Base64URL string serializers.
   - `routeMetadata(metadata)`: Route scope and source validation parser.
   - `DEFAULT_PROXY`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_ATTEMPTS`, `MAX_REDIRECTS_PER_ATTEMPT`: Upstream proxy and timeout foundations.
+  - `isRetryableStatus(status)`, `isSuccessfulStatus(status)`, `isClientAbortError(error)`: Status code predicates and client disconnection detectors.
   - `HOTLINK_REFERERS`, `refererFor(url)`: Anti-hotlinking CDN source referer resolution table.
   - `withoutCredentials(headers)`, `isAuthenticationRedirect(res)`, `isAuthenticationChallenge(res, url, cb)`: Security boundary credentials stripping and challenge detection.
   - `safeHost(url, fallback)`, `isHostOrSubdomain(hostname, base)`, `matchesHost(hostname, hosts)`, `parseHostList(value)`, `parseStatusList(value, fallback)`: Safe URL host normalizer, subdomain matchers, JSON/CSV host list and HTTP status code parser.
