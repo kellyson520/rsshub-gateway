@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import * as cheerio from 'cheerio';
+import sharp from 'sharp';
 
 export function safeJsonParse(value, fallback = null) {
   if (value === null || value === undefined) return fallback;
@@ -492,6 +493,33 @@ export function requestedImageVariantWidth(searchParams) {
   const width = Number(value);
   if (!IMAGE_VARIANT_WIDTHS.includes(width) || String(width) !== value) return { error: true };
   return { width };
+}
+
+export async function encodeWebp({ body, width, options = DEFAULT_WEBP_OPTIONS }) {
+  const image = sharp(body, { failOn: 'error' });
+  const metadata = await image.metadata();
+  if (metadata.pages && metadata.pages > 1) return body;
+  return image
+    .rotate()
+    .resize({ width, withoutEnlargement: true })
+    .webp(options)
+    .toBuffer();
+}
+
+export async function createImageVariant({ body, contentType, width, encoder = encodeWebp }) {
+  const normalizedContentType = normalizedImageContentType(contentType);
+  if (!IMAGE_VARIANT_WIDTHS.includes(Number(width))) throw unsupportedImageVariantWidthError();
+  if (!SUPPORTED_IMAGE_VARIANT_TYPES.has(normalizedContentType) || !Buffer.isBuffer(body) || body.length === 0) {
+    return originalImageResult(body, contentType);
+  }
+
+  try {
+    const variant = await encoder({ body, width: Number(width), options: DEFAULT_WEBP_OPTIONS });
+    if (!Buffer.isBuffer(variant) || variant.length >= body.length) return originalImageResult(body, contentType);
+    return { body: variant, contentType: 'image/webp', usedVariant: true };
+  } catch {
+    return originalImageResult(body, contentType);
+  }
 }
 
 export function imageVariantCacheUrl(target, width) {

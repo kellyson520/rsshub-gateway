@@ -387,6 +387,7 @@ All core gateway subsystems export pure functions, type predicates, serializatio
   - `promLabel(value)`, `sourceMetricName(source)`: Prometheus metrics and duration histogram label sanitizers.
   - `mapWithConcurrency(items, concurrency, worker)`, `durationCheckpoint(results, count)`: Concurrency-bounded streaming executor and latency percentile checkpoints.
   - `align64k(value)`, `ALIGN_64K`: 64 KiB boundary memory and byte-range slice aligners.
+  - `createImageVariant(opts)`, `encodeWebp(opts)`, `DEFAULT_WEBP_OPTIONS`, `IMAGE_VARIANT_WIDTHS`: High-performance WebP image downscaling and lossless compression engine with animated multi-page GIF bypass protection.
   - `benchmarkGallery(opts)`, `localGatewayUrl(url, hosts)`, `mediaUrls(html, baseUrl)`, `numericContentLength(res)`, `variantUrl(url, width)`: Gallery performance benchmark runner, byte savings metrics calculator, and local gateway target validator.
   - `ehviewerRankingTarget(period)`, `parseEhviewerRankingHtml(html, opts)`, `renderEhviewerRankingFeed(opts)`, `ehviewerGalleryPageUrls(html, url)`, `ehviewerImagePageUrls(html, url)`, `ehviewerFirstImagePageUrl(html, url)`, `EHVIEWER_RANKING_PERIODS`, `EHVIEWER_MAX_ITEMS`: E-Hentai gallery & ranking scraping pipeline, pagination extractor, and standard RSS 2.0 feed generator.
   - `loadCachedMedia(opts)`, `fetchCachedMedia(opts)`, `warmEhMedia(opts)`, `discoverEhGallery(opts)`: Pure cached media fetch pipelines, parallel media cache warmers, and resilient multi-page gallery discovery routines.

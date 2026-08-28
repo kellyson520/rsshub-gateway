@@ -143,6 +143,19 @@ test('requestedImageVariantWidth, isValidImageVariantWidth and isSupportedImageV
   assert.equal(isSupportedImageVariantType('text/plain'), false);
   assert.equal(isSupportedImageVariantType(null), false);
 
+  const { createImageVariant } = await import('../src/http-utils.js');
+  const dummyBuffer = Buffer.from('image bytes');
+  const mockEncoder = async ({ body }) => Buffer.from(body.slice(0, 4));
+  const res = await createImageVariant({
+    body: dummyBuffer,
+    contentType: 'image/jpeg',
+    width: 1920,
+    encoder: mockEncoder,
+  });
+  assert.equal(res.usedVariant, true);
+  assert.equal(res.contentType, 'image/webp');
+  assert.equal(res.body.length, 4);
+
   assert.ok(IMAGE_VARIANT_WIDTHS.includes(1920));
   assert.ok(SUPPORTED_IMAGE_VARIANT_TYPES.has('image/webp'));
 });
