@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
+import * as cheerio from 'cheerio';
 
 export function safeJsonParse(value, fallback = null) {
   if (value === null || value === undefined) return fallback;
@@ -566,6 +567,18 @@ export function variantUrl(original, width = DEFAULT_BENCHMARK_VARIANT_WIDTH) {
 export const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;
 export const EH_IMAGE_PATH = /^\/s\/[^/]+\/[^/]+(?:\/)?$/;
 
+export const EHVIEWER_RANKING_PERIODS = Object.freeze({
+  day: { query: '15', label: '昨日热度' },
+  month: { query: '13', label: '本月热度' },
+  year: { query: '12', label: '年度热度' },
+  all: { query: '11', label: '总热度' },
+});
+export const RANKING_PERIODS = EHVIEWER_RANKING_PERIODS;
+
+export const EHVIEWER_MAX_ITEMS = 50;
+export const EHVIEWER_MATCH_HOSTS = Object.freeze(['e-hentai.org', 'ehgt.org']);
+export const DEFAULT_EHVIEWER_UNAVAILABLE_MESSAGE = 'E-Hentai 内容暂时无法读取，请稍后重试或打开原始来源。';
+
 export function isEhentaiPage(value, pattern) {
   try {
     const parsed = new URL(value);
@@ -578,6 +591,115 @@ export function isEhentaiPage(value, pattern) {
 
 export function isEhImagePageTarget(value) {
   return isEhentaiPage(value, EH_IMAGE_PATH);
+}
+
+export function isEhGalleryUrl(value) {
+  return isEhentaiPage(value, EH_GALLERY_PATH);
+}
+
+export function ehviewerGalleryPageUrls(html, galleryUrl) {
+  const base = new URL(galleryUrl);
+  const result = [base.toString()];
+  const $ = cheerio.load(String(html || ''), { decodeEntities: false });
+  $('.gtb a[href]').each((_, element) => {
+    try {
+      const candidate = new URL($(element).attr('href'), base);
+      candidate.hash = '';
+      if (isEhGalleryUrl(candidate) && candidate.pathname === base.pathname) {
+        const value = candidate.toString();
+        if (!result.includes(value)) result.push(value);
+      }
+    } catch {
+      // Ignore malformed and cross-gallery pagination links.
+    }
+  });
+  return result;
+}
+
+export function ehviewerImagePageUrls(html, galleryUrl) {
+  const $ = cheerio.load(String(html || ''), { decodeEntities: false });
+  const result = [];
+  $('#gdt a[href]').each((_, element) => {
+    try {
+      const candidate = new URL($(element).attr('href'), galleryUrl);
+      candidate.hash = '';
+      if (isEhentaiPage(candidate, EH_IMAGE_PATH)) {
+        const value = candidate.toString();
+        if (!result.includes(value)) result.push(value);
+      }
+    } catch {
+      // Ignore malformed and cross-host links.
+    }
+  });
+  return result;
+}
+
+export function ehviewerFirstImagePageUrl(html, galleryUrl) {
+  if (!isEhGalleryUrl(galleryUrl)) return '';
+  return ehviewerImagePageUrls(html, galleryUrl)[0] || '';
+}
+
+export function ehviewerRankingTarget(period = 'day') {
+  const config = EHVIEWER_RANKING_PERIODS[period];
+  if (!config) throw new Error(`unknown ranking period: ${period}`);
+  return `https://e-hentai.org/toplist.php?tl=${config.query}`;
+}
+
+export function ehviewerPublicUrl(value, host, matchHosts = EHVIEWER_MATCH_HOSTS) {
+  try {
+    const url = new URL(value, 'https://e-hentai.org');
+    return matchesHost(url.hostname, matchHosts) && (url.hostname === host || url.hostname.endsWith(`.${host}`))
+      ? url.toString()
+      : '';
+  } catch {
+    return '';
+  }
+}
+
+export function parseEhviewerRankingHtml(html, { period = 'day' } = {}) {
+  if (!EHVIEWER_RANKING_PERIODS[period]) throw new Error(`unknown ranking period: ${period}`);
+  const $ = cheerio.load(String(html), { decodeEntities: false });
+  const items = [];
+  $('table.gltc tbody tr').each((_, element) => {
+    if (items.length >= EHVIEWER_MAX_ITEMS) return false;
+    const row = $(element);
+    const link = ehviewerPublicUrl(row.find('.glname a').first().attr('href'), 'e-hentai.org');
+    if (!link || !EH_GALLERY_PATH.test(new URL(link).pathname)) return;
+    const thumbnailImage = row.find('.glthumb img').first();
+    const title = row.find('.glname .glink').first().text().trim()
+      || thumbnailImage.attr('title')?.trim()
+      || thumbnailImage.attr('alt')?.trim()
+      || row.find('.glname a').first().text().trim();
+    if (!title) return;
+    const thumbnail = ehviewerPublicUrl(
+      thumbnailImage.attr('data-src') || thumbnailImage.attr('src'),
+      'ehgt.org',
+    );
+    const categories = row.find('.gt').map((__, category) => $(category).attr('title')?.replace(/^:/, '') || $(category).text().trim()).get().filter(Boolean);
+    const author = row.find('.glhide div a').first().text().trim();
+    const pageCount = row.find('.glhide div').map((__, value) => $(value).text().trim()).get().find((value) => /\bpages?\b/i.test(value)) || '';
+    const rank = row.children().first().find('p').first().text().trim();
+    const date = asDate(row.find('[id^="posted_"]').first().text());
+    items.push({ title, link, author, date, categories, thumbnail, rank, pageCount });
+  });
+  return { period, items };
+}
+
+export function renderEhviewerRankingFeed({ period = 'day', items = [] } = {}) {
+  const config = EHVIEWER_RANKING_PERIODS[period];
+  if (!config) throw new Error(`unknown ranking period: ${period}`);
+  const entries = items.slice(0, EHVIEWER_MAX_ITEMS).map((item) => {
+    const description = [
+      item.rank ? `<p>排名：${escapeXml(item.rank)}</p>` : '',
+      item.author ? `<p>作者：${escapeXml(item.author)}</p>` : '',
+      item.pageCount ? `<p>篇幅：${escapeXml(item.pageCount)}</p>` : '',
+      item.date ? `<p>发布时间：${escapeXml(item.date)}</p>` : '',
+      item.categories?.length ? `<p>分类：${escapeXml(item.categories.join(', '))}</p>` : '',
+      item.thumbnail ? `<p><img src="${escapeXml(item.thumbnail)}" alt="${escapeXml(item.title)}"></p>` : '',
+    ].join('');
+    return `<item><title>${escapeXml(item.title)}</title><link>${escapeXml(item.link)}</link><guid isPermaLink="true">${escapeXml(item.link)}</guid>${item.date ? `<pubDate>${escapeXml(item.date)}</pubDate>` : ''}<description>${cdata(description)}</description><content:encoded>${cdata(description)}</content:encoded></item>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>EhViewer ${escapeXml(config.label)}</title><link>${escapeXml(ehviewerRankingTarget(period))}</link><description>E-Hentai ${escapeXml(config.label)}</description>${entries}</channel></rss>`;
 }
 
 export function parseByteRange(value, size) {

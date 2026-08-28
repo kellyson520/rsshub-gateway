@@ -53,14 +53,69 @@ test('documentCacheKind maps e-hentai image pages to eh-image', () => {
 });
 
 test('isEhImagePageTarget, isEhentaiPage, EH_GALLERY_PATH, EH_IMAGE_PATH and imageVariantCacheUrl', async () => {
-  const { isEhImagePageTarget, isEhentaiPage, EH_GALLERY_PATH, EH_IMAGE_PATH, imageVariantCacheUrl } = await import('../src/http-utils.js');
+  const {
+    isEhImagePageTarget,
+    isEhentaiPage,
+    isEhGalleryUrl,
+    EH_GALLERY_PATH,
+    EH_IMAGE_PATH,
+    imageVariantCacheUrl,
+    EHVIEWER_RANKING_PERIODS,
+    EHVIEWER_MAX_ITEMS,
+    EHVIEWER_MATCH_HOSTS,
+    DEFAULT_EHVIEWER_UNAVAILABLE_MESSAGE,
+    ehviewerRankingTarget,
+    ehviewerGalleryPageUrls,
+    ehviewerImagePageUrls,
+    ehviewerFirstImagePageUrl,
+    ehviewerPublicUrl,
+    parseEhviewerRankingHtml,
+    renderEhviewerRankingFeed,
+  } = await import('../src/http-utils.js');
   assert.equal(isEhImagePageTarget('https://e-hentai.org/s/abc/123-1'), true);
   assert.equal(isEhImagePageTarget('https://e-hentai.org/g/123/'), false);
+  assert.equal(isEhGalleryUrl('https://e-hentai.org/g/123/456/'), true);
+  assert.equal(isEhGalleryUrl('https://e-hentai.org/s/123/456-1'), false);
   assert.equal(isEhentaiPage('https://e-hentai.org/g/123/456/', EH_GALLERY_PATH), true);
   assert.equal(isEhentaiPage('https://e-hentai.org/s/123/456-1', EH_IMAGE_PATH), true);
   assert.equal(isEhentaiPage('https://other.org/g/123/456/', EH_GALLERY_PATH), false);
   assert.equal(isEhentaiPage(null, EH_GALLERY_PATH), false);
   assert.equal(imageVariantCacheUrl('https://example.com/i.png', 1920), 'https://example.com/i.png#rsshub-gateway-v1-w1920');
+
+  assert.equal(EHVIEWER_MAX_ITEMS, 50);
+  assert.deepEqual(EHVIEWER_MATCH_HOSTS, ['e-hentai.org', 'ehgt.org']);
+  assert.equal(DEFAULT_EHVIEWER_UNAVAILABLE_MESSAGE.includes('E-Hentai'), true);
+  assert.equal(ehviewerRankingTarget('day'), 'https://e-hentai.org/toplist.php?tl=15');
+  assert.equal(ehviewerRankingTarget('month'), 'https://e-hentai.org/toplist.php?tl=13');
+
+  const html = `<div class="gtb"><a href="/g/123/abc/?p=1">2</a></div>
+    <div id="gdt"><a href="/s/first/123-1">1</a><a href="/s/second/123-2">2</a></div>`;
+  assert.deepEqual(ehviewerGalleryPageUrls(html, 'https://e-hentai.org/g/123/abc/'), [
+    'https://e-hentai.org/g/123/abc/',
+    'https://e-hentai.org/g/123/abc/?p=1',
+  ]);
+  assert.deepEqual(ehviewerImagePageUrls(html, 'https://e-hentai.org/g/123/abc/'), [
+    'https://e-hentai.org/s/first/123-1',
+    'https://e-hentai.org/s/second/123-2',
+  ]);
+  assert.equal(ehviewerFirstImagePageUrl(html, 'https://e-hentai.org/g/123/abc/'), 'https://e-hentai.org/s/first/123-1');
+  assert.equal(ehviewerPublicUrl('https://e-hentai.org/g/1/2', 'e-hentai.org'), 'https://e-hentai.org/g/1/2');
+  assert.equal(ehviewerPublicUrl('https://evil.com/g/1/2', 'e-hentai.org'), '');
+
+  const parsed = parseEhviewerRankingHtml(`
+    <table class="itg gltc"><tbody><tr class="gtr">
+      <td><p>#1</p></td>
+      <td class="gl2c"><div class="glthumb"><div><img data-src="https://ehgt.org/thumb.jpg" title="Item 1"></div></div></td>
+      <td class="gl3c glname"><a href="https://e-hentai.org/g/123/abc/"><div class="glink">Item 1</div></a></td>
+      <td class="gl4c glhide"><div><a>Author 1</a></div><div>10 pages</div></td>
+      <td><div id="posted_123">2026-08-08 12:00</div></td>
+    </tr></tbody></table>
+  `, { period: 'day' });
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.items[0].title, 'Item 1');
+  const feed = renderEhviewerRankingFeed(parsed);
+  assert.ok(feed.includes('<title>EhViewer 昨日热度</title>'));
+  assert.ok(feed.includes('Item 1'));
 });
 
 test('requestedImageVariantWidth, isValidImageVariantWidth and isSupportedImageVariantType validate widths and mime types', async () => {
