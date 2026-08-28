@@ -1022,6 +1022,174 @@ export class GatewayUpstreamError extends Error {
   }
 }
 
+export const DEFAULT_FAILURE_THRESHOLD = 3;
+export const DEFAULT_COOLDOWN_MS = 30_000;
+
+export const CIRCUIT_STATE_CLOSED = 'closed';
+export const CIRCUIT_STATE_OPEN = 'open';
+export const CIRCUIT_STATE_HALF_OPEN = 'half-open';
+
+export class CircuitBreaker {
+  constructor({ failureThreshold = DEFAULT_FAILURE_THRESHOLD, cooldownMs = DEFAULT_COOLDOWN_MS, now = () => Date.now() } = {}) {
+    this.failureThreshold = failureThreshold;
+    this.cooldownMs = cooldownMs;
+    this.now = now;
+    this.entries = new Map();
+  }
+
+  state(key) {
+    const entry = this.entries.get(key);
+    if (!entry) return CIRCUIT_STATE_CLOSED;
+    if (entry.state === CIRCUIT_STATE_OPEN && this.now() - entry.openedAt >= this.cooldownMs) return CIRCUIT_STATE_HALF_OPEN;
+    return entry.state;
+  }
+
+  canRequest(key) {
+    const entry = this.entries.get(key);
+    if (!entry || entry.state === CIRCUIT_STATE_CLOSED) return true;
+    if (entry.state === CIRCUIT_STATE_OPEN) {
+      if (this.now() - entry.openedAt < this.cooldownMs) return false;
+      entry.state = CIRCUIT_STATE_HALF_OPEN;
+      entry.probeInFlight = true;
+      return true;
+    }
+    return !entry.probeInFlight;
+  }
+
+  recordFailure(key) {
+    const entry = this.entries.get(key) || { state: CIRCUIT_STATE_CLOSED, failures: 0, openedAt: 0, probeInFlight: false };
+    entry.failures += 1;
+    entry.probeInFlight = false;
+    if (entry.state === CIRCUIT_STATE_HALF_OPEN || entry.failures >= this.failureThreshold) {
+      entry.state = CIRCUIT_STATE_OPEN;
+      entry.openedAt = this.now();
+    }
+    this.entries.set(key, entry);
+  }
+
+  recordSuccess(key) {
+    this.entries.delete(key);
+  }
+
+  openKeys() {
+    return [...this.entries.entries()]
+      .filter(([key, entry]) => this.state(key) === CIRCUIT_STATE_OPEN)
+      .map(([key]) => key)
+      .sort();
+  }
+
+  clearAll() {
+    this.entries.clear();
+  }
+
+  stats() {
+    const byState = { [CIRCUIT_STATE_CLOSED]: 0, [CIRCUIT_STATE_OPEN]: 0, [CIRCUIT_STATE_HALF_OPEN]: 0 };
+    for (const [key, entry] of this.entries.entries()) {
+      byState[this.state(key)] += 1;
+    }
+    return { byState, open: byState[CIRCUIT_STATE_OPEN], openKeys: this.openKeys() };
+  }
+}
+
+export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
+export const DEFAULT_SIGNALS = Object.freeze(['SIGTERM', 'SIGINT']);
+
+export function stopAcceptingServers(servers = []) {
+  for (const server of servers) {
+    if (!server) continue;
+    try {
+      server.close?.();
+    } catch {
+      // The server may already be closed; draining continues regardless.
+    }
+    if (typeof server.closeIdleConnections === 'function') {
+      server.closeIdleConnections();
+    }
+  }
+}
+
+export function drainServers(servers = []) {
+  return Promise.all(servers.map((server) => new Promise((resolve) => {
+    if (!server || typeof server.close !== 'function' || server.listening === false) {
+      resolve();
+      return;
+    }
+    server.once('close', resolve);
+  })));
+}
+
+export function installGracefulShutdown({
+  servers = [],
+  timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  signals = DEFAULT_SIGNALS,
+  logger = { info() {}, warn() {}, error() {} },
+  exitImpl = (code) => process.exit(code),
+  setTimeoutImpl = setTimeout,
+  clearTimeoutImpl = clearTimeout,
+} = {}) {
+  let draining = false;
+
+  function shutdown(signal = 'SIGTERM') {
+    if (draining) return false;
+    draining = true;
+    logger?.info?.('shutdown_draining', { signal, timeoutMs });
+    stopAcceptingServers(servers);
+    const force = setTimeoutImpl(() => {
+      logger?.warn?.('shutdown_timeout', { timeoutMs });
+      exitImpl(1);
+    }, timeoutMs);
+    if (force?.unref) force.unref();
+    void drainServers(servers).then(() => {
+      clearTimeoutImpl(force);
+      logger?.info?.('shutdown_drained');
+      exitImpl(0);
+    });
+    return true;
+  }
+
+  const handlers = new Map();
+  for (const signal of signals) {
+    const handler = () => shutdown(signal);
+    process.on(signal, handler);
+    handlers.set(signal, handler);
+  }
+
+  return {
+    isDraining: () => draining,
+    serverCount: () => servers.filter(Boolean).length,
+    shutdown,
+    dispose: () => {
+      for (const [signal, handler] of handlers) {
+        process.removeListener(signal, handler);
+      }
+      handlers.clear();
+    },
+  };
+}
+
+export const DEFAULT_FETCHD_BASE_URL = 'http://127.0.0.1:7899';
+export const DEFAULT_FETCHD_TIMEOUT_MS = 20_000;
+export const MAX_FETCHD_TIMEOUT_MS = 65_000;
+export const FETCHD_TIMEOUT_SLACK_MS = 5_000;
+
+export async function fetchdJson(fetchdFetch, url, {
+  method = 'GET',
+  headers = {},
+  body,
+  timeout = 20_000,
+} = {}) {
+  const response = await fetchdFetch(url, { method, headers, body, timeout });
+  if (!response.ok) {
+    throw new GatewayUpstreamError(`upstream returned ${response.status}`, {
+      code: 'UPSTREAM_RETRYABLE_STATUS',
+      source: new URL(url).hostname,
+      status: response.status,
+      attempts: 1,
+    });
+  }
+  return response.json();
+}
+
 export function constantTimeEquals(left, right) {
   try {
     const leftBuf = Buffer.isBuffer(left) ? left : Buffer.from(String(left ?? ''));

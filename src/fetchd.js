@@ -1,9 +1,20 @@
-import { GatewayUpstreamError } from './upstream-errors.js';
+import {
+  DEFAULT_FETCHD_BASE_URL,
+  DEFAULT_FETCHD_TIMEOUT_MS,
+  FETCHD_TIMEOUT_SLACK_MS,
+  fetchdJson,
+  GatewayUpstreamError,
+  MAX_FETCHD_TIMEOUT_MS,
+} from './http-utils.js';
 
-export const DEFAULT_BASE_URL = process.env.IWARA_FETCHD_URL || 'http://127.0.0.1:7899';
-export const DEFAULT_FETCHD_TIMEOUT_MS = 20_000;
-export const MAX_FETCHD_TIMEOUT_MS = 65_000;
-export const FETCHD_TIMEOUT_SLACK_MS = 5_000;
+export const DEFAULT_BASE_URL = process.env.IWARA_FETCHD_URL || DEFAULT_FETCHD_BASE_URL;
+
+export {
+  DEFAULT_FETCHD_TIMEOUT_MS,
+  MAX_FETCHD_TIMEOUT_MS,
+  FETCHD_TIMEOUT_SLACK_MS,
+  fetchdJson,
+};
 
 export function createFetchdClient({
   baseUrl = DEFAULT_BASE_URL,
@@ -52,22 +63,4 @@ export function createFetchdClient({
       text: async () => bodyBuffer.toString('utf8'),
     };
   };
-}
-
-export async function fetchdJson(fetchdFetch, url, {
-  method = 'GET',
-  headers = {},
-  body,
-  timeout = 20_000,
-} = {}) {
-  const response = await fetchdFetch(url, { method, headers, body, timeout });
-  if (!response.ok) {
-    throw new GatewayUpstreamError(`upstream returned ${response.status}`, {
-      code: 'UPSTREAM_RETRYABLE_STATUS',
-      source: new URL(url).hostname,
-      status: response.status,
-      attempts: 1,
-    });
-  }
-  return response.json();
 }

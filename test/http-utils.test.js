@@ -1109,6 +1109,72 @@ test('parseRetryAfter, upstreamRetryDelay, responseWithLease and upstream consta
   assert.equal(responseWithLease(nullLeaseRes, null), nullLeaseRes);
 });
 
+test('CircuitBreaker, graceful shutdown helpers and fetchdJson execute resilience workflows', async () => {
+  const {
+    CircuitBreaker,
+    CIRCUIT_STATE_CLOSED,
+    CIRCUIT_STATE_OPEN,
+    CIRCUIT_STATE_HALF_OPEN,
+    stopAcceptingServers,
+    drainServers,
+    installGracefulShutdown,
+    fetchdJson,
+    DEFAULT_FETCHD_BASE_URL,
+    DEFAULT_FETCHD_TIMEOUT_MS,
+    MAX_FETCHD_TIMEOUT_MS,
+    FETCHD_TIMEOUT_SLACK_MS,
+  } = await import('../src/http-utils.js');
+
+  let now = 1000;
+  const cb = new CircuitBreaker({ failureThreshold: 2, cooldownMs: 5000, now: () => now });
+  assert.equal(cb.state('iwara'), CIRCUIT_STATE_CLOSED);
+  assert.equal(cb.canRequest('iwara'), true);
+
+  cb.recordFailure('iwara');
+  assert.equal(cb.state('iwara'), CIRCUIT_STATE_CLOSED);
+  cb.recordFailure('iwara');
+  assert.equal(cb.state('iwara'), CIRCUIT_STATE_OPEN);
+  assert.equal(cb.canRequest('iwara'), false);
+
+  now += 5001;
+  assert.equal(cb.state('iwara'), CIRCUIT_STATE_HALF_OPEN);
+  assert.equal(cb.canRequest('iwara'), true);
+  cb.recordSuccess('iwara');
+  assert.equal(cb.state('iwara'), CIRCUIT_STATE_CLOSED);
+
+  assert.equal(DEFAULT_FETCHD_BASE_URL, 'http://127.0.0.1:7899');
+  assert.equal(DEFAULT_FETCHD_TIMEOUT_MS, 20000);
+  assert.equal(MAX_FETCHD_TIMEOUT_MS, 65000);
+  assert.equal(FETCHD_TIMEOUT_SLACK_MS, 5000);
+
+  const fakeFetchd = async (url) => ({
+    ok: true,
+    json: async () => ({ ok: true, data: 'test' }),
+  });
+  const json = await fetchdJson(fakeFetchd, 'https://example.com/data');
+  assert.deepEqual(json, { ok: true, data: 'test' });
+
+  // Test server drain and graceful shutdown setup
+  let closed = false;
+  const fakeServer = {
+    close: () => { closed = true; },
+    closeIdleConnections: () => {},
+    listening: false,
+  };
+  stopAcceptingServers([fakeServer]);
+  assert.equal(closed, true);
+  await drainServers([fakeServer]);
+
+  const shutdownMgr = installGracefulShutdown({
+    servers: [fakeServer],
+    logger: null,
+    exitImpl: () => {},
+  });
+  assert.equal(shutdownMgr.serverCount(), 1);
+  assert.equal(shutdownMgr.isDraining(), false);
+  shutdownMgr.dispose();
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 
