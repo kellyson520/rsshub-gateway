@@ -450,13 +450,37 @@ export const IMAGE_VARIANT_WIDTHS = Object.freeze([1280, 1920, 2560]);
 export const SUPPORTED_IMAGE_VARIANT_TYPES = Object.freeze(new Set(['image/jpeg', 'image/png', 'image/webp']));
 export const IMAGE_VARIANT_CACHE_VERSION = 'v1';
 
+export const DEFAULT_WEBP_OPTIONS = Object.freeze({
+  quality: 92,
+  nearLossless: true,
+  effort: 4,
+  smartSubsample: false,
+});
+
+export function normalizedImageContentType(contentType) {
+  return String(contentType || '').split(';', 1)[0].trim().toLowerCase();
+}
+
+export function originalImageResult(body, contentType) {
+  return {
+    body,
+    contentType,
+    usedVariant: false,
+  };
+}
+
+export function unsupportedImageVariantWidthError() {
+  const error = new Error('unsupported image variant width');
+  error.code = 'IMAGE_VARIANT_UNSUPPORTED_WIDTH';
+  return error;
+}
+
 export function isValidImageVariantWidth(width) {
   return IMAGE_VARIANT_WIDTHS.includes(Number(width));
 }
 
 export function isSupportedImageVariantType(contentType) {
-  const normalized = String(contentType || '').split(';', 1)[0].trim().toLowerCase();
-  return SUPPORTED_IMAGE_VARIANT_TYPES.has(normalized);
+  return SUPPORTED_IMAGE_VARIANT_TYPES.has(normalizedImageContentType(contentType));
 }
 
 export function requestedImageVariantWidth(searchParams) {
@@ -492,6 +516,50 @@ export function numericStyle(style, property, fallback) {
   const match = String(style || '').match(new RegExp(`${property}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px`, 'i'));
   const value = Number(match?.[1]);
   return Number.isFinite(value) ? clamp(Math.round(value), 1, 5000) : fallback;
+}
+
+export const BENCHMARK_LOCAL_HOSTS = Object.freeze(new Set(['127.0.0.1', 'localhost', '[::1]']));
+export const DEFAULT_MEDIA_CONCURRENCY = 8;
+export const DEFAULT_BENCHMARK_VARIANT_WIDTH = 1920;
+
+export function localGatewayUrl(value, localHosts = BENCHMARK_LOCAL_HOSTS) {
+  let target;
+  try {
+    target = new URL(value);
+  } catch {
+    target = null;
+  }
+  if (!target || !['http:', 'https:'].includes(target.protocol) || !localHosts.has(target.hostname)
+    || target.username || target.password || !target.pathname.startsWith('/_gateway/item/')) {
+    const error = new Error('a local gateway item URL is required');
+    error.code = 'BENCHMARK_LOCAL_GATEWAY_REQUIRED';
+    throw error;
+  }
+  return target;
+}
+
+export function mediaUrls(html, baseUrl) {
+  const urls = new Set();
+  for (const match of String(html || '').matchAll(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)) {
+    try {
+      const target = new URL(match[1], baseUrl);
+      if (target.origin === baseUrl.origin && target.pathname.startsWith('/_gateway/media/')) urls.add(target.toString());
+    } catch {
+      // Ignore malformed or external markup.
+    }
+  }
+  return [...urls];
+}
+
+export function numericContentLength(response) {
+  if (!response || !response.headers) return 0;
+  return nonNegativeInteger(response.headers.get ? response.headers.get('content-length') : response.headers['content-length'], 0);
+}
+
+export function variantUrl(original, width = DEFAULT_BENCHMARK_VARIANT_WIDTH) {
+  const target = new URL(original);
+  target.searchParams.set('w', String(width));
+  return target.toString();
 }
 
 export const EH_GALLERY_PATH = /^\/g\/[^/]+\/[^/]+\/?$/;

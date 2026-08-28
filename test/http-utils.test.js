@@ -937,6 +937,54 @@ test('cache helpers and download session record validators normalize and validat
   assert.equal(CHUNK_STATUSES.has('done'), true);
 });
 
+test('image variant helpers and gallery benchmark url extractors parse and validate targets safely', async () => {
+  const {
+    normalizedImageContentType,
+    originalImageResult,
+    unsupportedImageVariantWidthError,
+    DEFAULT_WEBP_OPTIONS,
+    localGatewayUrl,
+    mediaUrls,
+    numericContentLength,
+    variantUrl,
+    BENCHMARK_LOCAL_HOSTS,
+  } = await import('../src/http-utils.js');
+
+  assert.equal(normalizedImageContentType('image/jpeg; charset=utf-8'), 'image/jpeg');
+  assert.equal(normalizedImageContentType('IMAGE/PNG'), 'image/png');
+  assert.equal(normalizedImageContentType(''), '');
+
+  const orig = originalImageResult(Buffer.from('test'), 'image/png');
+  assert.deepEqual(orig, {
+    body: Buffer.from('test'),
+    contentType: 'image/png',
+    usedVariant: false,
+  });
+
+  const widthErr = unsupportedImageVariantWidthError();
+  assert.equal(widthErr.code, 'IMAGE_VARIANT_UNSUPPORTED_WIDTH');
+
+  assert.equal(DEFAULT_WEBP_OPTIONS.quality, 92);
+  assert.equal(DEFAULT_WEBP_OPTIONS.nearLossless, true);
+
+  const localItem = localGatewayUrl('http://127.0.0.1:1300/_gateway/item/eyJ1cmwiOiJodHRwczovL2V4YW1wbGUuY29tIn0');
+  assert.equal(localItem.hostname, '127.0.0.1');
+  assert.throws(() => localGatewayUrl('http://attacker.com/_gateway/item/123'), /local gateway item URL is required/);
+  assert.throws(() => localGatewayUrl('http://127.0.0.1:1300/other/path'), /local gateway item URL is required/);
+
+  const html = '<p><img src="/_gateway/media/abc"><img src="https://other.com/media/def"><img src="/_gateway/media/abc"></p>';
+  const base = new URL('http://127.0.0.1:1300/_gateway/item/123');
+  const urls = mediaUrls(html, base);
+  assert.deepEqual(urls, ['http://127.0.0.1:1300/_gateway/media/abc']);
+
+  assert.equal(numericContentLength({ headers: { 'content-length': '2048' } }), 2048);
+  assert.equal(numericContentLength({ headers: new Headers({ 'content-length': '4096' }) }), 4096);
+  assert.equal(numericContentLength(null), 0);
+
+  assert.equal(variantUrl('http://127.0.0.1:1300/_gateway/media/abc', 1920), 'http://127.0.0.1:1300/_gateway/media/abc?w=1920');
+  assert.equal(BENCHMARK_LOCAL_HOSTS.has('127.0.0.1'), true);
+});
+
 test('tileStyle, tileImage and EH_METADATA_LABELS format thumbnail sprite tiles and localize metadata labels', async () => {
   const { tileStyle, tileImage, EH_METADATA_LABELS } = await import('../src/http-utils.js');
 

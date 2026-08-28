@@ -1,8 +1,14 @@
-import { durationCheckpoint, mapWithConcurrency, nonNegativeInteger } from './http-utils.js';
-
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
-const MEDIA_CONCURRENCY = 8;
-const DEFAULT_BENCHMARK_VARIANT_WIDTH = 1920;
+import {
+  BENCHMARK_LOCAL_HOSTS as LOCAL_HOSTS,
+  DEFAULT_BENCHMARK_VARIANT_WIDTH,
+  DEFAULT_MEDIA_CONCURRENCY as MEDIA_CONCURRENCY,
+  durationCheckpoint,
+  localGatewayUrl,
+  mapWithConcurrency,
+  mediaUrls,
+  numericContentLength,
+  variantUrl,
+} from './http-utils.js';
 
 export {
   LOCAL_HOSTS,
@@ -15,45 +21,6 @@ export {
   durationCheckpoint,
   variantUrl,
 };
-
-function localGatewayUrl(value) {
-  let target;
-  try {
-    target = new URL(value);
-  } catch {
-    target = null;
-  }
-  if (!target || !['http:', 'https:'].includes(target.protocol) || !LOCAL_HOSTS.has(target.hostname)
-    || target.username || target.password || !target.pathname.startsWith('/_gateway/item/')) {
-    const error = new Error('a local gateway item URL is required');
-    error.code = 'BENCHMARK_LOCAL_GATEWAY_REQUIRED';
-    throw error;
-  }
-  return target;
-}
-
-function mediaUrls(html, baseUrl) {
-  const urls = new Set();
-  for (const match of String(html || '').matchAll(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)) {
-    try {
-      const target = new URL(match[1], baseUrl);
-      if (target.origin === baseUrl.origin && target.pathname.startsWith('/_gateway/media/')) urls.add(target.toString());
-    } catch {
-      // Ignore malformed or external markup.
-    }
-  }
-  return [...urls];
-}
-
-function numericContentLength(response) {
-  return nonNegativeInteger(response.headers.get('content-length'), 0);
-}
-
-function variantUrl(original, width = DEFAULT_BENCHMARK_VARIANT_WIDTH) {
-  const target = new URL(original);
-  target.searchParams.set('w', String(width));
-  return target.toString();
-}
 
 export async function benchmarkGallery({ gatewayUrl, fetchImpl = fetch, now = () => Date.now() } = {}) {
   const itemUrl = localGatewayUrl(gatewayUrl);

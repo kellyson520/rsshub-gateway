@@ -1,41 +1,25 @@
 import sharp from 'sharp';
 import {
+  DEFAULT_WEBP_OPTIONS as WEBP_OPTIONS,
   IMAGE_VARIANT_WIDTHS,
   isSupportedImageVariantType,
   isValidImageVariantWidth,
+  normalizedImageContentType as normalizedType,
+  originalImageResult as originalResult,
   SUPPORTED_IMAGE_VARIANT_TYPES as SUPPORTED_TYPES,
+  unsupportedImageVariantWidthError as unsupportedWidthError,
 } from './http-utils.js';
 
 export {
   IMAGE_VARIANT_WIDTHS,
   isSupportedImageVariantType,
   isValidImageVariantWidth,
+  SUPPORTED_TYPES,
+  WEBP_OPTIONS,
+  normalizedType,
+  originalResult,
+  unsupportedWidthError,
 };
-
-const WEBP_OPTIONS = Object.freeze({
-  quality: 92,
-  nearLossless: true,
-  effort: 4,
-  smartSubsample: false,
-});
-
-function originalResult(body, contentType) {
-  return {
-    body,
-    contentType,
-    usedVariant: false,
-  };
-}
-
-function unsupportedWidthError() {
-  const error = new Error('unsupported image variant width');
-  error.code = 'IMAGE_VARIANT_UNSUPPORTED_WIDTH';
-  return error;
-}
-
-function normalizedType(contentType) {
-  return String(contentType || '').split(';', 1)[0].trim().toLowerCase();
-}
 
 async function encodeWebp({ body, width, options }) {
   const image = sharp(body, { failOn: 'error' });
@@ -63,11 +47,3 @@ export async function createImageVariant({ body, contentType, width, encoder = e
     return originalResult(body, contentType);
   }
 }
-
-export {
-  SUPPORTED_TYPES,
-  WEBP_OPTIONS,
-  normalizedType,
-  originalResult,
-  unsupportedWidthError,
-};
