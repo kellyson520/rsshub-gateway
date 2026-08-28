@@ -6870,6 +6870,103 @@ export async function discoverEhGallery({
   };
 }
 
+export async function resolveForegroundEhPage({
+  adapter,
+  imageUrl,
+  pageNumber,
+  fetchDocument,
+  baseUrl,
+  secret,
+  signedTargetMetadata,
+  budgetMs,
+}) {
+  const operation = (async () => {
+    const remote = await fetchDocument(adapter.readerTarget(imageUrl), {
+      galleryShard: pageNumber - 1,
+      priority: 'foreground',
+      timeout: budgetMs,
+    }, 'html');
+    const body = await readLimited(remote);
+    if (!remote.ok || !(remote.headers.get('content-type') || '').includes('html')) return null;
+    const page = extractEhImagePage({
+      url: imageUrl,
+      html: body,
+      baseUrl,
+      secret,
+      pageNumber,
+      signedTargetMetadata,
+    });
+    return page ? { ...page, detailTarget: imageUrl } : null;
+  })();
+  void operation.catch(() => {});
+  const result = await withForegroundDeadline(operation, budgetMs);
+  return result.timedOut || !result.value ? null : result.value;
+}
+
+export async function prefetchEhGallery({
+  adapter,
+  target,
+  initialHtml,
+  fetchExternal,
+  baseUrl,
+  secret,
+  concurrency,
+  maxPages,
+  onPage,
+  discovery: providedDiscovery,
+}) {
+  const discovery = providedDiscovery || await discoverEhGallery({
+    adapter,
+    target,
+    initialHtml,
+    fetchExternal,
+    concurrency,
+    maxPages,
+  });
+  const failures = [...discovery.failures];
+  const imageResults = await mapWithConcurrency(discovery.selectedImageUrls, concurrency, async (imageUrl, index) => {
+    const pageNumber = index + 1;
+    try {
+      const remote = await fetchExternal(adapter.readerTarget(imageUrl), { galleryShard: index });
+      const body = await readLimited(remote);
+      const contentType = remote.headers.get('content-type') || '';
+      if (!remote.ok || !contentType.includes('html')) {
+        return { page: null, failure: { pageNumber, message: failureMessage('image', pageNumber) }, status: remote.status };
+      }
+      const page = extractEhImagePage({ url: imageUrl, html: body, baseUrl, secret, pageNumber });
+      if (page) {
+        try {
+          onPage?.(page);
+        } catch {
+          // Background warming must not affect gallery parsing.
+        }
+      }
+      return page
+        ? { page, failure: null, status: remote.status }
+        : { page: null, failure: { pageNumber, message: failureMessage('image', pageNumber) }, status: remote.status };
+    } catch {
+      return { page: null, failure: { pageNumber, message: failureMessage('image', pageNumber) }, status: 502 };
+    }
+  });
+
+  const pages = [];
+  let status = discovery.status;
+  for (const result of imageResults) {
+    if (result.page) pages.push(result.page);
+    if (result.failure) failures.push(result.failure);
+    if (!result.page && result.status && result.status >= 400) status = result.status;
+  }
+  pages.sort((left, right) => left.pageNumber - right.pageNumber);
+  return {
+    title: pages[0]?.title || discovery.title || 'E-Hentai 画廊',
+    pages,
+    failures,
+    totalPages: discovery.totalPages,
+    truncated: discovery.truncated,
+    status,
+  };
+}
+
 export const DEFAULT_SESSION_AFFINITY_VERSION = 1;
 export const DEFAULT_SESSION_AFFINITY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 
