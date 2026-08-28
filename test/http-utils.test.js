@@ -712,6 +712,20 @@ test('failureMessage and routeBucket provide degradation messaging and route cla
   assert.equal(routeBucket(null), 'feed');
 });
 
+test('mediaSrcset and numericStyle construct responsive image candidate sets and clamp CSS pixel styles', async () => {
+  const { mediaSrcset, numericStyle } = await import('../src/http-utils.js');
+
+  const srcset = mediaSrcset('https://example.com/cover.jpg', [1280, 1920]);
+  assert.equal(srcset, 'https://example.com/cover.jpg?w=1280 1280w, https://example.com/cover.jpg?w=1920 1920w');
+  assert.equal(mediaSrcset(''), '');
+  assert.equal(mediaSrcset(null), '');
+
+  assert.equal(numericStyle('width: 200px; height: 100px', 'width', 50), 200);
+  assert.equal(numericStyle('width: 6000px', 'width', 50), 5000);
+  assert.equal(numericStyle('width: -10px', 'width', 50), 1);
+  assert.equal(numericStyle('color: red', 'width', 50), 50);
+});
+
 test('compilePattern, normalizeRoute, matchSegments and sidecarUrl provide route pattern matching and sidecar url resolution', async () => {
   const {
     compilePattern,

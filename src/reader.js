@@ -3,7 +3,14 @@ import sanitizeHtml from 'sanitize-html';
 import { createMediaSignedTarget, createSignedTarget, isAllowedTarget } from './signed-target.js';
 import { IMAGE_VARIANT_WIDTHS } from './image-variants.js';
 import { EH_GALLERY_PATH, EH_IMAGE_PATH } from './adapters/ehviewer.js';
-import { clamp, cleanText, escapeHtml, nonNegativeInteger } from './http-utils.js';
+import {
+  clamp,
+  cleanText,
+  escapeHtml,
+  mediaSrcset,
+  nonNegativeInteger,
+  numericStyle,
+} from './http-utils.js';
 
 const DEFAULT_EH_IMAGE_PRELOAD_COUNT = 1;
 const IMAGE_SIZES = '(min-width:1120px) 1120px, 100vw';
@@ -73,18 +80,6 @@ function gatewayUrl(baseUrl, kind, value, sourceUrl, secret, signedTargetMetadat
   }
 }
 
-function mediaSrcset(media) {
-  try {
-    return IMAGE_VARIANT_WIDTHS.map((width) => {
-      const variant = new URL(media);
-      variant.searchParams.set('w', String(width));
-      return `${variant.toString()} ${width}w`;
-    }).join(', ');
-  } catch {
-    return '';
-  }
-}
-
 function renderDocument(title, content, preloadImages = []) {
   const preloads = [...new Map(preloadImages.filter(Boolean).map((value) => {
     const image = typeof value === 'string' ? { url: value } : value;
@@ -112,12 +107,6 @@ export { cleanText };
 export function extractEhGalleryTitle({ url, html }) {
   const $ = cheerio.load(String(html || ''), { decodeEntities: false });
   return cleanText($('#gn').first().text()) || cleanText($('title').first().text()) || url;
-}
-
-function numericStyle(style, property, fallback) {
-  const match = String(style || '').match(new RegExp(`${property}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px`, 'i'));
-  const value = Number(match?.[1]);
-  return Number.isFinite(value) ? clamp(Math.round(value), 1, 5000) : fallback;
 }
 
 function parseTile(style, sourceUrl, baseUrl, secret, signedTargetMetadata) {

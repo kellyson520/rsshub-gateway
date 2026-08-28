@@ -382,6 +382,26 @@ export function imageVariantCacheUrl(target, width) {
   return cacheUrl.toString();
 }
 
+export function mediaSrcset(media, widths = IMAGE_VARIANT_WIDTHS) {
+  if (!media || typeof media !== 'string') return '';
+  try {
+    const list = Array.isArray(widths) ? widths : IMAGE_VARIANT_WIDTHS;
+    return list.map((width) => {
+      const variant = new URL(media);
+      variant.searchParams.set('w', String(width));
+      return `${variant.toString()} ${width}w`;
+    }).join(', ');
+  } catch {
+    return '';
+  }
+}
+
+export function numericStyle(style, property, fallback) {
+  const match = String(style || '').match(new RegExp(`${property}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px`, 'i'));
+  const value = Number(match?.[1]);
+  return Number.isFinite(value) ? clamp(Math.round(value), 1, 5000) : fallback;
+}
+
 export function isEhImagePageTarget(value) {
   try {
     const target = new URL(value);
