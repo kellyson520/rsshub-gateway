@@ -168,6 +168,7 @@ export function createGatewayServer(options = {}) {
       probeTargets: egressProbeTargets,
       probeTimeoutMs: egressProbeTimeoutMs,
       probeCacheMs: egressProbeCacheMs,
+      ProxyAgentImpl: ProxyAgent,
       onEvent: (event) => {
         if (['refresh', 'degraded', 'empty'].includes(event.state)) {
           logger.info('mihomo_egress', { state: event.state, lanes: event.lanes });

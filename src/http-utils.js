@@ -2857,7 +2857,7 @@ export function createMihomoEgressAdapter({
   probeCacheMs = DEFAULT_EGRESS_PROBE_CACHE_MS,
   now = () => Date.now(),
   onEvent,
-  ProxyAgentImpl,
+  ProxyAgentImpl = ProxyAgent,
 } = {}) {
   const Agent = ProxyAgentImpl;
   const controller = String(controllerUrl).replace(/\/$/, '');
