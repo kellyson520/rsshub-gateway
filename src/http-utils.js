@@ -11,6 +11,7 @@ import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:z
 import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import sharp from 'sharp';
+import { ProxyAgent } from 'undici';
 
 export function safeJsonParse(value, fallback = null) {
   if (value === null || value === undefined) return fallback;
