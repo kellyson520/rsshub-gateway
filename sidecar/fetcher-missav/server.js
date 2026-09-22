@@ -18,7 +18,9 @@ async function main() {
     fetchHtml: async (url) => {
       const rendered = await renderClient.fetchRenderedHtml(url, { timeoutMs: 35_000 });
       if (rendered) {
-        return { ok: rendered.status >= 200 && rendered.status < 300, status: rendered.status, text: async () => rendered.html };
+        const hasContent = !rendered.html.includes('Just a moment...') && !rendered.html.includes('Attention Required');
+        const ok = (rendered.status >= 200 && rendered.status < 300) || hasContent;
+        return { ok, status: ok ? 200 : rendered.status, text: async () => rendered.html };
       }
       // 渲染服务配置但失败时直接报错（curl_cffi 无法渲染客户端页面，回退只会白等）
       if (process.env.GATEWAY_BROWSER_RENDER_URL) {

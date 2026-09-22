@@ -1,6 +1,7 @@
 import { fetchdJson } from '../fetchd.js';
 import { createUpstreamClient } from '../upstream.js';
 import { createBrowserFetchClient } from '../browser-fetch.js';
+import { createBrowserRenderClient } from '../browser-render.js';
 import { isAllowedTarget } from '../signed-target.js';
 import { createLogger } from './logger.js';
 import {
@@ -30,5 +31,6 @@ export function createRequestService(options = {}) {
     ...options,
     createUpstreamClientImpl: options.client ? undefined : (opts) => createUpstreamClient(opts),
     createBrowserFetchClientImpl: options.browserFetch ? undefined : () => createBrowserFetchClient(),
+    createBrowserRenderClientImpl: options.browserRender ? undefined : () => (process.env.GATEWAY_BROWSER_RENDER_URL ? createBrowserRenderClient() : null),
   });
 }

@@ -101,3 +101,36 @@ test('exports DEFAULT_BROWSER_FETCH_HOSTS, BROWSER_FETCH_HOSTS, safeHost and bro
   assert.equal(browserFetchHost('https://example.com/page'), false);
   assert.equal(browserFetchHost('invalid-url'), false);
 });
+
+test('request-service falls back to browserRender when browserFetch receives 403 challenge', async () => {
+  let browserRenderCalled = false;
+  const service = createRequestService({
+    browserFetch: {
+      fetch: async () => ({
+        ok: false,
+        status: 403,
+        headers: new Headers({ 'content-type': 'text/html' }),
+        text: async () => 'Just a moment...',
+      }),
+      fetchdFetch: async () => ({ ok: true }),
+      close: () => {},
+    },
+    browserRender: {
+      fetchRenderedHtml: async (url) => {
+        browserRenderCalled = true;
+        return {
+          status: 200,
+          html: '<html><head><title>SNOS-299 Jable</title></head><body>video content</body></html>',
+          finalUrl: url,
+        };
+      },
+    },
+  });
+
+  const res = await service.fetchExternal('https://jable.tv/videos/snos-299/', {});
+  assert.equal(browserRenderCalled, true);
+  assert.equal(res.status, 200);
+  assert.equal(res.ok, true);
+  const text = await res.text();
+  assert.ok(text.includes('SNOS-299 Jable'));
+});

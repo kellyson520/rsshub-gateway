@@ -52,6 +52,7 @@ services:
       GATEWAY_SIDECAR_GGJAV: "true"
       GATEWAY_SIDECAR_AIRAV: "true"
       GATEWAY_BROWSER_RENDER: "true"
+      GATEWAY_BROWSER_RENDER_URL: "http://127.0.0.1:8004"
       GATEWAY_SIDECAR_MISSAV: "true"
       GATEWAY_SIDECAR_JABLE: "true"
       GATEWAY_SIDECAR_JAVBUS: "true"
@@ -74,6 +75,8 @@ services:
       - ./config/sources.json:/app/config/sources.json:ro
       - ./secrets/gateway_secret:/run/secrets/gateway_secret:ro
       - ./gateway-routes.yaml:/app/gateway-routes.yaml:ro
+      - ./src:/app/src
+      - ./browser-render:/app/browser-render
       - ./sidecar:/app/sidecar
       - ./docker/entrypoint.sh:/entrypoint.sh:ro
     networks:

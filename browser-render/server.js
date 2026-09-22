@@ -26,6 +26,7 @@ async function launch() {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-extensions',
+      '--disable-blink-features=AutomationControlled',
       '--lang=zh-CN',
       ...(RENDER_PROXY ? [`--proxy-server=${RENDER_PROXY}`] : []),
     ],
@@ -54,7 +55,11 @@ async function acquirePage() {
   activePages += 1;
   try {
     const instance = await ensureBrowser();
-    return await instance.newPage();
+    const page = await instance.newPage();
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    }).catch(() => {});
+    return page;
   } catch (error) {
     activePages -= 1;
     throw error;
@@ -67,6 +72,13 @@ function releasePage() {
 
 async function doRender(page, url, budget) {
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+  try {
+    const origin = new URL(url).origin;
+    await page.setExtraHTTPHeaders({
+      referer: `${origin}/`,
+      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    });
+  } catch {}
   // networkidle 会被站点长连接（统计/广告）拖死：DOM 就绪后靠选择器轮询等待
   // 前端框架完成列表渲染，轮询有上界，不会无限挂起。
   const response = await page.goto(url, {
@@ -80,10 +92,14 @@ async function doRender(page, url, budget) {
   // 站点播放器或导航，反而拖慢或卡住渲染）。
   await new Promise((resolve) => setTimeout(resolve, 1_500));
   const html = await page.content();
+  const isChallenged = html.includes('Just a moment...') || html.includes('Attention Required');
+  const effectiveStatus = (response && (response.status() === 403 || response.status() === 503) && !isChallenged)
+    ? 200
+    : (response ? response.status() : 200);
   return {
     html,
     finalUrl: page.url(),
-    status: response ? response.status() : 200,
+    status: effectiveStatus,
   };
 }
 

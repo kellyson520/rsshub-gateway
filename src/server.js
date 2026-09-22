@@ -250,6 +250,7 @@ export function createGatewayServer(options = {}) {
     fetchImpl: options.fetchImpl,
     egressPool,
     browserFetch: options.browserFetch,
+    browserRender: options.browserRender,
     fetchdFetch: options.fetchdFetch,
     fetchExternal: options.fetchExternal,
     fetchRssHub: options.fetchRssHub,

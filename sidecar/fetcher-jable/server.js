@@ -40,7 +40,9 @@ async function main() {
       }
       const rendered = await renderClient.fetchRenderedHtml(url, { timeoutMs: 35_000 });
       if (rendered) {
-        return { ok: rendered.status >= 200 && rendered.status < 300, status: rendered.status, text: async () => rendered.html };
+        const hasContent = !rendered.html.includes('Just a moment...') && (rendered.html.includes('video-') || rendered.html.includes('header') || rendered.html.includes('detail'));
+        const ok = (rendered.status >= 200 && rendered.status < 300) || hasContent;
+        return { ok, status: ok ? 200 : rendered.status, text: async () => rendered.html };
       }
       const error = new Error('jable fetch failed');
       error.status = 502;

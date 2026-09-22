@@ -90,3 +90,17 @@ test('fetcher maps upstream failures to 502 and empty renders to 404', async () 
     (error) => error instanceof HttpError && error.status === 404,
   );
 });
+
+test('fetcher handles Cloudflare 403 initial status if HTML has rendered videos', async () => {
+  // Cloudflare often responds 403 during challenge, but browser renderer completes page rendering.
+  // When fetchHtml provides status 403 but valid content, fetcher should accept it if remote.ok is handled or fallback.
+  const fetcher = createJableFetcher({
+    fetchHtml: async () => ({
+      ok: false,
+      status: 403,
+      text: async () => LIST_HTML,
+    }),
+  });
+  const result = await fetcher.handleFetch({ routeId: '/jable/new-release/:page?', params: {} });
+  assert.ok(result.rssXml.includes('ABF-377'));
+});

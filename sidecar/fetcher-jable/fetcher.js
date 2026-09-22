@@ -140,11 +140,13 @@ export function createJableFetcher({ fetchHtml } = {}) {
       } catch (error) {
         throw new HttpError(502, `jable upstream failed: ${error.message}`);
       }
-      if (!remote?.ok) throw new HttpError(502, `jable returned ${remote?.status || 'unknown'}`);
-      html = await remote.text();
+      html = typeof remote?.text === 'function' ? await remote.text() : '';
       attempts += 1;
-      const looksChallenged = html.includes('Just a moment');
+      const looksChallenged = html.includes('Just a moment') || html.includes('Attention Required');
       const hasContent = isDetail ? Boolean(parseVideoDetail(html)) : parseVideoList(html).length > 0;
+      if (!remote?.ok && (!hasContent || looksChallenged)) {
+        throw new HttpError(502, `jable returned ${remote?.status || 'unknown'}`);
+      }
       // CF 偶发托管挑战：共享 cookie 罐下二次渲染常能直接通过。
       if (hasContent || attempts >= 2 || !looksChallenged) break;
       await new Promise((resolve) => setTimeout(resolve, 2_500));

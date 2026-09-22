@@ -4165,12 +4165,14 @@ export function createRequestService({
   fetchImpl,
   egressPool,
   browserFetch,
+  browserRender,
   fetchdFetch,
   fetchExternal,
   fetchRssHub,
   logger = createLogger(),
   createUpstreamClientImpl,
   createBrowserFetchClientImpl,
+  createBrowserRenderClientImpl,
 } = {}) {
   const upstreamClient = client || (createUpstreamClientImpl
     ? createUpstreamClientImpl({ sourceConfig, fetchImpl, egressPool })
@@ -4178,9 +4180,28 @@ export function createRequestService({
   const browser = browserFetch || (createBrowserFetchClientImpl
     ? createBrowserFetchClientImpl()
     : null);
+  const renderClient = browserRender || (createBrowserRenderClientImpl
+    ? createBrowserRenderClientImpl()
+    : null);
   const resolvedFetchdFetch = fetchdFetch || browser?.fetchdFetch;
   const resolvedFetchExternal = fetchExternal || ((url, request) => upstreamClient?.fetchExternal(url, request));
   const resolvedFetchRssHub = fetchRssHub || ((path, request) => upstreamClient?.fetchRssHub(path, undefined, request?.headers, request));
+
+  async function tryBrowserRenderFallback(url) {
+    if (!renderClient) return null;
+    try {
+      const rendered = await renderClient.fetchRenderedHtml(url, { timeoutMs: 35_000 });
+      if (rendered?.html && !rendered.html.includes('Just a moment...') && !rendered.html.includes('Attention Required')) {
+        return new Response(rendered.html, {
+          status: 200,
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+          },
+        });
+      }
+    } catch {}
+    return null;
+  }
 
   function fetchJsonViaFetchd(url, request) {
     const startedAt = Date.now();
@@ -4203,10 +4224,16 @@ export function createRequestService({
       }
       if (!allowed) return Promise.reject(new Error('external target is not allowed'));
       const browserRequest = { ...(request || {}), redirect: 'follow' };
-      return browser.fetch(url, browserRequest).then((response) => {
+      return browser.fetch(url, browserRequest).then(async (response) => {
         logger.debug('request_external_browser', { host, status: response?.status, durationMs: Date.now() - startedAt });
+        if ((!response?.ok || response?.status === 403 || response?.status === 503) && renderClient) {
+          const fallback = await tryBrowserRenderFallback(url);
+          if (fallback) return fallback;
+        }
         return response;
-      }).catch((error) => {
+      }).catch(async (error) => {
+        const fallback = await tryBrowserRenderFallback(url);
+        if (fallback) return fallback;
         logger.warn('request_external_browser_fallback', { host, error: error.message });
         return resolvedFetchExternal(url, request).then((response) => {
           logger.debug('request_external', { host, status: response?.status, durationMs: Date.now() - startedAt });

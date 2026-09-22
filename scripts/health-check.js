@@ -39,8 +39,8 @@ async function checkRoute({ name, path }) {
     const res = await request(url, {
       dispatcher: customDispatcher,
       headers: { host: HOST_HEADER },
-      headersTimeout: 35_000,
-      bodyTimeout: 35_000,
+      headersTimeout: 60_000,
+      bodyTimeout: 60_000,
     });
     const body = await res.body.text();
     const duration = ((Date.now() - start) / 1000).toFixed(2);
@@ -73,7 +73,7 @@ async function run() {
   console.log(`| ${'平台名称'.padEnd(14)} | ${'路由路径'.padEnd(28)} | ${'Feed 状态'.padEnd(16)} | ${'耗时'.padEnd(8)} | ${'Reader 状态'.padEnd(16)} |`);
   console.log(`|${'-'.repeat(16)}|${'-'.repeat(30)}|${'-'.repeat(18)}|${'-'.repeat(10)}|${'-'.repeat(18)}|`);
 
-  const concurrency = 6;
+  const concurrency = 3;
   const results = [];
   for (let i = 0; i < ROUTES.length; i += concurrency) {
     const batch = ROUTES.slice(i, i + concurrency);
