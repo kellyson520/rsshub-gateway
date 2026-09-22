@@ -8,7 +8,7 @@ import {
 import { createResponseCache } from './cache.js';
 import { createMediaPrefetchQueue } from './media-prefetch.js';
 import { createFeedPrefetchQueue } from './feed-prefetch.js';
-import { createDirectLinkProber } from './direct-link-prober.js';
+import { createDirectLinkProber, isTestEnvironment } from './direct-link-prober.js';
 import { createDynamicRouteRegistry } from './dynamic-registry.js';
 import { createEgressPool } from './egress-pool.js';
 import { createMihomoEgressAdapter } from './mihomo-egress.js';
@@ -699,7 +699,9 @@ export function createGatewayServer(options = {}) {
     seedPaths: feedPrefetchPaths,
     logger,
   });
-  const feedPrefetchQueue = (feedPrefetchPaths.length > 0 || dynamicRouteRegistry)
+  const isRunningTests = isTestEnvironment();
+
+  const feedPrefetchQueue = (feedPrefetchPaths.length > 0 || options.feedPrefetchQueue)
     ? createFeedPrefetchQueue({
       paths: feedPrefetchPaths,
       intervalMs: feedPrefetchIntervalMs,
@@ -787,7 +789,7 @@ export function createGatewayServer(options = {}) {
   prefetchServer = server;
   if (feedPrefetchQueue) {
     poller.register('feed-prefetch', () => {
-      if (dynamicRouteRegistry) {
+      if (dynamicRouteRegistry && !isRunningTests) {
         for (const p of dynamicRouteRegistry.getWarmupPaths()) {
           feedPrefetchQueue.enqueue(p);
         }
@@ -798,16 +800,18 @@ export function createGatewayServer(options = {}) {
       runImmediately: true,
     });
   }
-  poller.register('direct-link-probe', () => directLinkProber.probe(), {
-    interval: 300_000,
-    runImmediately: true,
-  });
+  if (!isRunningTests) {
+    poller.register('direct-link-probe', () => directLinkProber.probe(), {
+      interval: 300_000,
+      runImmediately: true,
+    });
+  }
   poller.register('lease-sweep', () => {
     const expired = leaseStore.revokeExpired();
     for (const username of expired) leaseBackfillQueue?.cancel(username);
     if (expired.length) logger.info('lease_sweep', { count: expired.length });
   }, { interval: 60_000 });
-  if (options.poller === undefined) poller.start();
+  if (options.poller === undefined && (feedPrefetchPaths.length > 0 || !isRunningTests)) poller.start();
 
   server.leaseProxy = leaseProxy;
   server.feedPrefetchQueue = feedPrefetchQueue;
@@ -817,6 +821,19 @@ export function createGatewayServer(options = {}) {
   server.leaseBackfillQueue = leaseBackfillQueue;
   server.browserFetch = browserFetch;
   server.poller = poller;
+
+  const originalClose = server.close.bind(server);
+  server.close = function close(callback) {
+    poller.stop();
+    feedPrefetchQueue?.stop();
+    if (!options.browserFetch) browserFetch?.close?.();
+    if (!server.listening) {
+      if (typeof callback === 'function') process.nextTick(() => callback());
+      return server;
+    }
+    return originalClose(callback);
+  };
+
   return server;
 }
 

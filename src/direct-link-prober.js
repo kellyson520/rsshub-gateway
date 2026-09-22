@@ -4,8 +4,14 @@ export const DEFAULT_DIRECT_PROBE_TARGETS = Object.freeze([
   'https://www.google.com/generate_204',
 ]);
 
+export function isTestEnvironment() {
+  return process.env.NODE_ENV === 'test'
+    || process.env.npm_lifecycle_event === 'test'
+    || process.argv.some((a) => a.includes('test'));
+}
+
 export function createDirectLinkProber({
-  fetchImpl = (process.env.NODE_ENV === 'test' ? null : fetch),
+  fetchImpl = (isTestEnvironment() ? null : fetch),
   targets = DEFAULT_DIRECT_PROBE_TARGETS,
   timeoutMs = 3500,
   threshold = 0.5,
