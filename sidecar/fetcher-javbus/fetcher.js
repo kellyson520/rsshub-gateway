@@ -3,6 +3,9 @@ import { HttpError } from '../../src/fetcher-server.js';
 export { HttpError };
 import * as cheerio from 'cheerio';
 
+export const DEFAULT_JAVBUS_COOKIE = 'dv=1; age=verified; existmag=all';
+export const DEFAULT_JAVBUS_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
 const DEFAULT_DOMAIN = 'javbus.com';
 const DEFAULT_WESTERN_DOMAIN = 'javbus.org';
 const DEFAULT_CACHE_TTL = 900;
@@ -51,17 +54,18 @@ export function javbusTarget(routeId, params = {}, query = {}) {
   const page = positivePage(params.page);
   const pageStr = page > 1 ? `/${page}` : '';
 
-  if (routeId === '/javbus/home/:page?') {
-    return { url: `${base}/home${pageStr}`, title: 'JavBus 最新影片', base };
-  }
-  if (routeId === '/javbus/censored/:page?') {
-    return { url: `${base}/censored/home${pageStr}`, title: 'JavBus 有碼', base };
+  if (routeId === '/javbus/home/:page?' || routeId === '/javbus/censored/:page?') {
+    const targetPath = page > 1 ? `/page/${page}` : '';
+    const title = routeId === '/javbus/censored/:page?' ? 'JavBus 有碼' : 'JavBus 最新影片';
+    return { url: `${base}${targetPath}`, title, base };
   }
   if (routeId === '/javbus/uncensored/:page?') {
-    return { url: `${base}/uncensored/home${pageStr}`, title: 'JavBus 無碼', base };
+    const targetPath = page > 1 ? `/uncensored/page/${page}` : '/uncensored';
+    return { url: `${base}${targetPath}`, title: 'JavBus 無碼', base };
   }
   if (routeId === '/javbus/western/:page?') {
-    return { url: `${westernBase}/western/home${pageStr}`, title: 'JavBus 歐美', base: westernBase };
+    const targetPath = page > 1 ? `/western/page/${page}` : '/western';
+    return { url: `${westernBase}${targetPath}`, title: 'JavBus 歐美', base: westernBase };
   }
   if (routeId === '/javbus/star/:id/:page?') {
     const id = String(params.id || '').trim();
@@ -186,7 +190,12 @@ export function createJavbusFetcher({ fetchHtml } = {}) {
 
     let remote;
     try {
-      remote = await fetchHtml(target.url);
+      remote = await fetchHtml(target.url, {
+        headers: {
+          cookie: DEFAULT_JAVBUS_COOKIE,
+          'user-agent': DEFAULT_JAVBUS_USER_AGENT,
+        },
+      });
     } catch (error) {
       throw new HttpError(502, `javbus upstream failed: ${error.message}`);
     }

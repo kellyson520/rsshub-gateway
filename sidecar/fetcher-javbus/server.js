@@ -22,8 +22,11 @@ const ROUTE_IDS = [
 async function main() {
   const browserFetch = createBrowserFetchClient();
   const fetcher = createJavbusFetcher({
-    fetchHtml: async (url) => {
-      const response = await browserFetch.fetch(url, { timeout: 25_000 });
+    fetchHtml: async (url, options = {}) => {
+      const response = await browserFetch.fetch(url, {
+        timeout: 25_000,
+        headers: options.headers || {},
+      });
       return {
         ok: response.ok,
         status: response.status,

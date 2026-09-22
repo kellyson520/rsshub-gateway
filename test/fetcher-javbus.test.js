@@ -50,23 +50,33 @@ function htmlResponse(html, status = 200) {
 
 test('javbusTarget: home route', () => {
   const t = javbusTarget('/javbus/home/:page?', {});
-  assert.equal(t.url, 'https://www.javbus.com/home');
+  assert.equal(t.url, 'https://www.javbus.com');
   assert.ok(t.title.includes('JavBus'));
 });
 
 test('javbusTarget: home with page 2', () => {
   const t = javbusTarget('/javbus/home/:page?', { page: '2' });
-  assert.equal(t.url, 'https://www.javbus.com/home/2');
+  assert.equal(t.url, 'https://www.javbus.com/page/2');
 });
 
 test('javbusTarget: censored route', () => {
   const t = javbusTarget('/javbus/censored/:page?', {});
-  assert.ok(t.url.includes('censored'));
+  assert.equal(t.url, 'https://www.javbus.com');
+});
+
+test('javbusTarget: censored route with page 2', () => {
+  const t = javbusTarget('/javbus/censored/:page?', { page: '2' });
+  assert.equal(t.url, 'https://www.javbus.com/page/2');
 });
 
 test('javbusTarget: uncensored route', () => {
   const t = javbusTarget('/javbus/uncensored/:page?', {});
-  assert.ok(t.url.includes('uncensored'));
+  assert.equal(t.url, 'https://www.javbus.com/uncensored');
+});
+
+test('javbusTarget: uncensored route with page 2', () => {
+  const t = javbusTarget('/javbus/uncensored/:page?', { page: '2' });
+  assert.equal(t.url, 'https://www.javbus.com/uncensored/page/2');
 });
 
 test('javbusTarget: western route uses western domain', () => {
@@ -153,10 +163,19 @@ test('parseVideoDetail: extracts actors', () => {
 // ===== createJavbusFetcher 集成测试 =====
 
 test('fetcher: home route returns rssXml', async () => {
+  let requestedUrl = '';
+  let requestedOptions = null;
   const fetcher = createJavbusFetcher({
-    fetchHtml: async () => htmlResponse(LIST_HTML),
+    fetchHtml: async (url, options) => {
+      requestedUrl = url;
+      requestedOptions = options;
+      return htmlResponse(LIST_HTML);
+    },
   });
   const result = await fetcher.handleFetch({ routeId: '/javbus/home/:page?', params: {} });
+  assert.equal(requestedUrl, 'https://www.javbus.com');
+  assert.ok(requestedOptions?.headers?.cookie?.includes('dv=1'));
+  assert.ok(requestedOptions?.headers?.cookie?.includes('age=verified'));
   assert.ok(result.rssXml.includes('<rss version="2.0"'));
   assert.ok(result.rssXml.includes('ABP-001'));
   assert.ok(result.rssXml.includes('JavBus'));
