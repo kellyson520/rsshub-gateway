@@ -30,6 +30,11 @@ const ROUTES = [
   { name: 'Kemono 创作者', path: '/kemono/posts' },
   { name: 'Coomer 创作者', path: '/coomer/posts' },
   { name: 'Chikubi 写真', path: '/chikubi/home' },
+  { name: 'Hanime1 里番', path: '/hanime1/latest' },
+  { name: 'DLsite 榜单', path: '/dlsite/ranking/maniax/day' },
+  { name: 'NodeSeek 社区', path: '/nodeseek/latest' },
+  { name: 'V2EX 技术社区', path: '/v2ex/topics/latest' },
+  { name: 'ACG.RIP 动漫BT', path: '/acgrip/latest' },
 ];
 
 async function checkRoute({ name, path }) {

@@ -92,6 +92,21 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_SKEB:-true}" = "true" ]; then
       start_sidecar fetcher-skeb
     fi
+    if [ "${GATEWAY_SIDECAR_HANIME1:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-hanime1
+    fi
+    if [ "${GATEWAY_SIDECAR_DLSITE:-true}" = "true" ]; then
+      start_sidecar fetcher-dlsite
+    fi
+    if [ "${GATEWAY_SIDECAR_NODESEEK:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-nodeseek
+    fi
+    if [ "${GATEWAY_SIDECAR_V2EX:-true}" = "true" ]; then
+      start_sidecar fetcher-v2ex
+    fi
+    if [ "${GATEWAY_SIDECAR_ACGRIP:-true}" = "true" ]; then
+      start_sidecar fetcher-acgrip
+    fi
     exec node src/server.js
     ;;
 esac
