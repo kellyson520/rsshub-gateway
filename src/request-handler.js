@@ -66,11 +66,13 @@ export function createRequestHandler(deps) {
     cacheNamespaceFor,
     client,
     currentEhPrefetchConcurrency,
+    directLinkProber,
     discoverCachedEhGallery,
     discoverEhGallery,
     dispatcher,
     dispatcherRegistrationToken,
     downloadSessions,
+    dynamicRouteRegistry,
     egressAdapter,
     egressPool,
     egressProbeTargets,
@@ -141,6 +143,9 @@ export function createRequestHandler(deps) {
     res.setHeader('x-request-id', requestId);
     recordMetric('gateway_request', { path: requestUrl.pathname });
     recordMetric(`route_${routeBucket(requestUrl.pathname)}`, { path: requestUrl.pathname });
+
+    dynamicRouteRegistry?.recordAccess(requestUrl.pathname);
+
     if (requestUrl.pathname === '/healthz') {
       writeText(res, 200, 'ok\n');
       return;
@@ -171,6 +176,10 @@ export function createRequestHandler(deps) {
       } catch {
         writeJson(res, 503, { ready: false, rsshub: 'unavailable', openCircuits: client.openCircuits?.() || [] });
       }
+      return;
+    }
+    if (requestUrl.pathname === '/_gateway/direct-link') {
+      writeJson(res, 200, directLinkProber?.status() || { canDirectLink: false, pending: true });
       return;
     }
     if (requestUrl.pathname === '/_gateway/metrics') {
@@ -286,6 +295,11 @@ export function createRequestHandler(deps) {
         leases: leaseStore.stats(),
         leaseBackfill: leaseBackfillQueue ? leaseBackfillQueue.stats() : null,
         feedPrefetch: feedPrefetchQueue ? feedPrefetchQueue.stats() : null,
+        directLink: directLinkProber ? directLinkProber.status() : null,
+        dynamicRoutes: dynamicRouteRegistry ? {
+          total: dynamicRouteRegistry.getAllRoutes().length,
+          warmupPaths: dynamicRouteRegistry.getWarmupPaths(),
+        } : null,
         circuits: client.circuitStats ? client.circuitStats() : { openKeys: client.openCircuits?.() || [] },
         metrics: Object.fromEntries(metricCounts),
         histograms: Object.fromEntries([...histograms].map(([metric, entry]) => [

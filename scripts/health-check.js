@@ -51,14 +51,18 @@ async function checkRoute({ name, path }) {
     const linkMatch = body.match(/https:\/\/kellson\.dpdns\.org:81\/_gateway\/item\/[^\s"<>]+/);
     if (linkMatch) {
       const readerStart = Date.now();
-      const rres = await request(linkMatch[0], {
-        dispatcher: customDispatcher,
-        headers: { host: HOST_HEADER },
-        headersTimeout: 35_000,
-        bodyTimeout: 35_000,
-      });
-      await rres.body.dump();
-      readerStatus = `HTTP ${rres.statusCode} (${((Date.now() - readerStart) / 1000).toFixed(2)}s)`;
+      try {
+        const rres = await request(linkMatch[0], {
+          dispatcher: customDispatcher,
+          headers: { host: HOST_HEADER },
+          headersTimeout: 35_000,
+          bodyTimeout: 35_000,
+        });
+        await rres.body.dump();
+        readerStatus = `HTTP ${rres.statusCode} (${((Date.now() - readerStart) / 1000).toFixed(2)}s)`;
+      } catch (rerr) {
+        readerStatus = `ERR (${((Date.now() - readerStart) / 1000).toFixed(2)}s)`;
+      }
     }
 
     return { name, path, feedStatus, duration: `${duration}s`, readerStatus, ok: isXml };

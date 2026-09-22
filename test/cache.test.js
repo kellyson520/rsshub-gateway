@@ -432,3 +432,55 @@ test('exports normalizeBody, positiveNumber, resultFromEntry and SAFE_HEADERS', 
     body: Buffer.from('bin'),
   });
 });
+
+test('staleWhileRevalidate returns expired entry immediately and refreshes in background', async () => {
+  let now = 1_000;
+  await withCache({ now: () => now, ttlSeconds: { rss: 10 } }, async (cache) => {
+    let loaderCount = 0;
+    const initial = async () => ({
+      status: 200,
+      headers: { 'content-type': 'application/rss+xml' },
+      body: '<rss>v1</rss>',
+      cacheable: true,
+    });
+    await cache.getOrLoad('https://gateway.internal/feed', 'rss', initial);
+
+    now = 15_000; // cache is expired
+
+    let backgroundResolve;
+    const backgroundPromise = new Promise((resolve) => { backgroundResolve = resolve; });
+
+    const slowLoader = async () => {
+      loaderCount++;
+      await backgroundPromise;
+      return {
+        status: 200,
+        headers: { 'content-type': 'application/rss+xml' },
+        body: '<rss>v2</rss>',
+        cacheable: true,
+      };
+    };
+
+    const start = Date.now();
+    const result = await cache.getOrLoad('https://gateway.internal/feed', 'rss', slowLoader, {
+      staleWhileRevalidate: true,
+    });
+    const duration = Date.now() - start;
+
+    // Should return STALE immediately without waiting for backgroundPromise
+    assert.ok(duration < 100);
+    assert.equal(result.state, 'STALE');
+    assert.equal(result.body, '<rss>v1</rss>');
+
+    // Now resolve the background refresh
+    backgroundResolve();
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Next request after revalidation should receive the fresh v2
+    const freshResult = await cache.getOrLoad('https://gateway.internal/feed', 'rss', async () => ({
+      status: 500,
+    }));
+    assert.equal(freshResult.state, 'HIT');
+    assert.equal(freshResult.body, '<rss>v2</rss>');
+  });
+});

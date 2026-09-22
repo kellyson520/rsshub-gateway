@@ -481,6 +481,7 @@ export function createResponseCache({
 
   async function getOrLoad(url, kind, loader, {
     allowStale = true,
+    staleWhileRevalidate = false,
     namespace = 'public',
     bypassInflight = false,
     ignoreFresh = false,
@@ -505,6 +506,26 @@ export function createResponseCache({
       }
     }
     const stale = allowStale ? await readEntry(url, kind, cacheNamespace, true) : null;
+    if (staleWhileRevalidate && stale) {
+      counters.staleHits += 1;
+      if (!inflight.has(key)) {
+        const backgroundOp = (async () => {
+          try {
+            const loaded = await loader();
+            if (loaded?.status >= 200 && loaded.status < 300) {
+              const cacheLoaded = typeof loaded.cacheBody === 'function' ? await loaded.cacheBody() : loaded;
+              await store(url, kind, cacheNamespace, cacheLoaded);
+            }
+          } catch {
+            // Background revalidation silently degrades
+          } finally {
+            if (inflight.get(key) === backgroundOp) inflight.delete(key);
+          }
+        })();
+        inflight.set(key, backgroundOp);
+      }
+      return resultFromCacheEntry(stale.entry, stale.body, 'STALE');
+    }
     if (!bypassInflight && inflight.has(key)) return inflight.get(key);
     const loadOrder = beginLoad(key);
 
@@ -704,6 +725,7 @@ export async function fetchCachedDocument({ cache, fetcher, requestUrl, cacheUrl
     };
   }, {
     allowStale: cacheKind !== 'eh-image',
+    staleWhileRevalidate: cacheKind === 'rss',
     bypassInflight: request?.priority === 'foreground',
   });
   cacheStateLog(cacheUrl, cacheKind, result.state, logger);

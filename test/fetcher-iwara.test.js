@@ -113,6 +113,27 @@ test('fetcher wraps upstream failures as 502', async () => {
   );
 });
 
+test('fetcher falls back to public access when token refresh fails with 403', async () => {
+  const { fetchJson } = fakeIwaraApi();
+  const failingFetchJson = async (url, options) => {
+    if (url.includes('/user/token')) {
+      const err = new Error('upstream returned 403');
+      err.status = 403;
+      throw err;
+    }
+    return fetchJson(url, options);
+  };
+  const fetcher = createIwaraFetcher({
+    fetchJson: failingFetchJson,
+    tokenProvider: async () => 'expired-token',
+  });
+  const result = await fetcher.handleFetch({
+    routeId: '/iwara/users/:username/:kind?',
+    params: { username: 'example' },
+  });
+  assert.ok(result.rssXml.includes('https://iwara.tv/video/abc123'));
+});
+
 test('fetcher supports image kind', async () => {
   const { fetchJson } = fakeIwaraApi();
   const fetcher = createIwaraFetcher({ fetchJson, tokenProvider: async () => null });

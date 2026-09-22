@@ -8,6 +8,8 @@ import {
 import { createResponseCache } from './cache.js';
 import { createMediaPrefetchQueue } from './media-prefetch.js';
 import { createFeedPrefetchQueue } from './feed-prefetch.js';
+import { createDirectLinkProber } from './direct-link-prober.js';
+import { createDynamicRouteRegistry } from './dynamic-registry.js';
 import { createEgressPool } from './egress-pool.js';
 import { createMihomoEgressAdapter } from './mihomo-egress.js';
 import { createSessionAffinity } from './session-affinity.js';
@@ -243,7 +245,11 @@ export function createGatewayServer(options = {}) {
   }
   const cache = options.cache === false
     ? null
-    : options.cache || ((!options.fetchExternal && !options.fetchRssHub) ? createResponseCache() : null);
+    : options.cache || ((!options.fetchExternal && !options.fetchRssHub) ? createResponseCache({
+      ttlSeconds: {
+        rss: Number(process.env.GATEWAY_CACHE_TTL_RSS) || 1800,
+      },
+    }) : null);
   const requestService = options.requestService || createRequestService({
     sourceConfig,
     client: options.client,
@@ -288,6 +294,10 @@ export function createGatewayServer(options = {}) {
     const now = Date.now();
     if (iwaraAccessToken.value && iwaraAccessToken.expiresAt > now + 60_000) return iwaraAccessToken.value;
     const payload = decodeJwtPayload(credentials.token);
+    if (payload?.exp && payload.exp * 1000 <= now) {
+      // 令牌已在本地过期，直接免鉴权返回 null，避免阻塞并携带无效 Token
+      return null;
+    }
     if (payload?.type === 'access_token') {
       iwaraAccessToken.value = credentials.token;
       iwaraAccessToken.expiresAt = Number.isFinite(payload.exp) ? payload.exp * 1000 : now + IWARA_ACCESS_DEFAULT_TTL_MS;
@@ -684,7 +694,12 @@ export function createGatewayServer(options = {}) {
   }
 
   let prefetchServer = null;
-  const feedPrefetchQueue = feedPrefetchPaths.length > 0
+  const directLinkProber = options.directLinkProber || createDirectLinkProber({ logger });
+  const dynamicRouteRegistry = options.dynamicRouteRegistry || createDynamicRouteRegistry({
+    seedPaths: feedPrefetchPaths,
+    logger,
+  });
+  const feedPrefetchQueue = (feedPrefetchPaths.length > 0 || dynamicRouteRegistry)
     ? createFeedPrefetchQueue({
       paths: feedPrefetchPaths,
       intervalMs: feedPrefetchIntervalMs,
@@ -709,9 +724,11 @@ export function createGatewayServer(options = {}) {
     cacheNamespaceFor,
     client,
     currentEhPrefetchConcurrency,
+    directLinkProber,
     discoverCachedEhGallery,
     discoverEhGallery,
     downloadSessions,
+    dynamicRouteRegistry,
     egressAdapter,
     egressPool,
     egressProbeTargets,
@@ -769,11 +786,22 @@ export function createGatewayServer(options = {}) {
   const server = http.createServer(requestHandler);
   prefetchServer = server;
   if (feedPrefetchQueue) {
-    poller.register('feed-prefetch', () => feedPrefetchQueue.runCycle(), {
+    poller.register('feed-prefetch', () => {
+      if (dynamicRouteRegistry) {
+        for (const p of dynamicRouteRegistry.getWarmupPaths()) {
+          feedPrefetchQueue.enqueue(p);
+        }
+      }
+      return feedPrefetchQueue.runCycle();
+    }, {
       interval: feedPrefetchIntervalMs,
       runImmediately: true,
     });
   }
+  poller.register('direct-link-probe', () => directLinkProber.probe(), {
+    interval: 300_000,
+    runImmediately: true,
+  });
   poller.register('lease-sweep', () => {
     const expired = leaseStore.revokeExpired();
     for (const username of expired) leaseBackfillQueue?.cancel(username);
@@ -783,6 +811,8 @@ export function createGatewayServer(options = {}) {
 
   server.leaseProxy = leaseProxy;
   server.feedPrefetchQueue = feedPrefetchQueue;
+  server.directLinkProber = directLinkProber;
+  server.dynamicRouteRegistry = dynamicRouteRegistry;
   server.leaseStore = leaseStore;
   server.leaseBackfillQueue = leaseBackfillQueue;
   server.browserFetch = browserFetch;

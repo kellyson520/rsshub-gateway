@@ -26,6 +26,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 from curl_cffi import requests
 
@@ -43,19 +44,22 @@ SUPPORTED_IMPERSONATIONS = [
 # 所有的 Mihomo 出口代理通道
 ALL_PROXY_LANES = [
     "http://127.0.0.1:7901",
+    "http://127.0.0.1:7906",
     "http://127.0.0.1:7908",
     "http://127.0.0.1:7903",
     "http://127.0.0.1:7890",
     "http://127.0.0.1:7902",
     "http://127.0.0.1:7904",
     "http://127.0.0.1:7905",
-    "http://127.0.0.1:7906",
     "http://127.0.0.1:7907",
     "http://127.0.0.1:7909",
     "http://127.0.0.1:7910",
     "http://127.0.0.1:7911",
     "http://127.0.0.1:7912",
 ]
+
+# 记住每个域名的最佳出口通道，避免对抗 Cloudflare 每次无效轮询
+DOMAIN_SUCCESS_PROXIES = {}
 
 
 def execute_request_with_proxy(method, url, impersonate, headers, body_bytes, proxy, timeout, redirect):
@@ -106,14 +110,25 @@ def run_request(payload):
     body_bytes = body.encode("utf-8") if body is not None else None
     started = time.monotonic()
 
-    # 动态负载均衡与打散重试，避免单个出口节点触发频控
-    other_lanes = [p for p in ALL_PROXY_LANES if p != primary_proxy]
+    # 提取请求域名
+    domain = urlparse(url).netloc.lower().split(':')[0]
+
+    # 动态负载均衡与打散重试，优先尝试历史成功通道
+    remembered_proxy = DOMAIN_SUCCESS_PROXIES.get(domain)
+    other_lanes = [p for p in ALL_PROXY_LANES if p != primary_proxy and p != remembered_proxy]
     random.shuffle(other_lanes)
-    proxy_candidates = [primary_proxy] + other_lanes
+
+    proxy_candidates = []
+    if remembered_proxy:
+        proxy_candidates.append(remembered_proxy)
+    if primary_proxy not in proxy_candidates:
+        proxy_candidates.append(primary_proxy)
+    proxy_candidates.extend(other_lanes)
+
     last_error = None
     last_candidate_response = None
     final_response = None
-    per_proxy_timeout = min(timeout, 3.5)
+    per_proxy_timeout = min(timeout, 3.0)
 
     for proxy in proxy_candidates:
         try:
@@ -123,6 +138,7 @@ def run_request(payload):
             # 2xx / 3xx / 404 等业务正常响应直接采纳
             if res.status_code not in (429, 403, 502, 503, 504):
                 final_response = res
+                DOMAIN_SUCCESS_PROXIES[domain] = proxy
                 break
             last_candidate_response = res
         except Exception as exc:  # noqa: BLE001

@@ -45,8 +45,11 @@ services:
       GATEWAY_LEASE_PROXY_PORT: "1301"
       # Dispatcher 路由注册表（缺省=纯透明增强网关）
       # 疑难站点增强模式（单容器）：sidecar 默认开启，独立进程；关闭设 false
-      # 成人平台 feed 预热（异步预抓取预缓存，阶段3.2）
-      GATEWAY_FEED_PREFETCH_PATHS: "/ggjav/home,/airav/home,/javbus/home,/javdb/home,/netflav,/91porn,/jable/new-release,/missav/new"
+      # 平台 feed 预热（后台定时异步预抓取，100% 缓存命中，实现 ms 级超快访问）
+      GATEWAY_FEED_PREFETCH_PATHS: "/linuxdo/latest,/iwara/users/zzzwen/video,/ehviewer/ranking/day,/javbus/home,/javdb/home,/ggjav/home,/airav/home,/missav/new,/jable/new-release,/netflav,/91porn,/skeb/art,/fanbox/official,/wnacg/home,/sehuatang/103,/kemono/posts,/coomer/posts,/chikubi/home"
+      GATEWAY_FEED_PREFETCH_INTERVAL_MS: "300000"
+      GATEWAY_FEED_PREFETCH_CONCURRENCY: "3"
+      GATEWAY_CACHE_TTL_RSS: "1800"
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
       GATEWAY_SIDECAR_GGJAV: "true"

@@ -2,6 +2,7 @@ import {
   fetchIwaraUser,
   fetchIwaraVideos,
   iwaraThumbnailUrl,
+  jwtExpiryMs,
   refreshIwaraAccessToken,
   renderIwaraFeed,
 } from '../../src/adapters/iwara.js';
@@ -27,12 +28,22 @@ export function createIwaraFetcher({
   async function token() {
     const refreshToken = await tokenProvider();
     if (!refreshToken) return null;
+    const expiry = jwtExpiryMs(refreshToken, { now });
+    if (expiry !== null && expiry <= 0) {
+      // 令牌已在客户端本地过期，直接免鉴权公开访问，避免等待网络超时
+      return null;
+    }
     if (accessToken && accessTokenExpiresAt > now() + ACCESS_TOKEN_MIN_TTL_MS) return accessToken;
-    const refreshed = await refreshIwaraAccessToken(fetchJson, refreshToken);
-    if (!refreshed?.token) return null;
-    accessToken = refreshed.token;
-    accessTokenExpiresAt = now() + Math.max(ACCESS_TOKEN_MIN_TTL_MS, refreshed.expiresMs || 60 * 60 * 1000);
-    return accessToken;
+    try {
+      const refreshed = await refreshIwaraAccessToken(fetchJson, refreshToken);
+      if (!refreshed?.token) return null;
+      accessToken = refreshed.token;
+      accessTokenExpiresAt = now() + Math.max(ACCESS_TOKEN_MIN_TTL_MS, refreshed.expiresMs || 60 * 60 * 1000);
+      return accessToken;
+    } catch {
+      // 刷新令牌不可用时降级为公开免鉴权访问，不阻塞公开 Feed
+      return null;
+    }
   }
 
   async function handleFetch(body) {
