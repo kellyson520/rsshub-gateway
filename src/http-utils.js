@@ -4930,13 +4930,23 @@ export const ADULT_DOMAINS = Object.freeze([
   'uraaka-joshi.com',
   'netflav.com',
   '91porn.com',
+  'hanime1.me',
+  'hembed.com',
+  'dlsite.com',
+  'dlsite.jp',
+  'nodeseek.com',
 ]);
 
-export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, acceptLanguage = DEFAULT_ADULT_ACCEPT_LANGUAGE } = {}) {
-  return {
+export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, acceptLanguage = DEFAULT_ADULT_ACCEPT_LANGUAGE, url } = {}) {
+  const headers = {
     'User-Agent': userAgent,
     'Accept-Language': acceptLanguage,
   };
+  const targetStr = String(url || '');
+  if (targetStr.includes('dlsite.com') || targetStr.includes('dlsite.jp')) {
+    headers['Cookie'] = 'adultchecked=1; locale=zh-cn;';
+  }
+  return headers;
 }
 
 export const DEFAULT_ADULT_UNAVAILABLE_MESSAGE = '该视频/漫画页面暂时无法直接读取，请稍后刷新或点击打开原始来源。';

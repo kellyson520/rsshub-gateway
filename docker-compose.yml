@@ -38,15 +38,15 @@ services:
       EGRESS_PROBE_URL: https://e-hentai.org/
       EGRESS_PROBE_TIMEOUT_MS: "5000"
       EGRESS_PROBE_CACHE_MS: "300000"
-      EGRESS_PUBLIC_HOSTS: "linux.do,kemono.su,kemono.cr,coomer.su,coomer.st,fanbox.cc,skeb.jp,uraaka-joshi.com,sehuatang.net,jable.tv,missav.ws,missav.ai,missav.com,missav.live,javbus.com,javdb.com,airav.wiki,airav.io,ggjav.com,ggjav.tv,wnacg.com,chikubi.jp"
-      GATEWAY_BROWSER_FETCH_HOSTS: "javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,kemono.su,kemono.cr,coomer.su,coomer.st,sehuatang.net,linux.do"
+      EGRESS_PUBLIC_HOSTS: "linux.do,kemono.su,kemono.cr,coomer.su,coomer.st,fanbox.cc,skeb.jp,uraaka-joshi.com,sehuatang.net,jable.tv,missav.ws,missav.ai,missav.com,missav.live,javbus.com,javdb.com,airav.wiki,airav.io,ggjav.com,ggjav.tv,wnacg.com,chikubi.jp,hanime1.me,dlsite.com,dlsite.jp,nodeseek.com,v2ex.com,acg.rip,bangumi.tv,bgm.tv,nyaa.si"
+      GATEWAY_BROWSER_FETCH_HOSTS: "javbus.com,javdb.com,airav.wiki,airav.io,jable.tv,missav.ws,missav.ai,missav.com,missav.live,ggjav.com,ggjav.tv,wnacg.com,wnacg.org,chikubi.jp,skeb.jp,fanbox.cc,kemono.su,kemono.cr,coomer.su,coomer.st,sehuatang.net,linux.do,hanime1.me,dlsite.com,dlsite.jp,nodeseek.com,v2ex.com,acg.rip,bangumi.tv,bgm.tv,nyaa.si"
       RSSHUB_URL: http://rsshub:1200
       SOURCE_CONFIG_FILE: /app/config/sources.json
       GATEWAY_LEASE_PROXY_PORT: "1301"
       # Dispatcher 路由注册表（缺省=纯透明增强网关）
       # 疑难站点增强模式（单容器）：sidecar 默认开启，独立进程；关闭设 false
       # 平台 feed 预热（后台定时异步预抓取，100% 缓存命中，实现 ms 级超快访问）
-      GATEWAY_FEED_PREFETCH_PATHS: "/linuxdo/latest,/iwara/users/zzzwen/video,/ehviewer/ranking/day,/javbus/home,/javdb/home,/ggjav/home,/airav/home,/missav/new,/jable/new-release,/netflav,/91porn,/skeb/art,/fanbox/official,/wnacg/home,/sehuatang/103,/kemono/posts,/coomer/posts,/chikubi/home"
+      GATEWAY_FEED_PREFETCH_PATHS: "/linuxdo/latest,/iwara/users/zzzwen/video,/ehviewer/ranking/day,/javbus/home,/javdb/home,/ggjav/home,/airav/home,/missav/new,/jable/new-release,/netflav,/91porn,/skeb/art,/fanbox/official,/wnacg/home,/sehuatang/103,/kemono/posts,/coomer/posts,/chikubi/home,/hanime1/latest,/dlsite/ranking/maniax/day,/nodeseek/latest,/v2ex/topics/latest,/acgrip/latest"
       GATEWAY_FEED_PREFETCH_INTERVAL_MS: "300000"
       GATEWAY_FEED_PREFETCH_CONCURRENCY: "3"
       GATEWAY_CACHE_TTL_RSS: "1800"
@@ -69,6 +69,11 @@ services:
       GATEWAY_SIDECAR_LINUXDO: "true"
       GATEWAY_SIDECAR_SKEB: "true"
       GATEWAY_SIDECAR_KEMONO: "true"
+      GATEWAY_SIDECAR_HANIME1: "true"
+      GATEWAY_SIDECAR_DLSITE: "true"
+      GATEWAY_SIDECAR_NODESEEK: "true"
+      GATEWAY_SIDECAR_V2EX: "true"
+      GATEWAY_SIDECAR_ACGRIP: "true"
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301

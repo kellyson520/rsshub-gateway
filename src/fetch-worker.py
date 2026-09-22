@@ -113,6 +113,17 @@ def run_request(payload):
     # 提取请求域名
     domain = urlparse(url).netloc.lower().split(':')[0]
 
+    # 特殊疑难站点自动注入基础伪装头部与 Cookie
+    header_keys_lower = {str(k).lower() for k in headers}
+    if ("dlsite.com" in domain or "dlsite.jp" in domain) and "cookie" not in header_keys_lower:
+        headers["cookie"] = "adultchecked=1; locale=zh-cn;"
+    if "hanime1.me" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://hanime1.me/"
+    if "nodeseek.com" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://www.nodeseek.com/"
+    if "v2ex.com" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://www.v2ex.com/"
+
     # 动态负载均衡与打散重试，优先尝试历史成功通道
     remembered_proxy = DOMAIN_SUCCESS_PROXIES.get(domain)
     other_lanes = [p for p in ALL_PROXY_LANES if p != primary_proxy and p != remembered_proxy]
