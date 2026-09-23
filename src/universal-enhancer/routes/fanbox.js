@@ -15,10 +15,20 @@ export const routes = [
         headers: {
           Origin: 'https://www.fanbox.cc',
           Referer: 'https://www.fanbox.cc/',
-          Accept: 'application/json',
+          Accept: 'application/json, text/plain, */*',
         },
       });
-      const rawPosts = data?.body || [];
+      const rawBody = data?.body;
+      let rawPosts = [];
+      if (Array.isArray(rawBody)) {
+        rawPosts = rawBody;
+      } else if (Array.isArray(rawBody?.items)) {
+        rawPosts = rawBody.items;
+      } else if (Array.isArray(rawBody?.posts)) {
+        rawPosts = rawBody.posts;
+      } else if (Array.isArray(data?.items)) {
+        rawPosts = data.items;
+      }
       const items = rawPosts.map(parsePost);
       const rssXml = renderFanboxFeed({
         title: target.title,

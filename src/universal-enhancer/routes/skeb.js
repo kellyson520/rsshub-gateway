@@ -12,9 +12,11 @@ export const routes = [
     handler: async (ctx) => {
       const target = skebTarget('/skeb/:category', ctx.params);
       const data = await ctx.fetchJson(target.apiUrl, {
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json, text/plain, */*' },
       });
-      const rawWorks = Array.isArray(data) ? data : (data?.works || []);
+      const rawWorks = Array.isArray(data)
+        ? data
+        : (data?.[target.category] || data?.works || []);
       const items = rawWorks.map(parseWork);
       const rssXml = renderSkebFeed({
         title: target.title,
