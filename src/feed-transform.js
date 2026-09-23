@@ -17,6 +17,8 @@ import {
   XML_NAMED_ENTITIES as NAMED_ENTITIES,
 } from './http-utils.js';
 
+import { applyAdaptivePipeline } from './adaptive-pipeline/index.js';
+
 export {
   cdata,
   decodeEntity,
@@ -30,6 +32,7 @@ export {
   matchesFeedFilters,
   matchesFilters,
   rewriteEntry,
+  applyAdaptivePipeline,
 };
 
 export function rewriteHtml(html, options) {
@@ -37,5 +40,21 @@ export function rewriteHtml(html, options) {
 }
 
 export function transformFeed(xml, options = {}) {
-  return baseTransformFeed(xml, options, cheerio);
+  if (xml === null || xml === undefined || typeof xml !== 'string' || !xml.trim()) {
+    return '';
+  }
+
+  let preparedXml = xml;
+  // 仅当开启智能自适应流水线时（默认开启），动态增强官方输入流
+  if (options.adaptivePipeline !== false && process.env.GATEWAY_ADAPTIVE_PIPELINE !== 'false') {
+    try {
+      const $ = cheerio.load(xml, { xmlMode: true, decodeEntities: true });
+      applyAdaptivePipeline($, options);
+      preparedXml = $.xml();
+    } catch {
+      preparedXml = xml;
+    }
+  }
+
+  return baseTransformFeed(preparedXml, options, cheerio);
 }
