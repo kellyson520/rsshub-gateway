@@ -68,7 +68,7 @@ function escapeXml(value) {
   }[c]));
 }
 
-function parseWork(work) {
+export function parseWork(work) {
   const path = String(work.path || '');
   const match = path.match(/^\/@([^/]+)\/works\/(\d+)/);
   const creatorUsername = match ? match[1] : (work.creator?.screen_name || 'creator');

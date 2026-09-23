@@ -110,7 +110,7 @@ export function createEnhancerContext({
         return res.json();
       }
     } catch (err) {
-      logger?.warn?.(`[universal-enhancer] fetchRendered failed for ${url}:`, err.message);
+      logger?.warn?.(`[universal-enhancer] fetchRendered failed for ${url}`, { error: err.message });
     }
     throw new Error('browserRenderClient not available or failed in enhancer context');
   }
@@ -121,7 +121,7 @@ export function createEnhancerContext({
       try {
         return await browserFetchClient.fetch(url, options);
       } catch (err) {
-        logger?.warn?.(`[universal-enhancer] browserFetchClient error, falling back to standard fetch:`, err.message);
+        logger?.warn?.(`[universal-enhancer] browserFetchClient error, falling back to standard fetch`, { error: err.message });
       }
     }
     // 降级使用标准 fetch

@@ -30,9 +30,13 @@ export function wnacgTarget(routeId, params = {}) {
   const tag = String(params.tag || '').trim();
 
   let url = `${SITE_BASE}/albums`;
-  if (cid && CATEGORIES[cid]) {
-    url += `-index-cate-${CATEGORIES[cid]}`;
-  } else if (cid) {
+  if (cid && CATEGORIES[cid] !== undefined) {
+    if (CATEGORIES[cid]) {
+      url += `-index-cate-${CATEGORIES[cid]}`;
+    }
+  } else if (cid && /^\d+$/.test(cid)) {
+    url += `-index-cate-${cid}`;
+  } else if (cid && cid !== 'all') {
     throw new HttpError(400, `unsupported category: ${cid}`);
   }
   

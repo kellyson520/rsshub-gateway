@@ -1,4 +1,4 @@
-import { skebTarget, renderFeed as renderSkebFeed } from '../../../sidecar/fetcher-skeb/fetcher.js';
+import { skebTarget, parseWork, renderFeed as renderSkebFeed } from '../../../sidecar/fetcher-skeb/fetcher.js';
 
 export const routes = [
   {
@@ -14,7 +14,8 @@ export const routes = [
       const data = await ctx.fetchJson(target.apiUrl, {
         headers: { Accept: 'application/json' },
       });
-      const items = Array.isArray(data) ? data : (data?.works || []);
+      const rawWorks = Array.isArray(data) ? data : (data?.works || []);
+      const items = rawWorks.map(parseWork);
       const rssXml = renderSkebFeed({
         title: target.title,
         siteUrl: target.siteUrl,

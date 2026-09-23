@@ -2276,13 +2276,25 @@ export function createLogger({
   const levels = LOG_LEVELS;
   const threshold = levels[level] ?? levels.info;
 
+  function normalizeFields(fields) {
+    if (!fields) return {};
+    if (fields instanceof Error) {
+      return { error: fields.message, stack: fields.stack };
+    }
+    if (typeof fields !== 'object' || Array.isArray(fields)) {
+      return { message: String(fields) };
+    }
+    return fields;
+  }
+
   function write(event, fields = {}, levelName = 'info') {
     if ((levels[levelName] ?? levels.info) < threshold) return;
+    const norm = normalizeFields(fields);
     const payload = {
       event,
       level: levelName,
       ts: new Date(now()).toISOString(),
-      ...(redact ? redactFields(fields) : fields),
+      ...(redact ? redactFields(norm) : norm),
     };
     try {
       sink(JSON.stringify(payload));

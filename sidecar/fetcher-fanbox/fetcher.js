@@ -31,7 +31,7 @@ function escapeXml(value) {
   }[c]));
 }
 
-function parsePost(post) {
+export function parsePost(post) {
   const creatorId = post.creatorId || 'creator';
   const authorName = post.user?.name || creatorId;
   const title = post.title || 'Untitled Post';

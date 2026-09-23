@@ -76,7 +76,7 @@ function thumbUrl(path) {
   return `${IMG_BASE}/thumbnail/data${path}`;
 }
 
-function parsePost(post, source, userId) {
+export function parsePost(post, source, userId) {
   const attachments = Array.isArray(post.attachments) ? post.attachments : [];
   const file = post.file && post.file.path ? post.file : null;
 

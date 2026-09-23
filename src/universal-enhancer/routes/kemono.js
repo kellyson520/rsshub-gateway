@@ -1,4 +1,4 @@
-import { kemonoTarget, renderKemonoFeed } from '../../../sidecar/fetcher-kemono/fetcher.js';
+import { kemonoTarget, parsePost, renderKemonoFeed } from '../../../sidecar/fetcher-kemono/fetcher.js';
 
 export const routes = [
   {
@@ -16,7 +16,8 @@ export const routes = [
       const data = await ctx.fetchJson(target.apiUrl, {
         headers: { Accept: 'application/json' },
       });
-      const items = Array.isArray(data) ? data : (data?.posts || []);
+      const rawPosts = Array.isArray(data) ? data : (data?.posts || []);
+      const items = rawPosts.map((p) => parsePost(p, target.source, target.id));
       const rssXml = renderKemonoFeed({
         title: target.title,
         siteUrl: target.siteUrl,

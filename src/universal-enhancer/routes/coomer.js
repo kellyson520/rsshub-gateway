@@ -1,4 +1,4 @@
-import { coomerTarget, renderCoomerFeed } from '../../../sidecar/fetcher-coomer/fetcher.js';
+import { coomerTarget, parsePost, renderCoomerFeed } from '../../../sidecar/fetcher-coomer/fetcher.js';
 
 export const routes = [
   {
@@ -15,7 +15,8 @@ export const routes = [
       const data = await ctx.fetchJson(target.apiUrl, {
         headers: { Accept: 'application/json' },
       });
-      const items = Array.isArray(data) ? data : (data?.posts || []);
+      const rawPosts = Array.isArray(data) ? data : (data?.posts || []);
+      const items = rawPosts.map(parsePost);
       const rssXml = renderCoomerFeed({
         title: target.title,
         siteUrl: target.siteUrl,

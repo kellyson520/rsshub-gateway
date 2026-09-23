@@ -1,4 +1,4 @@
-import { fanboxTarget, renderFeed as renderFanboxFeed } from '../../../sidecar/fetcher-fanbox/fetcher.js';
+import { fanboxTarget, parsePost, renderFeed as renderFanboxFeed } from '../../../sidecar/fetcher-fanbox/fetcher.js';
 
 export const routes = [
   {
@@ -18,7 +18,8 @@ export const routes = [
           Accept: 'application/json',
         },
       });
-      const items = data?.body || [];
+      const rawPosts = data?.body || [];
+      const items = rawPosts.map(parsePost);
       const rssXml = renderFanboxFeed({
         title: target.title,
         siteUrl: target.siteUrl,

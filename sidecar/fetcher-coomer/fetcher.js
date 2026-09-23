@@ -53,7 +53,7 @@ function escapeXml(value) {
   }[c]));
 }
 
-function parsePost(post) {
+export function parsePost(post) {
   const images = [];
   if (post.file && post.file.path) {
     images.push(`${SITE_BASE}/data${post.file.path}`);

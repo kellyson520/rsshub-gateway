@@ -42,19 +42,11 @@ export function resolveCategory(identifier) {
 
 export function linuxdoTarget(routeId, params = {}) {
   const normalizedRoute = String(routeId || '').trim();
+  const categoryParam = String(params.category || '').trim().toLowerCase();
+  const periodParam = String(params.period || params.type || '').trim().toLowerCase();
 
-  // 1. 最新
-  if (normalizedRoute === '/linuxdo/latest' || normalizedRoute === '/linuxdo') {
-    return {
-      apiUrl: `${SITE_BASE}/latest.json`,
-      siteUrl: `${SITE_BASE}/latest`,
-      title: 'LINUX DO - 最新话题',
-      description: 'LINUX DO 社区最新发布的讨论主题',
-    };
-  }
-
-  // 2. 热门
-  if (normalizedRoute === '/linuxdo/hot') {
+  // 1. 热门 (需在最前匹配)
+  if (normalizedRoute === '/linuxdo/hot' || categoryParam === 'hot') {
     return {
       apiUrl: `${SITE_BASE}/hot.json`,
       siteUrl: `${SITE_BASE}/hot`,
@@ -63,9 +55,12 @@ export function linuxdoTarget(routeId, params = {}) {
     };
   }
 
-  // 3. 精华 / TOP
-  if (normalizedRoute === '/linuxdo/top/:period?' || normalizedRoute === '/linuxdo/top') {
-    const period = String(params.period || 'daily').trim();
+  // 2. 精华 / TOP
+  if (
+    normalizedRoute.startsWith('/linuxdo/top') ||
+    categoryParam === 'top'
+  ) {
+    const period = periodParam || 'daily';
     return {
       apiUrl: `${SITE_BASE}/top.json?period=${encodeURIComponent(period)}`,
       siteUrl: `${SITE_BASE}/top?period=${encodeURIComponent(period)}`,
@@ -74,18 +69,27 @@ export function linuxdoTarget(routeId, params = {}) {
     };
   }
 
-  // 4. 分类板块
+  // 3. 最新
   if (
-    normalizedRoute === '/linuxdo/category/:category/:period?'
-    || normalizedRoute === '/linuxdo/c/:category/:period?'
-    || normalizedRoute === '/linuxdo/:category/:period?'
-    || normalizedRoute === '/linuxdo/:category'
+    normalizedRoute === '/linuxdo/latest' ||
+    normalizedRoute === '/linuxdo' ||
+    normalizedRoute === '/linuxdo/:category?/:type?' && !categoryParam ||
+    categoryParam === 'latest'
   ) {
-    const categoryParam = params.category;
+    return {
+      apiUrl: `${SITE_BASE}/latest.json`,
+      siteUrl: `${SITE_BASE}/latest`,
+      title: 'LINUX DO - 最新话题',
+      description: 'LINUX DO 社区最新发布的讨论主题',
+    };
+  }
+
+  // 4. 分类板块
+  if (categoryParam) {
     const cat = resolveCategory(categoryParam);
     if (!cat) throw new HttpError(400, `invalid category: ${categoryParam}`);
 
-    const period = params.period ? String(params.period).trim() : '';
+    const period = periodParam ? String(periodParam).trim() : '';
     const query = period ? `?period=${encodeURIComponent(period)}` : '';
     const apiUrl = cat.id
       ? `${SITE_BASE}/c/${encodeURIComponent(cat.slug)}/${cat.id}.json${query}`
@@ -100,6 +104,20 @@ export function linuxdoTarget(routeId, params = {}) {
       title: `LINUX DO - ${cat.name}`,
       description: cat.description || `LINUX DO ${cat.name} 板块话题`,
       category: cat,
+    };
+  }
+
+  // 兜底：如果是纯 /linuxdo/* 路径未带参数，尝试从路径解析
+  if (normalizedRoute.startsWith('/linuxdo/')) {
+    const sub = normalizedRoute.replace(/^\/linuxdo\/?/, '').split('/')[0];
+    if (sub && sub !== ':category?' && sub !== ':category') {
+      return linuxdoTarget('/linuxdo/:category', { category: sub, period: periodParam });
+    }
+    return {
+      apiUrl: `${SITE_BASE}/latest.json`,
+      siteUrl: `${SITE_BASE}/latest`,
+      title: 'LINUX DO - 最新话题',
+      description: 'LINUX DO 社区最新发布的讨论主题',
     };
   }
 
