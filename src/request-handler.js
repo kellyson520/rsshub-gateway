@@ -448,7 +448,7 @@ export function createRequestHandler(deps) {
       res.end(`redirecting to ${destination}\n`);
       return;
     }
-    if (dispatched?.route.backend.startsWith('sidecar://')) {
+    if (dispatched?.route.backend.startsWith('sidecar://') || dispatched?.route.backend.startsWith('universal://')) {
       const { route, params } = dispatched;
       attribution.source = route.routeId.split('/').filter(Boolean)[0] || 'sidecar';
       try {

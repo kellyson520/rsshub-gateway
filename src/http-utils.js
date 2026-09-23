@@ -8659,6 +8659,7 @@ export function createDispatcher({
   fetchImpl = fetch,
   logger = console,
   sidecarTimeoutMs = DEFAULT_SIDECAR_TIMEOUT_MS,
+  universalEnhancer = null,
 } = {}) {
   const readFn = readFileImpl || fs.readFileSync;
   const yamlParser = parseYaml || ((src) => {
@@ -8694,10 +8695,35 @@ export function createDispatcher({
   }
 
   function match(pathname) {
-    return matchRouteList([...routes, ...runtimeRoutes], pathname);
+    // 1. First check explicit route entries
+    const explicit = matchRouteList([...routes, ...runtimeRoutes], pathname);
+    if (explicit) return explicit;
+
+    // 2. If universalEnhancer has an in-process match, synthesize a route
+    if (universalEnhancer) {
+      const uMatch = universalEnhancer.match(pathname);
+      if (uMatch) {
+        return {
+          route: {
+            routeId: uMatch.route.routeId,
+            backend: 'universal://in-process',
+            fallbackUpstream: true,
+            cacheTtl: uMatch.route.cacheTtl,
+          },
+          params: uMatch.params,
+        };
+      }
+    }
+    return null;
   }
 
   async function callSidecar(route, params, { egressLane, cookies, cacheTtl, requestId } = {}) {
+    if (route?.backend === 'universal://in-process' && universalEnhancer) {
+      const pathname = typeof params === 'object' && Object.keys(params).length > 0
+        ? route.routeId.replace(/:([a-zA-Z0-9_]+)\??/g, (_, name) => params[name] || '')
+        : route.routeId;
+      return universalEnhancer.execute(pathname, { egressLane, cookies, requestId });
+    }
     const baseUrl = sidecarUrl(route?.backend);
     if (!baseUrl) throw new Error(`unsupported backend: ${route?.backend}`);
     let response;
@@ -8727,7 +8753,7 @@ export function createDispatcher({
     return payload;
   }
 
-  return { routes, runtimeRoutes, registerRoutes, unregisterRoutes, match, callSidecar };
+  return { routes, runtimeRoutes, registerRoutes, unregisterRoutes, match, callSidecar, universalEnhancer };
 }
 
 export function cookiesObject(cookies) {

@@ -50,6 +50,9 @@ services:
       GATEWAY_FEED_PREFETCH_INTERVAL_MS: "300000"
       GATEWAY_FEED_PREFETCH_CONCURRENCY: "3"
       GATEWAY_CACHE_TTL_RSS: "1800"
+      # 通用增强线路引擎：单进程内高性能异步驱动大部分高频站点，大幅削减子进程内存与端口开销
+      GATEWAY_UNIVERSAL_ENHANCER: "true"
+      # 保留核心疑难/反爬高压独立隔离 sidecar
       GATEWAY_SIDECAR_IWARA: "true"
       GATEWAY_SIDECAR_EH: "true"
       GATEWAY_SIDECAR_GGJAV: "true"
@@ -75,15 +78,16 @@ services:
       GATEWAY_SIDECAR_V2EX: "true"
       GATEWAY_SIDECAR_ACGRIP: "true"
       GATEWAY_SIDECAR_NYAA: "true"
-      GATEWAY_SIDECAR_DMHY: "true"
-      GATEWAY_SIDECAR_BANGUMI: "true"
-      GATEWAY_SIDECAR_STEAM: "true"
-      GATEWAY_SIDECAR_MANGADEX: "true"
-      GATEWAY_SIDECAR_EPIC: "true"
-      GATEWAY_SIDECAR_BILIBILI: "true"
-      GATEWAY_SIDECAR_WEIBO: "true"
-      GATEWAY_SIDECAR_ZHIHU: "true"
-      GATEWAY_SIDECAR_GITHUB: "true"
+      # 以下站点已全面迁移至通用线路内置引擎，子进程设为 false 节省资源
+      GATEWAY_SIDECAR_DMHY: "false"
+      GATEWAY_SIDECAR_BANGUMI: "false"
+      GATEWAY_SIDECAR_STEAM: "false"
+      GATEWAY_SIDECAR_MANGADEX: "false"
+      GATEWAY_SIDECAR_EPIC: "false"
+      GATEWAY_SIDECAR_BILIBILI: "false"
+      GATEWAY_SIDECAR_WEIBO: "false"
+      GATEWAY_SIDECAR_ZHIHU: "false"
+      GATEWAY_SIDECAR_GITHUB: "false"
     ports:
       - 127.0.0.1:1300:1300
       - 1301:1301

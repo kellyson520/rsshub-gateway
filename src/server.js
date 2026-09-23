@@ -54,6 +54,7 @@ import { createRequestService } from './infrastructure/request-service.js';
 import { createLeaseStore, createSignedChunk } from './download-lease.js';
 import { createDownloadSessionStore } from './download-session.js';
 import { createDispatcher } from './dispatcher.js';
+import { createUniversalEnhancer } from './universal-enhancer/index.js';
 import { createRequestHandler } from './request-handler.js';
 import { installGracefulShutdown } from './graceful-shutdown.js';
 import { createLeaseProxy } from './lease-proxy.js';
@@ -718,7 +719,8 @@ export function createGatewayServer(options = {}) {
     : null;
   feedPrefetchQueue?.start();
   const poller = options.poller || createPoller({ intervalMs: 60_000, logger });
-  const dispatcher = options.dispatcher || createDispatcher({ routesFile, logger });
+  const universalEnhancer = options.universalEnhancer || createUniversalEnhancer({ logger });
+  const dispatcher = options.dispatcher || createDispatcher({ routesFile, logger, universalEnhancer });
   const requestHandler = createRequestHandler({
     cache,
     dispatcher,
