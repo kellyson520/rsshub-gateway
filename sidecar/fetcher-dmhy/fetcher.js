@@ -10,7 +10,7 @@ export function parseDmhyTopics(html) {
   const topics = [];
   const seen = new Set();
 
-  const rowRegex = /<tr>([\s\S]*?)<\/tr>/gi;
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
 
   while ((rowMatch = rowRegex.exec(html)) !== null) {
@@ -38,7 +38,7 @@ export function parseDmhyTopics(html) {
     const magnet = magnetMatch ? magnetMatch[1] : '';
 
     // Size & seeders
-    const sizeMatch = /<td[^>]*class="text-center"[^>]*>(\d+(?:\.\d+)?\s*(?:[KMGTP]?B|Bytes))<\/td>/i.exec(rowHtml);
+    const sizeMatch = /<td[^>]*>(\d+(?:\.\d+)?\s*(?:[KMGTP]?B|Bytes))<\/td>/i.exec(rowHtml);
     const size = sizeMatch ? sizeMatch[1].trim() : '';
 
     const seedersMatch = /<span class="btl_1">(\d+)<\/span>/i.exec(rowHtml);

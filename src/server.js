@@ -281,6 +281,7 @@ export function createGatewayServer(options = {}) {
   });
 
   const browserFetch = requestService.browserFetch;
+  const browserRender = requestService.browserRender;
   const fetchdFetch = requestService.fetchdFetch;
   const fetchJsonViaFetchd = requestService.fetchJsonViaFetchd;
   const iwaraAccessToken = { value: null, expiresAt: 0 };
@@ -719,7 +720,11 @@ export function createGatewayServer(options = {}) {
     : null;
   feedPrefetchQueue?.start();
   const poller = options.poller || createPoller({ intervalMs: 60_000, logger });
-  const universalEnhancer = options.universalEnhancer || createUniversalEnhancer({ logger });
+  const universalEnhancer = options.universalEnhancer || createUniversalEnhancer({
+    fetchClient: { fetch: fetchExternal },
+    browserRenderClient: browserRender,
+    logger,
+  });
   const dispatcher = options.dispatcher || createDispatcher({ routesFile, logger, universalEnhancer });
   const requestHandler = createRequestHandler({
     cache,

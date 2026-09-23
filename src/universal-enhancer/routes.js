@@ -193,10 +193,21 @@ export function registerBuiltinRoutes(enhancer) {
     name: '动漫花园最新发布',
     cacheTtl: 900,
     handler: async (ctx) => {
-      const res = await ctx.fetch('https://share.dmhy.org/topics/list/page/1');
-      const html = await res.text();
+      let html = '';
+      try {
+        const rendered = await ctx.fetchRendered('https://share.dmhy.org/topics/list/page/1');
+        html = rendered?.html || '';
+      } catch {
+        const res = await ctx.fetch('https://share.dmhy.org/topics/list/page/1');
+        html = await res.text();
+      }
       const topics = parseDmhyTopics(html);
-      const rssXml = renderDmhyFeed(topics, '动漫花园 DMHY - 最新发布', 'https://share.dmhy.org/topics/list/page/1');
+      const rssXml = renderDmhyFeed({
+        title: '动漫花园 DMHY - 最新发布',
+        description: '动漫花园 DMHY 最新动画 BT 发布列表',
+        selfUrl: '/dmhy/latest',
+        topics,
+      });
       return { rssXml, mediaUrls: [], cacheHint: { ttl: 900 } };
     },
   });
@@ -214,8 +225,13 @@ export function registerBuiltinRoutes(enhancer) {
       });
       const todayId = new Date().getDay() || 7;
       const subjects = parseBangumiCalendar(data, todayId);
-      const rssXml = renderBangumiCalendarFeed(subjects, `Bangumi 每日放送`);
-      const mediaUrls = subjects.map((s) => s.images?.common || s.images?.large).filter(Boolean);
+      const rssXml = renderBangumiCalendarFeed({
+        title: 'Bangumi 番组计划 - 每日放送',
+        description: 'Bangumi 每日新番放送排期表',
+        selfUrl: '/bangumi/calendar/today',
+        items: subjects,
+      });
+      const mediaUrls = subjects.map((s) => s.cover).filter(Boolean);
       return { rssXml, mediaUrls, cacheHint: { ttl: 1800 } };
     },
   });

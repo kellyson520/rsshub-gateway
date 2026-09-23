@@ -21,9 +21,18 @@ export function coomerTarget(routeId, params = {}, query = {}) {
     throw new HttpError(400, `unsupported routeId: ${routeId}`);
   }
 
-  const source = String(params.source || 'patreon').toLowerCase();
+  const source = params.source !== undefined && params.source !== null && String(params.source).trim() !== ''
+    ? String(params.source).toLowerCase()
+    : 'patreon';
   const id = String(params.id || '').trim();
   const limit = positivePage(query.limit);
+
+  if (source === 'posts') {
+    const apiUrl = `${API_BASE}/posts`;
+    const siteUrl = `${SITE_BASE}/posts`;
+    const title = 'Coomer Posts';
+    return { apiUrl, siteUrl, title, limit };
+  }
 
   if (!id) throw new HttpError(400, 'user id is required');
 
