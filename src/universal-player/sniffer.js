@@ -1,6 +1,6 @@
 /**
- * 通用多平台视频嗅探子模块 (Video Sniffer)
- * 支持主流视频平台、流媒体协议(HLS .m3u8)、HTML5 <video>、OpenGraph 与社交媒体嵌入卡片
+ * 通用多平台音视频嗅探子模块 (Universal Media Sniffer)
+ * 支持主流视频平台、流媒体协议(HLS .m3u8)、HTML5 <video>/<audio>、OpenGraph、音频播客与社交媒体嵌入
  */
 
 import * as cheerio from 'cheerio';
@@ -17,7 +17,7 @@ export function resolveUrlSafely(relative, base) {
 }
 
 /**
- * 平台特征规则提取器
+ * 平台特征规则提取器池
  */
 export const PLATFORM_RULES = [
   // 1. YouTube 视频 / Shorts / 嵌入
@@ -64,7 +64,28 @@ export const PLATFORM_RULES = [
       id: m[1],
     }),
   },
-  // 5. TikTok
+  // 5. Twitch Clips & VODs
+  {
+    name: 'twitch-clip',
+    test: (url) => url.match(/clips\.twitch\.tv\/([a-zA-Z0-9_-]+)/i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://clips.twitch.tv/embed?clip=${m[1]}&parent=localhost`,
+      platform: 'Twitch Clip',
+      id: m[1],
+    }),
+  },
+  {
+    name: 'twitch-video',
+    test: (url) => url.match(/twitch\.tv\/videos\/(\d+)/i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://player.twitch.tv/?video=${m[1]}&parent=localhost&autoplay=false`,
+      platform: 'Twitch',
+      id: m[1],
+    }),
+  },
+  // 6. TikTok
   {
     name: 'tiktok',
     test: (url) => url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i),
@@ -75,7 +96,7 @@ export const PLATFORM_RULES = [
       id: m[1],
     }),
   },
-  // 6. X / Twitter
+  // 7. X / Twitter
   {
     name: 'twitter',
     test: (url) => url.match(/(?:twitter\.com|x\.com)\/[^/]+\/status\/(\d+)/i),
@@ -86,13 +107,57 @@ export const PLATFORM_RULES = [
       id: m[1],
     }),
   },
+  // 8. Instagram Reel / Post
+  {
+    name: 'instagram',
+    test: (url) => url.match(/instagram\.com\/(?:p|reel)\/([a-zA-Z0-9_-]+)/i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://www.instagram.com/p/${m[1]}/embed`,
+      platform: 'Instagram',
+      id: m[1],
+    }),
+  },
+  // 9. Pornhub
+  {
+    name: 'pornhub',
+    test: (url) => url.match(/pornhub\.com\/view_video\.php\?viewkey=([a-zA-Z0-9]+)/i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://www.pornhub.com/embed/${m[1]}`,
+      platform: 'Pornhub',
+      id: m[1],
+    }),
+  },
+  // 10. SpankBang
+  {
+    name: 'spankbang',
+    test: (url) => url.match(/spankbang\.com\/([a-zA-Z0-9]+)\/video\//i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://spankbang.com/${m[1]}/embed/`,
+      platform: 'SpankBang',
+      id: m[1],
+    }),
+  },
+  // 11. SoundCloud Audio Embed
+  {
+    name: 'soundcloud',
+    test: (url) => url.match(/soundcloud\.com\/[^/]+\/[^/]+/i),
+    extract: (m) => ({
+      type: 'iframe',
+      src: `https://w.soundcloud.com/player/?url=${encodeURIComponent(m[0])}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false`,
+      platform: 'SoundCloud',
+      mediaCategory: 'audio',
+    }),
+  },
 ];
 
 /**
- * 从 URL 和 HTML 中智能嗅探视频源
+ * 从 URL 和 HTML 中智能嗅探音视频源
  * @param {string} url - 目标网页 URL
  * @param {string} [html=''] - 目标网页 HTML
- * @returns {{ type: 'iframe' | 'hls' | 'video', src: string, poster?: string, title?: string, platform?: string } | null}
+ * @returns {{ type: 'iframe' | 'hls' | 'video' | 'audio', src: string, poster?: string, title?: string, platform?: string, mediaCategory?: 'video' | 'audio' } | null}
  */
 export function sniffUniversalVideo(url, html = '') {
   const targetUrl = String(url || '');
@@ -137,7 +202,17 @@ export function sniffUniversalVideo(url, html = '') {
     }
   }
 
-  // 4. 正则嗅探 HLS .m3u8 直链
+  // 4. HTML5 <audio> 标签
+  const audioElem = $('audio').first();
+  if (audioElem.length) {
+    const src = audioElem.attr('src') || audioElem.find('source').first().attr('src');
+    if (src) {
+      const resolvedSrc = resolveUrlSafely(src, targetUrl);
+      return { type: 'audio', src: resolvedSrc, platform: 'HTML5-Audio', mediaCategory: 'audio' };
+    }
+  }
+
+  // 5. 正则嗅探 HLS .m3u8 直链
   const m3u8Match = html.match(/hlsUrl\s*=\s*["']([^"']+)["']/i)
     || html.match(/(?:source|file|videoUrl|streamUrl)\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i)
     || html.match(/https?:\/\/[^"'\s<>]+\.m3u8(?:\?[^"'\s<>]*)?/i);
@@ -146,7 +221,7 @@ export function sniffUniversalVideo(url, html = '') {
     return { type: 'hls', src: resolveUrlSafely(raw, targetUrl), platform: 'HLS-Stream' };
   }
 
-  // 5. 正则嗅探 MP4 / WebM 直链
+  // 6. 正则嗅探 MP4 / WebM 直链
   const mp4Match = html.match(/(?:video_url|videoUrl|mp4Url)\s*=\s*["']([^"']+\.mp4[^"']*)["']/i)
     || html.match(/https?:\/\/[^"'\s<>]+\.mp4(?:\?[^"'\s<>]*)?/i);
   if (mp4Match) {
@@ -154,7 +229,13 @@ export function sniffUniversalVideo(url, html = '') {
     return { type: 'video', src: resolveUrlSafely(raw, targetUrl), platform: 'MP4-Stream' };
   }
 
-  // 6. 内嵌播放器 iframe
+  // 7. 正则嗅探 MP3 / M4A / AAC 音频播客直链
+  const audioMatch = html.match(/https?:\/\/[^"'\s<>]+\.(?:mp3|m4a|aac|flac|wav)(?:\?[^"'\s<>]*)?/i);
+  if (audioMatch) {
+    return { type: 'audio', src: resolveUrlSafely(audioMatch[0], targetUrl), platform: 'Audio-Podcast', mediaCategory: 'audio' };
+  }
+
+  // 8. 内嵌播放器 iframe
   const iframeElem = $('iframe[src*="player"], iframe[src*="embed"], iframe[src*="video"]').first();
   if (iframeElem.length) {
     const src = iframeElem.attr('src');

@@ -129,3 +129,29 @@ test('upstream RSSHub feed enhancement: automatically injects video player and e
   // 2. MP4 item: 自动补充 <enclosure type="video/mp4" ...>
   assert.ok(enhanced.includes('<enclosure url="https://example.com/media/ep1.mp4" type="video/mp4" length="0"/>') || enhanced.includes('type="video/mp4"'));
 });
+
+test('universal media engine: sniffs audio podcasts, Twitch and Instagram', () => {
+  const twitch = sniffUniversalVideo('https://clips.twitch.tv/FrailTamePeanutCurseLit-abc123');
+  assert.ok(twitch);
+  assert.equal(twitch.platform, 'Twitch Clip');
+  assert.ok(twitch.src.includes('clips.twitch.tv/embed'));
+
+  const instagram = sniffUniversalVideo('https://www.instagram.com/reel/C123456789/');
+  assert.ok(instagram);
+  assert.equal(instagram.platform, 'Instagram');
+  assert.ok(instagram.src.includes('instagram.com/p/C123456789/embed'));
+
+  const audioHtml = `<p>本期音频节目录音：<a href="https://podcast.example.com/episodes/42.mp3">下载试听</a></p>`;
+  const audio = sniffUniversalVideo('https://podcast.example.com/episodes/42', audioHtml);
+  assert.ok(audio);
+  assert.equal(audio.type, 'audio');
+  assert.equal(audio.src, 'https://podcast.example.com/episodes/42.mp3');
+
+  const renderedAudio = renderUniversalPlayerComponent({
+    video: audio,
+    title: '第42期：深度技术专访',
+  });
+  assert.ok(renderedAudio.includes('universal-audio-player'));
+  assert.ok(renderedAudio.includes('第42期：深度技术专访'));
+  assert.ok(renderedAudio.includes('https://podcast.example.com/episodes/42.mp3'));
+});

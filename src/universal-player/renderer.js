@@ -1,5 +1,5 @@
 /**
- * 影院级播放器渲染器与 UI 样式子模块 (Cinema Player Renderer)
+ * 影院级多媒体播放器渲染器与 UI 样式子模块 (Cinema & Audio Player Renderer)
  */
 
 import { escapeHtml } from '../http-utils.js';
@@ -20,6 +20,18 @@ export const UNIVERSAL_PLAYER_STYLES = `
   width: 100%;
   padding-top: 56.25%; /* 16:9 Aspect Ratio */
   background: #000;
+}
+.universal-audio-box {
+  padding: 24px 20px;
+  background: linear-gradient(135deg, #131722, #1b2130);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.universal-audio-player {
+  width: 100%;
+  outline: none;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
 }
 .universal-cinema-iframe,
 .universal-cinema-video {
@@ -59,6 +71,9 @@ export const UNIVERSAL_PLAYER_STYLES = `
   text-transform: uppercase;
   white-space: nowrap;
 }
+.universal-cinema-badge.audio-badge {
+  background: #38bdf8;
+}
 .universal-cinema-title {
   color: #f1f5f9;
   font-weight: 600;
@@ -75,11 +90,11 @@ export const UNIVERSAL_PLAYER_STYLES = `
 `;
 
 /**
- * 渲染通用 16:9 响应式影院播放器 HTML 组件
+ * 渲染通用 16:9 响应式影院播放器/音频播客播放器 HTML 组件
  * @param {object} params
- * @param {object} params.video - 嗅探到的视频对象
+ * @param {object} params.video - 嗅探到的媒体对象
  * @param {string} [params.poster] - 封面预览图
- * @param {string} [params.title] - 视频标题
+ * @param {string} [params.title] - 标题
  * @returns {string} 播放器 HTML 片段
  */
 export function renderUniversalPlayerComponent({ video, poster = '', title = '' }) {
@@ -87,7 +102,35 @@ export function renderUniversalPlayerComponent({ video, poster = '', title = '' 
 
   const { type, src, platform } = video;
   const isHls = type === 'hls';
+  const isAudio = type === 'audio';
   const playerPoster = poster || video.poster || '';
+
+  if (isAudio) {
+    return `
+<!-- Universal Audio Podcast Player -->
+<div class="universal-cinema-container">
+  <div class="universal-audio-box">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:26px;">🎙️</span>
+      <div style="flex:1;overflow:hidden;">
+        <div style="font-size:15px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(title || '音频播客播放')}</div>
+        <div style="font-size:12px;color:#94a3b8;">${escapeHtml(platform || '音频流')}</div>
+      </div>
+    </div>
+    <audio controls class="universal-audio-player" src="${escapeHtml(src)}" preload="metadata">
+      您的浏览器不支持 HTML5 音频播放。
+    </audio>
+  </div>
+  <div class="universal-cinema-bar">
+    <div class="universal-cinema-info">
+      <span class="universal-cinema-badge audio-badge">🎵 音频模式</span>
+      ${title ? `<span class="universal-cinema-title">${escapeHtml(title)}</span>` : ''}
+    </div>
+    ${platform ? `<span class="universal-cinema-platform">来源：${escapeHtml(platform)}</span>` : ''}
+  </div>
+</div>
+`;
+  }
 
   return `
 <!-- Universal Cinema Video Player -->
