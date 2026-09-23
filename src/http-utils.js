@@ -160,6 +160,14 @@ export const HOTLINK_REFERERS = Object.freeze({
   'fanbox.cc': 'https://www.fanbox.cc/',
   'nodeseek.com': 'https://www.nodeseek.com/',
   'linux.do': 'https://linux.do/',
+  'nyaa.si': 'https://nyaa.si/',
+  'dmhy.org': 'https://share.dmhy.org/',
+  'mangadex.org': 'https://mangadex.org/',
+  'uploads.mangadex.org': 'https://mangadex.org/',
+  'dmm.co.jp': 'https://www.dmm.co.jp/',
+  'pics.dmm.co.jp': 'https://www.dmm.co.jp/',
+  'bgm.tv': 'https://bgm.tv/',
+  'lain.bgm.tv': 'https://bgm.tv/',
 });
 
 export function refererFor(url, referers = HOTLINK_REFERERS) {
@@ -1401,6 +1409,12 @@ export const ALLOWED_HOSTS = Object.freeze([
   'qpic.cn',
   'sehuatang.org',
   'fanza.co.jp',
+  'share.dmhy.org',
+  'dmhy.org',
+  'mangadex.org',
+  'api.mangadex.org',
+  'uploads.mangadex.org',
+  'pics.dmm.co.jp',
 ]);
 
 export function routeMetadata(metadata = {}) {
@@ -4935,6 +4949,8 @@ export const ADULT_DOMAINS = Object.freeze([
   'dlsite.com',
   'dlsite.jp',
   'nodeseek.com',
+  'fanza.co.jp',
+  'dmm.co.jp',
 ]);
 
 export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, acceptLanguage = DEFAULT_ADULT_ACCEPT_LANGUAGE, url } = {}) {
@@ -4945,6 +4961,9 @@ export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, accept
   const targetStr = String(url || '');
   if (targetStr.includes('dlsite.com') || targetStr.includes('dlsite.jp')) {
     headers['Cookie'] = 'adultchecked=1; locale=zh-cn;';
+  }
+  if (targetStr.includes('dmm.co.jp') || targetStr.includes('fanza.co.jp')) {
+    headers['Cookie'] = 'age_check_done=1; ckcy=1; cklg=ja;';
   }
   return headers;
 }

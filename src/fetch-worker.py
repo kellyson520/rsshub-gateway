@@ -117,12 +117,20 @@ def run_request(payload):
     header_keys_lower = {str(k).lower() for k in headers}
     if ("dlsite.com" in domain or "dlsite.jp" in domain) and "cookie" not in header_keys_lower:
         headers["cookie"] = "adultchecked=1; locale=zh-cn;"
+    if ("dmm.co.jp" in domain or "fanza.co.jp" in domain) and "cookie" not in header_keys_lower:
+        headers["cookie"] = "age_check_done=1; ckcy=1; cklg=ja;"
     if "hanime1.me" in domain and "referer" not in header_keys_lower:
         headers["referer"] = "https://hanime1.me/"
     if "nodeseek.com" in domain and "referer" not in header_keys_lower:
         headers["referer"] = "https://www.nodeseek.com/"
     if "v2ex.com" in domain and "referer" not in header_keys_lower:
         headers["referer"] = "https://www.v2ex.com/"
+    if "nyaa.si" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://nyaa.si/"
+    if "dmhy.org" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://share.dmhy.org/"
+    if "mangadex.org" in domain and "referer" not in header_keys_lower:
+        headers["referer"] = "https://mangadex.org/"
 
     # 动态负载均衡与打散重试，优先尝试历史成功通道
     remembered_proxy = DOMAIN_SUCCESS_PROXIES.get(domain)

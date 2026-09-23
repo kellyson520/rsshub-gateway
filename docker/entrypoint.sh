@@ -107,6 +107,21 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_ACGRIP:-true}" = "true" ]; then
       start_sidecar fetcher-acgrip
     fi
+    if [ "${GATEWAY_SIDECAR_NYAA:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-nyaa
+    fi
+    if [ "${GATEWAY_SIDECAR_DMHY:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-dmhy
+    fi
+    if [ "${GATEWAY_SIDECAR_BANGUMI:-true}" = "true" ]; then
+      start_sidecar fetcher-bangumi
+    fi
+    if [ "${GATEWAY_SIDECAR_STEAM:-true}" = "true" ]; then
+      start_sidecar fetcher-steam
+    fi
+    if [ "${GATEWAY_SIDECAR_MANGADEX:-true}" = "true" ]; then
+      start_sidecar fetcher-mangadex
+    fi
     exec node src/server.js
     ;;
 esac

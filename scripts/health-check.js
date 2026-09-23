@@ -35,6 +35,11 @@ const ROUTES = [
   { name: 'NodeSeek 社区', path: '/nodeseek/latest' },
   { name: 'V2EX 技术社区', path: '/v2ex/topics/latest' },
   { name: 'ACG.RIP 动漫BT', path: '/acgrip/latest' },
+  { name: 'Nyaa 动漫BT', path: '/nyaa/recent' },
+  { name: '动漫花园 DMHY', path: '/dmhy/latest' },
+  { name: 'Bangumi 放送日历', path: '/bangumi/calendar/today' },
+  { name: 'Steam 游戏特惠', path: '/steam/specials' },
+  { name: 'MangaDex 漫画更新', path: '/mangadex/latest' },
 ];
 
 async function checkRoute({ name, path }) {
