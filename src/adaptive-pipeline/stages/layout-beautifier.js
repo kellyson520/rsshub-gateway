@@ -1,3 +1,5 @@
+import { setCdata } from '../../http-utils.js';
+
 /**
  * 排版与暗黑模式适配去噪算子
  * 1. 清理破坏现代阅读器暗黑模式与手机屏幕的内联固定样式（固定高宽、黑色字体、白色背景）
@@ -119,6 +121,6 @@ export function applyLayoutBeautifier($, itemNode) {
     raw = removeTrackingPixels(raw);
     raw = sanitizeInlineStyles(raw);
 
-    n.text(raw);
+    setCdata($, n, raw);
   }
 }

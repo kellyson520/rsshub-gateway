@@ -11,6 +11,7 @@ import {
   normalizeNumericEntities,
   rewriteEntry,
   rewriteFeedHtml,
+  setCdata,
   signedGatewayUrl,
   transformFeed as baseTransformFeed,
   XML_NAMED_ENTITIES,
@@ -18,9 +19,11 @@ import {
 } from './http-utils.js';
 
 import { applyAdaptivePipeline } from './adaptive-pipeline/index.js';
+import { enhanceFeedItemWithVideo, applyFeedVideoEnhancer } from './universal-player/feed-enhancer.js';
 
 export {
   cdata,
+  setCdata,
   decodeEntity,
   decodeTextEntities,
   escapeHtml,
@@ -33,6 +36,8 @@ export {
   matchesFilters,
   rewriteEntry,
   applyAdaptivePipeline,
+  enhanceFeedItemWithVideo,
+  applyFeedVideoEnhancer,
 };
 
 export function rewriteHtml(html, options) {

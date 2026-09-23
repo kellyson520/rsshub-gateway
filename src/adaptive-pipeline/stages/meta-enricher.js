@@ -4,6 +4,8 @@
  * 2. 智能提取标签 (Hashtag -> <category>)
  */
 
+import { setCdata } from '../../http-utils.js';
+
 export function calculateReadingStats(text) {
   if (!text || typeof text !== 'string') {
     return { chars: 0, words: 0, minutes: 0 };
@@ -70,7 +72,7 @@ export function applyMetaEnricher($, itemNode) {
       const badge = `<p style="font-size: 13px; color: #888; margin-bottom: 12px;">📖 约 ${stats.minutes} 分钟阅读 (${stats.totalUnits} 字)</p>`;
       const target = contentNode.length > 0 ? contentNode : descNode;
       if (target.length > 0) {
-        target.text(`${badge}${target.text()}`);
+        setCdata($, target, `${badge}${target.text()}`);
       }
     }
   }

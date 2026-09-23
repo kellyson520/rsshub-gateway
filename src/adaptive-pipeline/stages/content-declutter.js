@@ -1,3 +1,5 @@
+import { setCdata } from '../../http-utils.js';
+
 /**
  * 内容去噪与垃圾尾巴清理算子
  * 1. 清理常见 RSS 爬虫附加的推广尾巴、版权废话与二维码关注提示
@@ -40,7 +42,7 @@ export function applyContentDeclutter($, itemNode) {
     if (!raw) continue;
     const decluttered = declutterHtml(raw);
     if (decluttered !== raw) {
-      n.text(decluttered);
+      setCdata($, n, decluttered);
     }
   }
 }

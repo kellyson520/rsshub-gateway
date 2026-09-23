@@ -1,3 +1,5 @@
+import { setCdata } from '../../http-utils.js';
+
 /**
  * 智能媒体升格与无损解析算子
  * 1. 自动嗅探并将 Twitter/Bilibili/Weibo/Pixiv/Zhihu/YouTube 等主流 CDN 压缩缩略图升级为无损原图
@@ -124,6 +126,6 @@ export function applyMediaHydrator($, itemNode, cheerioParser = null) {
   // 2. 嗅探并修补 enclosure
   detectMediaEnclosure($, itemNode, rawHtml);
 
-  // 重新写回正文
-  targetNode.text(rawHtml);
+  // 重新写回正文 (保持 CDATA)
+  setCdata($, targetNode, rawHtml);
 }

@@ -155,3 +155,125 @@ test('universal media engine: sniffs audio podcasts, Twitch and Instagram', () =
   assert.ok(renderedAudio.includes('第42期：深度技术专访'));
   assert.ok(renderedAudio.includes('https://podcast.example.com/episodes/42.mp3'));
 });
+
+test('RSS reader compatibility: strictly preserves CDATA and generates reader-compatible media cards and namespaces', async () => {
+  const { transformFeed } = await import('../src/feed-transform.js');
+
+  const rawXml = `<?xml version="1.0" encoding="utf-8"?>
+  <rss version="2.0">
+    <channel>
+      <title>Feed for Readers</title>
+      <link>https://example.com</link>
+      <item>
+        <title>视频教程分享</title>
+        <link>https://www.youtube.com/watch?v=9bZkp7q19f0</link>
+        <description><![CDATA[<p>这是视频正文说明，各大阅读器应正常渲染 HTML 而非转义字符。</p>]]></description>
+      </item>
+    </channel>
+  </rss>`;
+
+  const output = transformFeed(rawXml, {
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+    signedTargetMetadata: { egressScope: 'public' },
+  });
+
+  // 1. 验证 CDATA 存在且未被转义为 &lt;p&gt;
+  assert.ok(output.includes('<![CDATA['), 'Output must contain CDATA wrapper');
+  assert.ok(!output.includes('&lt;p&gt;这是视频正文说明'), 'HTML tags must not be escaped as literal text');
+
+  // 2. 验证阅读器 WebView 兼容卡片与备用播放链接
+  assert.ok(output.includes('rss-media-card'), 'Must contain reader-compatible card');
+  assert.ok(output.includes('在 YouTube 播放'), 'Must contain fallback player link');
+
+  // 3. 验证命名空间声明已自动补充
+  assert.ok(output.includes('xmlns:content="http://purl.org/rss/1.0/modules/content/"'));
+  assert.ok(output.includes('xmlns:media="http://search.yahoo.com/mrss/"'));
+});
+
+test('RSS reader compatibility: HTML5 video and audio native controls with posters and enclosures', async () => {
+  const { transformFeed } = await import('../src/feed-transform.js');
+
+  const rawXml = `<?xml version="1.0" encoding="utf-8"?>
+  <rss version="2.0">
+    <channel>
+      <title>Native Media Feed</title>
+      <link>https://example.com</link>
+      <item>
+        <title>原生视频演示</title>
+        <link>https://example.com/videos/demo</link>
+        <description><![CDATA[<p>精彩视频回顾：<video src="https://media.example.com/clip.mp4" poster="https://media.example.com/poster.jpg"></video></p>]]></description>
+      </item>
+      <item>
+        <title>科技播客第100期</title>
+        <link>https://example.com/podcast/100</link>
+        <description><![CDATA[<p>本期音频：<audio src="https://media.example.com/ep100.mp3"></audio><img src="https://media.example.com/ep100-cover.jpg"/></p>]]></description>
+      </item>
+    </channel>
+  </rss>`;
+
+  const output = transformFeed(rawXml, {
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+  });
+
+  // 1. 原生 video controls 与 poster 校验
+  assert.match(output, /<video src="[^"]+" controls playsinline/);
+  assert.match(output, /poster="[^"]+"/);
+  assert.match(output, /<enclosure url="[^"]+" type="video\/mp4" length="0"\/>/);
+  assert.match(output, /<media:content url="[^"]+" type="video\/mp4" medium="video"\/>/);
+  assert.match(output, /<media:thumbnail url="[^"]+"/);
+
+  // 2. 原生 audio controls 与封面校验
+  assert.match(output, /<audio src="[^"]+" controls/);
+  assert.match(output, /<enclosure url="[^"]+" type="audio\/mpeg" length="0"\/>/);
+  assert.match(output, /<media:content url="[^"]+" type="audio\/mpeg" medium="audio"\/>/);
+
+  // 3. content:encoded 合成与 CDATA 保全校验
+  assert.ok(output.includes('<content:encoded><![CDATA['), 'Must synthesize content:encoded with CDATA');
+  assert.ok(!output.includes('&lt;video'), 'Video tags must not be escaped as literal text');
+  assert.ok(!output.includes('&lt;audio'), 'Audio tags must not be escaped as literal text');
+});
+
+test('RSS reader compatibility: Atom entry support with enclosures and MRSS', async () => {
+  const { transformFeed } = await import('../src/feed-transform.js');
+
+  const atomXml = `<?xml version="1.0" encoding="utf-8"?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <title>Atom Media Feed</title>
+    <entry>
+      <title>Bilibili 视频分享</title>
+      <link rel="alternate" href="https://www.bilibili.com/video/BV1xx411c7mD" />
+      <summary>B站热门视频</summary>
+      <content type="html"><![CDATA[<p>这是 B 站精彩内容，请欣赏。<img src="https://i0.hdslb.com/bfs/archive/cover.jpg" /></p>]]></content>
+    </entry>
+    <entry>
+      <title>Atom 原生 MP4 视频</title>
+      <link rel="alternate" href="https://example.com/atom/post/1" />
+      <summary>Atom 视频正文</summary>
+      <content type="html"><![CDATA[<p>在线看：<video src="https://media.example.com/atom.mp4" poster="https://media.example.com/atom-poster.jpg"></video></p>]]></content>
+    </entry>
+  </feed>`;
+
+  const output = transformFeed(atomXml, {
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+  });
+
+  // 1. 根 feed 具备 media 与 content 命名空间
+  assert.ok(output.includes('xmlns:media="http://search.yahoo.com/mrss/"'));
+  assert.ok(output.includes('xmlns:content="http://purl.org/rss/1.0/modules/content/"'));
+
+  // 2. Bilibili entry 具备沙盒阅读器兜底卡片与直达播放链接
+  assert.ok(output.includes('player.bilibili.com/player.html'));
+  assert.ok(output.includes('在 Bilibili 播放'));
+  assert.match(output, /<media:thumbnail url="[^"]+"/);
+
+  // 3. Atom 原生视频 entry 具备 <link rel="enclosure"> 与 <media:content>
+  assert.match(output, /<link rel="enclosure" type="video\/mp4" href="[^"]+"/);
+  assert.match(output, /<media:content url="[^"]+" type="video\/mp4" medium="video"\/>/);
+
+  // 4. CDATA 保持未转义
+  assert.ok(output.includes('<![CDATA['), 'Atom content must be wrapped in CDATA');
+  assert.ok(!output.includes('&lt;p&gt;这是 B 站精彩内容'), 'Atom content must not be escaped');
+});

@@ -1661,12 +1661,46 @@ export function rewriteEntry($, entry, options, cheerioParser = cheerio) {
     }
   });
   $(entry).children().each((_, child) => {
-    if (!['description', 'content', 'content:encoded'].includes(child.name)) return;
+    if (!['description', 'content', 'content:encoded', 'summary'].includes(child.name)) return;
     const text = $(child).text();
     const hasCdata = $(child).contents().toArray().some((node) => node.type === 'cdata');
     const content = hasCdata ? decodeTextEntities(text) : text;
-    if (/<[a-z][\s\S]*>/i.test(content)) setCdata($, child, rewriteFeedHtml(content, options, cheerioParser));
+    if (/<[a-z][\s\S]*>/i.test(content)) {
+      setCdata($, child, rewriteFeedHtml(content, options, cheerioParser));
+    } else if (hasCdata) {
+      setCdata($, child, content);
+    }
   });
+
+  const isAtom = entry.name === 'entry' || $(entry).is('entry');
+  if (!isAtom) {
+    const descNode = $(entry).children('description').first();
+    const contentNode = $(entry).children('content\\:encoded, encoded').first();
+    if (descNode.length && !contentNode.length) {
+      const descHtml = descNode.contents().toArray().some((node) => node.type === 'cdata')
+        ? descNode.text()
+        : (descNode.html() || descNode.text());
+      if (/<[a-z][\s\S]*>/i.test(descHtml)) {
+        $(entry).append(`<content:encoded>${cdata(descHtml)}</content:encoded>`);
+      }
+    } else if (contentNode.length && !descNode.length) {
+      const contentHtml = contentNode.contents().toArray().some((node) => node.type === 'cdata')
+        ? contentNode.text()
+        : (contentNode.html() || contentNode.text());
+      $(entry).append(`<description>${cdata(contentHtml)}</description>`);
+    }
+  } else {
+    const summaryNode = $(entry).children('summary').first();
+    const contentNode = $(entry).children('content').first();
+    if (summaryNode.length && !contentNode.length) {
+      const summaryHtml = summaryNode.contents().toArray().some((node) => node.type === 'cdata')
+        ? summaryNode.text()
+        : (summaryNode.html() || summaryNode.text());
+      if (/<[a-z][\s\S]*>/i.test(summaryHtml)) {
+        $(entry).append(`<content type="html">${cdata(summaryHtml)}</content>`);
+      }
+    }
+  }
 }
 
 export function matchesFilters($, entry, filters = {}) {
@@ -1681,6 +1715,17 @@ export function transformFeed(xml, options = {}, cheerioParser = cheerio) {
     return '';
   }
   const $ = cheerioParser.load(xml, { xmlMode: true, decodeEntities: true });
+
+  const rssRoot = $('rss');
+  if (rssRoot.length > 0) {
+    if (!rssRoot.attr('xmlns:content')) rssRoot.attr('xmlns:content', 'http://purl.org/rss/1.0/modules/content/');
+    if (!rssRoot.attr('xmlns:media')) rssRoot.attr('xmlns:media', 'http://search.yahoo.com/mrss/');
+  }
+  const feedRoot = $('feed');
+  if (feedRoot.length > 0) {
+    if (!feedRoot.attr('xmlns:content')) feedRoot.attr('xmlns:content', 'http://purl.org/rss/1.0/modules/content/');
+    if (!feedRoot.attr('xmlns:media')) feedRoot.attr('xmlns:media', 'http://search.yahoo.com/mrss/');
+  }
   
   if (options.filters) {
     $('item,entry').each((_, entry) => {
