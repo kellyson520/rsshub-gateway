@@ -12,6 +12,11 @@ import * as cheerio from 'cheerio';
 import sanitizeHtml from 'sanitize-html';
 import sharp from 'sharp';
 import { ProxyAgent } from 'undici';
+import {
+  sniffUniversalVideo,
+  renderUniversalPlayerComponent,
+  UNIVERSAL_PLAYER_STYLES,
+} from './universal-player/engine.js';
 
 export function safeJsonParse(value, fallback = null) {
   if (value === null || value === undefined) return fallback;
@@ -7906,7 +7911,7 @@ export function renderDocument(title, content, preloadImages = []) {
       return `<link rel="preload" as="image" href="${escapeHtml(image.url)}" fetchpriority="high"${srcset ? ` imagesrcset="${escapeHtml(srcset)}" imagesizes="${IMAGE_SIZES}"` : ''}>`;
     })
     .join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}</style></head><body>${content}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${preloads}<style>${READER_CSS}\n${UNIVERSAL_PLAYER_STYLES}</style></head><body>${content}</body></html>`;
 }
 
 function renderReaderMetadata($) {
@@ -8068,7 +8073,16 @@ export function renderEhImagePage({ url, html, baseUrl, secret, signedTargetMeta
 }
 
 export function renderGenericReaderPage({ url, html, baseUrl, secret, signedTargetMetadata }) {
+  // 1. 万能视频引擎嗅探：自动检测任意站点的视频、流媒体或嵌入播放器
+  const universalVideo = sniffUniversalVideo(url, html);
   const $ = cheerio.load(html, { decodeEntities: false });
+  const title = $('title').first().text().trim() || url;
+  const poster = $('meta[property="og:image"]').attr('content')
+    || $('meta[name="twitter:image"]').attr('content')
+    || $('video[poster]').attr('poster')
+    || $('img').first().attr('src')
+    || '';
+
   $('script, noscript, iframe, form, object, embed').remove();
   $('img').each((_, element) => {
     const image = $(element);
@@ -8118,8 +8132,12 @@ export function renderGenericReaderPage({ url, html, baseUrl, secret, signedTarg
     // rewritten gateway link stripped from the reader output.
     allowedSchemes: ['http', 'https'],
   });
-  const title = $('title').first().text().trim() || url;
-  return renderDocument(title, `<main class="reader"><p class="reader-source"><a href="${escapeHtml(url)}">原始来源</a></p>${safe}</main>`);
+
+  const playerHtml = universalVideo
+    ? renderUniversalPlayerComponent({ video: universalVideo, poster, title })
+    : '';
+
+  return renderDocument(title, `<main class="reader"><p class="reader-source"><a href="${escapeHtml(url)}">原始来源</a></p>${playerHtml}${safe}</main>`);
 }
 
 export function renderReaderPage({ url, html, baseUrl, secret, prefetchedGallery, signedTargetMetadata }) {
