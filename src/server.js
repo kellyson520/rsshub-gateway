@@ -737,6 +737,7 @@ export function createGatewayServer(options = {}) {
     directLinkProber,
     discoverCachedEhGallery,
     discoverEhGallery,
+    browserRender,
     downloadSessions,
     dynamicRouteRegistry,
     egressAdapter,

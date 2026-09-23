@@ -11,6 +11,7 @@ import {
   signedGatewayUrl,
 } from '../http-utils.js';
 import * as cheerio from 'cheerio';
+import { ProxyAgent } from 'undici';
 
 export const name = 'adult-media';
 export const publiclyReadable = true;
@@ -43,7 +44,7 @@ export function unavailableMessage() {
 
 export function isAdultVideoTarget(url) {
   if (!url || typeof url !== 'string') return false;
-  return /(?:jable\.tv\/videos\/|missav\.[a-z]+\/|hanime1\.me\/watch|javbus\.com\/[A-Za-z0-9_-]+|javdb\.com\/v\/|airav\.[a-z]+\/|ggjav\.com\/main\/movie\/|91porn\.com\/view_video\.php)/i.test(url);
+  return /(?:jable\.tv\/videos\/|missav\.[a-z]+\/|hanime1\.me\/watch|javbus\.com\/[A-Za-z0-9_-]+|javdb\.com\/v\/|airav\.[a-z]+\/|ggjav\.com\/main\/movie\/|91porn\.com\/view_video\.php|playno1\.com\/article)/i.test(url);
 }
 
 export function extractAdultCode(url, title = '') {
@@ -72,18 +73,28 @@ export function extractAdultCode(url, title = '') {
   return '';
 }
 
-export async function fetchAdultVideoDetail(url, { browserRenderUrl = process.env.GATEWAY_BROWSER_RENDER_URL || 'http://127.0.0.1:8004' } = {}) {
+export async function fetchAdultVideoDetail(url, { browserRenderClient, browserRenderUrl = process.env.GATEWAY_BROWSER_RENDER_URL || 'http://127.0.0.1:8004' } = {}) {
   if (!url) return null;
 
   let html = '';
-  // 1. 优先通过内网无头浏览器服务（端口8004）进行高保真渲染，绕过 CF 5秒盾并加载动态 JS
-  if (browserRenderUrl) {
+  // 1. 优先通过内网无头浏览器服务（端口8004）
+  const renderClient = browserRenderClient?.render ? browserRenderClient : null;
+  if (renderClient) {
+    try {
+      const renderRes = await renderClient({ url, waitMs: 2500 });
+      if (renderRes?.html && renderRes.html.length > 500) {
+        html = renderRes.html;
+      }
+    } catch {
+      // 容错降级
+    }
+  } else if (browserRenderUrl) {
     try {
       const renderRes = await fetch(`${browserRenderUrl.replace(/\/$/, '')}/render`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url, waitMs: 2500 }),
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(10000),
       });
       if (renderRes.ok) {
         const data = await renderRes.json();
@@ -96,39 +107,59 @@ export async function fetchAdultVideoDetail(url, { browserRenderUrl = process.en
     }
   }
 
-  // 2. 无头浏览器不可用时降级为普通轻量 HTTP 请求
+  // 2. 直连 HTTP 请求（附带防反爬 Cookie 与 Proxy 自动降级）
   if (!html) {
+    const fetchHeaders = adultMediaHeaders({ url });
+    fetchHeaders['referer'] = url;
+
+    // 尝试直接获取
     try {
       const res = await fetch(url, {
-        headers: {
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          referer: url,
-        },
-        signal: AbortSignal.timeout(6000),
+        headers: fetchHeaders,
+        signal: AbortSignal.timeout(5000),
       });
       if (res.ok) {
         html = await res.text();
       }
     } catch {
-      // ignore
+      // 失败时走本地代理 127.0.0.1:7890
+      try {
+        const proxyDispatcher = new ProxyAgent('http://127.0.0.1:7890');
+        const res = await fetch(url, {
+          dispatcher: proxyDispatcher,
+          headers: fetchHeaders,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (res.ok) {
+          html = await res.text();
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
-  const $ = cheerio.load(html || '');
+  if (!html) return null;
+
+  const $ = cheerio.load(html, { decodeEntities: false });
+
+  // 提取标题
   const rawTitle = $('meta[property="og:title"]').attr('content')
-    || $('title').first().text().replace(/\s*-\s*(?:Jable|MissAV|Hanime1|JavBus|JavDB|Javchu).*$/i, '').trim()
+    || $('title').first().text().replace(/\s*-\s*(?:Jable|MissAV|Hanime1|JavBus|JavDB|PLAYNO\.1|AVNo\.1).*$/i, '').trim()
     || '';
 
+  // 提取封面
   const cover = $('meta[property="og:image"]').attr('content')
     || $('.bigImage').attr('href')
     || $('.screencap img').attr('src')
     || $('img[poster]').attr('src')
+    || $('#article_content img').first().attr('src')
     || '';
 
   // 嗅探 m3u8 流媒体直链
   let streamUrl = '';
   const m3u8Match = html.match(/hlsUrl\s*=\s*["']([^"']+)["']/i)
-    || html.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/i);
+    || html.match(/https?:\/\/[^"'\s<>]+\.m3u8(?:\?[^"'\s<>]*)?/i);
   if (m3u8Match) {
     streamUrl = m3u8Match[1] || m3u8Match[0];
   }
@@ -159,12 +190,39 @@ export async function fetchAdultVideoDetail(url, { browserRenderUrl = process.en
     if (name && !actresses.includes(name)) actresses.push(name);
   });
 
-  // 提取剧照
+  // 从正文中识别演员或情报
+  const articleContentText = $('#article_content, .article-content, #content').text();
+  const actressMatch = articleContentText.match(/女優名[：:]\s*([^\n\r(（]+)/i)
+    || rawTitle.match(/([^\s()（）]{2,15})\s*(?:\([^)]+\))?一改名/);
+  if (actressMatch) {
+    const name = actressMatch[1].trim().split(/[，,]/)[0].trim();
+    if (name && !actresses.includes(name)) actresses.push(name);
+  }
+
+  // 提取剧照与动画 GIF 预览片段
   const samples = [];
-  $('.sample-box, #sample-waterfall a, .preview-images a').each((_, el) => {
-    const src = $(el).attr('href') || $(el).find('img').attr('src');
-    if (src && !samples.includes(src)) samples.push(src);
+  const gifs = [];
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src');
+    if (!src || !/^https?:\/\//i.test(src)) return;
+    if (src.includes('avatar') || src.includes('logo') || src.includes('icon')) return;
+
+    if (/\.gif(?:\?|$)/i.test(src)) {
+      if (!gifs.includes(src)) gifs.push(src);
+    } else if (/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(src)) {
+      if (!samples.includes(src)) samples.push(src);
+    }
   });
+
+  // 提取文章正文段落
+  let articleHtml = '';
+  const contentContainer = $('#article_content, .article-content, .entry-content').first();
+  if (contentContainer.length > 0) {
+    // 移除正文容器里的图片和iframe，保留干净文字排版
+    const clone = contentContainer.clone();
+    clone.find('img, iframe, script, style').remove();
+    articleHtml = clone.html()?.trim() || '';
+  }
 
   const code = extractAdultCode(url, rawTitle);
   const title = rawTitle || (code ? `影片 ${code}` : '精选成人影院视频');
@@ -176,7 +234,9 @@ export async function fetchAdultVideoDetail(url, { browserRenderUrl = process.en
     code,
     actresses,
     samples,
+    gifs,
     magnets,
+    articleHtml,
     originalUrl: url,
   };
 }
@@ -189,8 +249,10 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
   const actresses = video.actresses || [];
   const magnets = video.magnets || [];
   const samples = video.samples || [];
+  const gifs = video.gifs || [];
+  const articleHtml = video.articleHtml || '';
 
-  let coverUrl = video.cover || '';
+  let coverUrl = video.cover || (samples[0] || gifs[0] || '');
   if (coverUrl.startsWith('http://')) coverUrl = coverUrl.replace('http://', 'https://');
   if (coverUrl && secret && baseUrl) {
     try {
@@ -198,7 +260,25 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
     } catch {}
   }
 
+  // 签名处理所有 GIF 动图与高清剧照
+  const signedGifs = gifs.map((g) => {
+    try {
+      return signedGatewayUrl(baseUrl, 'media', g, { secret, signedTargetMetadata: { egressScope: 'public', source: 'adult-media' } });
+    } catch {
+      return g;
+    }
+  });
+
+  const signedSamples = samples.map((s) => {
+    try {
+      return signedGatewayUrl(baseUrl, 'media', s, { secret, signedTargetMetadata: { egressScope: 'public', source: 'adult-media' } });
+    } catch {
+      return s;
+    }
+  });
+
   const isHls = streamUrl.includes('.m3u8');
+  const hasGifs = signedGifs.length > 0;
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -299,6 +379,47 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
       background: #000;
       outline: none;
     }
+    .gif-cinema-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+    }
+    .gif-cinema-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .gif-controls-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 18px;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #fff;
+      font-size: 13px;
+    }
+    .gif-btn {
+      padding: 5px 12px;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .gif-btn:hover { background: var(--accent); }
     .no-stream-card {
       position: absolute;
       top: 0;
@@ -361,6 +482,29 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
       padding: 4px 12px;
       border-radius: 6px;
     }
+    .quick-search-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px dashed var(--border);
+    }
+    .quick-search-tag {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 5px;
+      background: #1e2433;
+      color: var(--text-muted);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .quick-search-tag:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
     .section-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -377,57 +521,13 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
       align-items: center;
       gap: 8px;
     }
-    .magnet-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 12px 16px;
-      background: var(--card-inner);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      transition: border-color 0.2s;
+    .article-body {
+      font-size: 15px;
+      line-height: 1.8;
+      color: #cbd5e1;
+      word-break: break-word;
     }
-    .magnet-row:hover {
-      border-color: #3b4254;
-    }
-    .magnet-detail {
-      flex: 1;
-      overflow: hidden;
-    }
-    .magnet-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .magnet-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    .copy-btn {
-      padding: 7px 16px;
-      background: linear-gradient(135deg, #f43f5e, #e11d48);
-      color: #fff;
-      border: 0;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 700;
-      white-space: nowrap;
-      transition: transform 0.15s, opacity 0.15s;
-    }
-    .copy-btn:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-    .copy-btn:active {
-      transform: translateY(0);
-    }
+    .article-body p { margin-bottom: 14px; }
     .gallery-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -449,6 +549,19 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
     .gallery-tile:hover img {
       transform: scale(1.06);
     }
+    .copy-btn {
+      padding: 7px 16px;
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .copy-btn:hover { opacity: 0.9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -463,16 +576,28 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
   </nav>
 
   <main class="container">
-    <!-- 影院级专属播放器 -->
+    <!-- 沉浸式影院播放视口 -->
     <div class="cinema-viewport">
       ${streamUrl ? `
         <video id="cinemaVideo" class="cinema-player" controls playsinline preload="metadata"${coverUrl ? ` poster="${escapeHtml(coverUrl)}"` : ''}></video>
+      ` : (hasGifs ? `
+        <div class="gif-cinema-screen">
+          <img id="gifViewer" src="${escapeHtml(signedGifs[0])}" class="gif-cinema-img" alt="精彩动态切片预览"/>
+          <div class="gif-controls-overlay">
+            <span>🎞️ 官方精彩动态切片放映机 (<span id="gifIndex">1</span>/${signedGifs.length})</span>
+            <div style="display:flex;gap:8px;">
+              <button class="gif-btn" onclick="prevGif()">◀ 上一切片</button>
+              <button class="gif-btn" onclick="toggleGifPlay()" id="playPauseBtn">⏸ 暂停轮播</button>
+              <button class="gif-btn" onclick="nextGif()">下一切片 ▶</button>
+            </div>
+          </div>
+        </div>
       ` : `
         <div class="no-stream-card">
           ${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="封面预览"/>` : ''}
-          <p class="no-stream-hint">原站流媒体需动态解密，请使用下方磁力直连下载或点击右上角前往原站播放</p>
+          <p class="no-stream-hint">原站流媒体需动态解密或尚未发售，请使用下方磁力直连或聚合搜索</p>
         </div>
-      `}
+      `)}
     </div>
 
     <div class="header-area">
@@ -481,6 +606,16 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
         ${code ? `<span class="code-pill">${escapeHtml(code)}</span>` : ''}
         ${actresses.map((a) => `<span class="actress-pill">👤 ${escapeHtml(a)}</span>`).join('')}
       </div>
+
+      ${code ? `
+      <div class="quick-search-bar">
+        <span style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;">⚡ 番号直达播放：</span>
+        <a href="https://jable.tv/search/${encodeURIComponent(code)}/" target="_blank" class="quick-search-tag">Jable.tv 观看 ↗</a>
+        <a href="https://missav.live/search/${encodeURIComponent(code)}" target="_blank" class="quick-search-tag">MissAV 观看 ↗</a>
+        <a href="https://www.javbus.com/search/${encodeURIComponent(code)}" target="_blank" class="quick-search-tag">JavBus 磁力 ↗</a>
+        <a href="https://javdb.com/search?q=${encodeURIComponent(code)}" target="_blank" class="quick-search-tag">JavDB 档案 ↗</a>
+      </div>
+      ` : ''}
     </div>
 
     <!-- 磁力下载板块 -->
@@ -488,12 +623,12 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
     <section class="section-card">
       <h2 class="section-title">🧲 磁力直连高速下载 (${magnets.length})</h2>
       ${magnets.map((m) => `
-        <div class="magnet-row">
-          <div class="magnet-detail">
-            <div class="magnet-name" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>
-            ${m.size ? `<div class="magnet-sub">文件大小：${escapeHtml(m.size)}</div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;background:var(--card-inner);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">
+          <div style="flex:1;overflow:hidden;">
+            <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>
+            ${m.size ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">文件大小：${escapeHtml(m.size)}</div>` : ''}
           </div>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeHtml(m.href)}');alert('磁力链接已复制到剪贴板！可直接粘贴至迅雷/Aria2/115下载。')">
+          <button class="copy-btn" onclick="navigator.clipboard.writeText('${escapeHtml(m.href)}');alert('磁力链接已复制到剪贴板！')">
             复制磁链
           </button>
         </div>
@@ -501,12 +636,34 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
     </section>
     ` : ''}
 
-    <!-- 剧照画廊 -->
-    ${samples.length > 0 ? `
+    <!-- 文章正文剧情与演员情报 -->
+    ${articleHtml ? `
     <section class="section-card">
-      <h2 class="section-title">📷 官方高清剧照 (${samples.length})</h2>
+      <h2 class="section-title">📖 剧情介绍与独家专栏</h2>
+      <div class="article-body">${articleHtml}</div>
+    </section>
+    ` : ''}
+
+    <!-- 动态预览切片画廊 -->
+    ${signedGifs.length > 0 ? `
+    <section class="section-card">
+      <h2 class="section-title">🎞️ 全部精彩动态片段 (${signedGifs.length})</h2>
       <div class="gallery-grid">
-        ${samples.map((s) => `
+        ${signedGifs.map((g, idx) => `
+          <div class="gallery-tile" style="cursor:pointer;" onclick="selectGif(${idx})">
+            <img src="${escapeHtml(g)}" loading="lazy" alt="片段 ${idx + 1}"/>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+    ` : ''}
+
+    <!-- 高清剧照画廊 -->
+    ${signedSamples.length > 0 ? `
+    <section class="section-card">
+      <h2 class="section-title">📷 官方高清剧照 (${signedSamples.length})</h2>
+      <div class="gallery-grid">
+        ${signedSamples.map((s) => `
           <a href="${escapeHtml(s)}" target="_blank" class="gallery-tile" rel="noopener noreferrer">
             <img src="${escapeHtml(s)}" loading="lazy" alt="剧照预览"/>
           </a>
@@ -532,7 +689,52 @@ export function renderAdultVideoReaderPage({ video = {}, baseUrl = '', secret })
       vid.src = stream;
     }
   </script>
-  ` : ''}
+  ` : (hasGifs ? `
+  <script>
+    const gifList = ${JSON.stringify(signedGifs)};
+    let curIdx = 0;
+    let isPlaying = true;
+    let timer = null;
+
+    function updateGifView() {
+      document.getElementById('gifViewer').src = gifList[curIdx];
+      document.getElementById('gifIndex').innerText = curIdx + 1;
+    }
+
+    function nextGif() {
+      curIdx = (curIdx + 1) % gifList.length;
+      updateGifView();
+    }
+
+    function prevGif() {
+      curIdx = (curIdx - 1 + gifList.length) % gifList.length;
+      updateGifView();
+    }
+
+    function selectGif(i) {
+      curIdx = i;
+      updateGifView();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function toggleGifPlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('playPauseBtn').innerText = isPlaying ? '⏸ 暂停轮播' : '▶ 播放轮播';
+      if (isPlaying) {
+        startTimer();
+      } else {
+        clearInterval(timer);
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timer);
+      timer = setInterval(nextGif, 3500);
+    }
+
+    startTimer();
+  </script>
+  ` : '')}
 </body>
 </html>`;
 }

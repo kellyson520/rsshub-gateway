@@ -73,6 +73,7 @@ export {
 
 export function createRequestHandler(deps) {
   const {
+    browserRender,
     cache,
     cacheNamespaceFor,
     client,
@@ -859,8 +860,8 @@ export function createRequestHandler(deps) {
         }
         if (gatewayMatch[1] === 'item' && isAdultVideoTarget(target)) {
           try {
-            const detail = await fetchAdultVideoDetail(target);
-            if (detail?.title || detail?.streamUrl || detail?.magnets?.length) {
+            const detail = await fetchAdultVideoDetail(target, { browserRenderClient: browserRender });
+            if (detail?.title || detail?.streamUrl || detail?.magnets?.length || detail?.gifs?.length || detail?.articleHtml) {
               const page = renderAdultVideoReaderPage({ video: detail, baseUrl: publicBaseUrl(req), secret });
               const encoded = encodeHtmlResponse({
                 body: page,

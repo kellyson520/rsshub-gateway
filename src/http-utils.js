@@ -4963,6 +4963,7 @@ export const ADULT_DOMAINS = Object.freeze([
   'nodeseek.com',
   'fanza.co.jp',
   'dmm.co.jp',
+  'playno1.com',
 ]);
 
 export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, acceptLanguage = DEFAULT_ADULT_ACCEPT_LANGUAGE, url } = {}) {
@@ -4977,6 +4978,9 @@ export function adultMediaHeaders({ userAgent = DEFAULT_ADULT_USER_AGENT, accept
   if (targetStr.includes('dmm.co.jp') || targetStr.includes('fanza.co.jp')) {
     headers['Cookie'] = 'age_check_done=1; ckcy=1; cklg=ja;';
   }
+  if (targetStr.includes('playno1.com')) {
+    headers['Cookie'] = 'playno1=playno1Cookie; playno1_referer=/;';
+  }
   return headers;
 }
 
@@ -4986,6 +4990,7 @@ export const ADULT_CHALLENGE_SUBSTRINGS = Object.freeze([
   'cf-challenge',
   'ddos-guard',
   'cloudflare-static',
+  'playno1Cookie',
 ]);
 
 export function isAdultMediaChallenge({ status, headers, body } = {}) {
