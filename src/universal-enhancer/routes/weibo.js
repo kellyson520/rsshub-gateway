@@ -21,7 +21,12 @@ export const routes = [
         const html = await ctx.fetchHtml('https://s.weibo.com/top/summary');
         items = parseWeiboHotSearch(html);
       }
-      const rssXml = renderWeiboFeed(items);
+      const rssXml = renderWeiboFeed({
+        title: '微博实时热搜榜',
+        description: '微博实时热搜榜单与要闻',
+        selfUrl: '/weibo/search/hot',
+        items,
+      });
       return { rssXml, mediaUrls: [], cacheHint: { ttl: 300 } };
     },
   },
@@ -42,7 +47,12 @@ export const routes = [
         const html = await ctx.fetchHtml('https://s.weibo.com/top/summary');
         items = parseWeiboHotSearch(html);
       }
-      const rssXml = renderWeiboFeed(items);
+      const rssXml = renderWeiboFeed({
+        title: '微博实时热搜',
+        description: '微博热搜榜',
+        selfUrl: '/weibo/hot',
+        items,
+      });
       return { rssXml, mediaUrls: [], cacheHint: { ttl: 300 } };
     },
   },

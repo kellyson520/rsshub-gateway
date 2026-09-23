@@ -1,5 +1,18 @@
 import * as cheerio from 'cheerio';
+import { ProxyAgent } from 'undici';
 import { renderStandardFeed } from './feed-builder.js';
+
+let defaultProxyClient = null;
+function getProxyDispatcher() {
+  if (defaultProxyClient) return defaultProxyClient;
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://127.0.0.1:7890';
+  try {
+    defaultProxyClient = new ProxyAgent(proxyUrl);
+    return defaultProxyClient;
+  } catch {
+    return undefined;
+  }
+}
 
 export function createEnhancerContext({
   routeId,
@@ -21,17 +34,23 @@ export function createEnhancerContext({
     };
 
     if (fetchClient?.fetch) {
-      return fetchClient.fetch(url, {
-        ...options,
-        headers: {
-          ...defaultHeaders,
-          ...(options.headers || {}),
-        },
-      });
+      try {
+        return await fetchClient.fetch(url, {
+          ...options,
+          headers: {
+            ...defaultHeaders,
+            ...(options.headers || {}),
+          },
+        });
+      } catch (err) {
+        // fallback to proxy-routed fetch
+      }
     }
 
+    const dispatcher = options.dispatcher || getProxyDispatcher();
     return fetch(url, {
       ...options,
+      ...(dispatcher ? { dispatcher } : {}),
       headers: {
         ...defaultHeaders,
         ...(options.headers || {}),

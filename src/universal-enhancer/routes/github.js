@@ -20,7 +20,12 @@ export const routes = [
         },
       });
       const repos = parseGithubTrending(html);
-      const rssXml = renderGithubFeed(repos, language, since);
+      const rssXml = renderGithubFeed({
+        title: `GitHub Trending - ${language || '全语言'} (${since})`,
+        description: 'GitHub 全球热门开源项目趋势榜',
+        selfUrl: `/github/trending${language ? `/${language}` : ''}`,
+        items: repos,
+      });
       return { rssXml, mediaUrls: [], cacheHint: { ttl: 1800 } };
     },
   },
@@ -39,7 +44,12 @@ export const routes = [
         },
       });
       const repos = parseGithubTrending(html);
-      const rssXml = renderGithubFeed(repos, language, since);
+      const rssXml = renderGithubFeed({
+        title: 'GitHub Trending - 全球热门开源项目',
+        description: 'GitHub 全球热门开源项目趋势榜',
+        selfUrl: '/github/trending',
+        items: repos,
+      });
       return { rssXml, mediaUrls: [], cacheHint: { ttl: 1800 } };
     },
   },

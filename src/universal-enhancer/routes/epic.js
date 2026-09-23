@@ -10,7 +10,12 @@ export const routes = [
       const url = 'https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=zh-CN&country=CN&allowCountries=CN';
       const data = await ctx.fetchJson(url);
       const games = parseEpicFreeGames(data, 'all');
-      const rssXml = renderEpicFeed(games, 'all');
+      const rssXml = renderEpicFeed({
+        title: 'Epic Games 每周限免喜加一',
+        description: 'Epic 游戏商城每周限时免费精选',
+        selfUrl: '/epic/free',
+        games,
+      });
       const mediaUrls = games.map((g) => g.poster).filter(Boolean);
       return { rssXml, mediaUrls, cacheHint: { ttl: 1800 } };
     },
@@ -24,7 +29,12 @@ export const routes = [
       const url = 'https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=zh-CN&country=CN&allowCountries=CN';
       const data = await ctx.fetchJson(url);
       const games = parseEpicFreeGames(data, 'active');
-      const rssXml = renderEpicFeed(games, 'active');
+      const rssXml = renderEpicFeed({
+        title: 'Epic Games 当前限免游戏',
+        description: 'Epic 游戏商城当前正在免费领取的游戏',
+        selfUrl: '/epic/active',
+        games,
+      });
       const mediaUrls = games.map((g) => g.poster).filter(Boolean);
       return { rssXml, mediaUrls, cacheHint: { ttl: 1800 } };
     },
@@ -38,7 +48,12 @@ export const routes = [
       const url = 'https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=zh-CN&country=CN&allowCountries=CN';
       const data = await ctx.fetchJson(url);
       const games = parseEpicFreeGames(data, 'upcoming');
-      const rssXml = renderEpicFeed(games, 'upcoming');
+      const rssXml = renderEpicFeed({
+        title: 'Epic Games 即将限免游戏预告',
+        description: 'Epic 游戏商城下周限免预告',
+        selfUrl: '/epic/upcoming',
+        games,
+      });
       const mediaUrls = games.map((g) => g.poster).filter(Boolean);
       return { rssXml, mediaUrls, cacheHint: { ttl: 1800 } };
     },

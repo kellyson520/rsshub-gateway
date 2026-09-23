@@ -9,7 +9,12 @@ export const routes = [
     handler: async (ctx) => {
       const data = await ctx.fetchJson('https://store.steampowered.com/api/featuredcategories/?l=schinese&cc=cn');
       const apps = parseSteamFeatured(data, 'specials');
-      const rssXml = renderSteamFeed(apps, 'Steam 特惠游戏 - Specials', 'https://store.steampowered.com/search/?specials=1');
+      const rssXml = renderSteamFeed({
+        title: 'Steam 特惠折扣游戏',
+        description: 'Steam 商店当前精选特惠与折扣游戏',
+        selfUrl: '/steam/specials',
+        games: apps,
+      });
       const mediaUrls = apps.map((a) => a.headerImage).filter(Boolean);
       return { rssXml, mediaUrls, cacheHint: { ttl: 1800 } };
     },
