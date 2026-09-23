@@ -756,7 +756,8 @@ export function createRequestHandler(deps) {
       let target;
       let routeMetadata;
       try {
-        const verified = verifySignedTarget(gatewayMatch[2], secret);
+        const isItemOrMedia = gatewayMatch[1] === 'item' || gatewayMatch[1] === 'media';
+        const verified = verifySignedTarget(gatewayMatch[2], secret, Math.floor(Date.now() / 1000), { allowExpired: isItemOrMedia });
         target = verified.url;
         routeMetadata = { egressScope: verified.egressScope, source: verified.source };
       } catch {

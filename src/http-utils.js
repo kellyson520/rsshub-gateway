@@ -1268,6 +1268,7 @@ export function isSignatureMatch(actual, expected) {
 
 export const EGRESS_SCOPES = Object.freeze(new Set(['public', 'session', 'sticky']));
 export const DEFAULT_TTL_SECONDS = 15 * 60;
+export const DEFAULT_ITEM_TTL_SECONDS = 30 * 24 * 60 * 60; // 30天
 export const MEDIA_CACHE_TTL_SECONDS = 24 * 60 * 60;
 
 export const ALLOWED_HOSTS = Object.freeze([
@@ -1493,7 +1494,7 @@ export function createMediaSignedTarget(url, secret, now = Math.floor(Date.now()
   return createSignedTarget(url, secret, expiresAt - now, now, metadata);
 }
 
-export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000)) {
+export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 1000), { allowExpired = false } = {}) {
   const [payload, signature] = String(token).split('.');
   if (!payload || !signature) {
     throw new Error('malformed target token');
@@ -1504,7 +1505,7 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
   const data = safeJsonParse(base64UrlDecode(payload), null);
   if (!data || typeof data !== 'object'
     || Object.keys(data).some((key) => !['url', 'exp', 'egressScope', 'source'].includes(key))
-    || !Number.isInteger(data.exp) || data.exp <= now || !isAllowedTarget(data.url)) {
+    || !Number.isInteger(data.exp) || (!allowExpired && data.exp <= now) || !isAllowedTarget(data.url)) {
     throw new Error('target expired or disallowed');
   }
   return { url: new URL(data.url).toString(), exp: data.exp, ...routeMetadata(data) };
@@ -1512,7 +1513,7 @@ export function verifySignedTarget(token, secret, now = Math.floor(Date.now() / 
 
 export function signedGatewayUrl(baseUrl, kind, target, opts = {}, extraSignedMetadata) {
   let secret;
-  let ttlSeconds = DEFAULT_TTL_SECONDS;
+  let ttlSeconds = kind === 'item' ? DEFAULT_ITEM_TTL_SECONDS : DEFAULT_TTL_SECONDS;
   let now = Math.floor(Date.now() / 1000);
   let signedTargetMetadata = extraSignedMetadata;
   if (typeof opts === 'string') {
