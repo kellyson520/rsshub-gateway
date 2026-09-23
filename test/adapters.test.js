@@ -260,3 +260,40 @@ test('bilibili adapter: matches video targets and renders responsive player page
   assert.ok(html.includes('测试视频简介'));
   assert.ok(html.includes('iframe'));
 });
+
+test('adult-media adapter: parses video target, code, and renders cinema player with magnets', async () => {
+  const adultMedia = await import('../src/adapters/adult-media.js');
+
+  assert.equal(adultMedia.isAdultVideoTarget('https://jable.tv/videos/snos-299/'), true);
+  assert.equal(adultMedia.isAdultVideoTarget('https://missav.live/snos-299'), true);
+  assert.equal(adultMedia.isAdultVideoTarget('https://hanime1.me/watch?v=12345'), true);
+  assert.equal(adultMedia.isAdultVideoTarget('https://www.bilibili.com/video/BV123'), false);
+
+  assert.equal(adultMedia.extractAdultCode('https://jable.tv/videos/snos-299/'), 'SNOS-299');
+  assert.equal(adultMedia.extractAdultCode('https://www.javbus.com/SSIS-888'), 'SSIS-888');
+
+  const html = adultMedia.renderAdultVideoReaderPage({
+    video: {
+      title: 'SNOS-299 希望美羽 特大号新人',
+      code: 'SNOS-299',
+      originalUrl: 'https://jable.tv/videos/snos-299/',
+      streamUrl: 'https://cdn.example.com/hls/snos-299.m3u8',
+      cover: 'https://cdn.example.com/preview.jpg',
+      actresses: ['希望美羽'],
+      magnets: [
+        { name: 'SNOS-299 高清 1080P', href: 'magnet:?xt=urn:btih:abc123456789', size: '4.8 GB' },
+      ],
+      samples: ['https://cdn.example.com/sample1.jpg'],
+    },
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+  });
+
+  assert.ok(html.includes('专属智能影院'));
+  assert.ok(html.includes('SNOS-299'));
+  assert.ok(html.includes('希望美羽'));
+  assert.ok(html.includes('magnet:?xt=urn:btih:abc123456789'));
+  assert.ok(html.includes('4.8 GB'));
+  assert.ok(html.includes('hls.min.js'));
+  assert.ok(html.includes('cinema-viewport'));
+});
