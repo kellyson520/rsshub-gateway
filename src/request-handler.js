@@ -49,6 +49,12 @@ import {
   linuxdoTopicId,
   renderLinuxdoReaderPage,
 } from './adapters/linuxdo.js';
+import {
+  fetchBilibiliVideoDetail,
+  isBilibiliVideoTarget,
+  bilibiliVideoId,
+  renderBilibiliReaderPage,
+} from './adapters/bilibili.js';
 
 export {
   downloadSessionView,
@@ -809,6 +815,28 @@ export function createRequestHandler(deps) {
             const detail = await fetchLinuxdoTopicDetail(fetchJsonViaFetchd, topicId);
             if (detail?.id || detail?.post_stream) {
               const page = renderLinuxdoReaderPage({ topic: detail, baseUrl: publicBaseUrl(req), secret });
+              const encoded = encodeHtmlResponse({
+                body: page,
+                contentType: 'text/html; charset=utf-8',
+                acceptEncoding: req.headers['accept-encoding'],
+                method: 'GET',
+                minBytes: htmlBrotliMinBytes,
+                quality: htmlBrotliQuality,
+              });
+              writeBuffer(res, 200, encoded.body, 'text/html; charset=utf-8', encoded.headers);
+              return;
+            }
+          } catch {
+            // Fall through to standard item handling when metadata is unavailable.
+          }
+        }
+        if (gatewayMatch[1] === 'item' && isBilibiliVideoTarget(target)) {
+          try {
+            const bvid = bilibiliVideoId(target);
+            const pageIndex = Number(requestUrl.searchParams.get('p')) || 1;
+            const detail = await fetchBilibiliVideoDetail(null, bvid);
+            if (detail?.bvid || detail?.aid) {
+              const page = renderBilibiliReaderPage({ video: detail, baseUrl: publicBaseUrl(req), secret, pageIndex });
               const encoded = encodeHtmlResponse({
                 body: page,
                 contentType: 'text/html; charset=utf-8',

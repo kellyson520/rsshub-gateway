@@ -6,6 +6,7 @@ import * as ehviewer from './ehviewer.js';
 import * as pixiv from './pixiv.js';
 import * as linuxdo from './linuxdo.js';
 import * as adultMedia from './adult-media.js';
+import * as bilibili from './bilibili.js';
 
 import {
   DEFAULT_ADAPTER_UNAVAILABLE_MESSAGE as DEFAULT_UNAVAILABLE_MESSAGE,
@@ -17,7 +18,7 @@ import {
   safeHost,
 } from '../http-utils.js';
 
-export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia];
+export const adapters = [iwara, x, instagram, telegram, ehviewer, pixiv, linuxdo, adultMedia, bilibili];
 
 export {
   DEFAULT_UNAVAILABLE_MESSAGE,

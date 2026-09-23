@@ -168,7 +168,7 @@ test('exports linuxdo adapter helpers and SITE_BASE constant', async () => {
 test('exports adapters array and defaultAdapter object', async () => {
   const { adapters, defaultAdapter } = await import('../src/adapters/index.js');
   assert.ok(Array.isArray(adapters));
-  assert.equal(adapters.length, 8);
+  assert.equal(adapters.length, 9);
   assert.equal(defaultAdapter.name, 'unknown');
   assert.equal(defaultAdapter.publiclyReadable, false);
   assert.deepEqual(defaultAdapter.headers(), {});
@@ -226,4 +226,37 @@ test('exports default unavailable messages and patterns across adapters', async 
   assert.ok(iwara.DEFAULT_UNAVAILABLE_MESSAGE.includes('Iwara 内容'));
   assert.ok(index.DEFAULT_UNAVAILABLE_MESSAGE.includes('该来源暂时无法读取'));
   assert.equal(typeof eh.isEhentaiPage, 'function');
+});
+
+test('bilibili adapter: matches video targets and renders responsive player page', async () => {
+  const { adapterForUrl } = await import('../src/adapters/index.js');
+  const bilibili = await import('../src/adapters/bilibili.js');
+
+  const adapter = adapterForUrl('https://www.bilibili.com/video/BV1yvhW6sEzi');
+  assert.equal(adapter.name, 'bilibili');
+  assert.equal(bilibili.isBilibiliVideoTarget('https://www.bilibili.com/video/BV1yvhW6sEzi'), true);
+  assert.equal(bilibili.isBilibiliVideoTarget('https://b23.tv/BV1yvhW6sEzi'), true);
+  assert.equal(bilibili.isBilibiliVideoTarget('https://www.bilibili.com/read/cv123'), false);
+  assert.equal(bilibili.bilibiliVideoId('https://www.bilibili.com/video/BV1yvhW6sEzi'), 'BV1yvhW6sEzi');
+
+  const html = bilibili.renderBilibiliReaderPage({
+    video: {
+      bvid: 'BV1yvhW6sEzi',
+      cid: 123456,
+      title: '星穹铁道PV',
+      owner: { name: '米哈游', face: 'http://example.com/face.jpg' },
+      stat: { view: 100000, danmaku: 500, like: 10000, coin: 5000, favorite: 3000, share: 800 },
+      desc: '测试视频简介',
+      pubdate: 1700000000,
+    },
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+  });
+
+  assert.ok(html.includes('player.bilibili.com/player.html?bvid=BV1yvhW6sEzi'));
+  assert.ok(html.includes('星穹铁道PV'));
+  assert.ok(html.includes('米哈游'));
+  assert.ok(html.includes('10.0万'));
+  assert.ok(html.includes('测试视频简介'));
+  assert.ok(html.includes('iframe'));
 });
