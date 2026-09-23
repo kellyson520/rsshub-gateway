@@ -9,6 +9,7 @@ import { applyMediaHydrator } from './stages/media-hydrator.js';
 import { applyLayoutBeautifier } from './stages/layout-beautifier.js';
 import { applyMetaEnricher } from './stages/meta-enricher.js';
 import { applyContentDeclutter } from './stages/content-declutter.js';
+import { applyFeedVideoEnhancer } from '../universal-player/feed-enhancer.js';
 
 export const DEFAULT_PIPELINE_CONFIG = {
   enabled: true,
@@ -16,6 +17,7 @@ export const DEFAULT_PIPELINE_CONFIG = {
   layoutBeautify: true,
   metaEnrich: true,
   declutter: true,
+  videoEnhance: true,
 };
 
 export function applyAdaptivePipeline($, options = {}) {
@@ -34,10 +36,13 @@ export function applyAdaptivePipeline($, options = {}) {
     // 2. 媒体智能嗅探与无损升格（4K原图、音视频enclosure）
     applyMediaHydrator($, entry);
 
-    // 3. 排版净化与暗黑模式适配
+    // 3. 通用视频增强（对上游 RSSHub 任意视频源自动注入响应式播放器与媒体标签）
+    applyFeedVideoEnhancer($, entry);
+
+    // 4. 排版净化与暗黑模式适配
     applyLayoutBeautifier($, entry);
 
-    // 4. 元数据与阅读时间智能扩充
+    // 5. 元数据与阅读时间智能扩充
     applyMetaEnricher($, entry);
   });
 

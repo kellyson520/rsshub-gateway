@@ -95,3 +95,37 @@ test('renderGenericReaderPage automatically injects universal player on any webs
   assert.ok(rendered.includes('科技测评：最新无人机视频'));
   assert.ok(rendered.includes('这是正文内容介绍'));
 });
+
+test('upstream RSSHub feed enhancement: automatically injects video player and enclosure', async () => {
+  const { transformFeed } = await import('../src/feed-transform.js');
+
+  const upstreamRssHubXml = `<?xml version="1.0" encoding="utf-8"?>
+  <rss version="2.0">
+    <channel>
+      <title>Upstream RSSHub Channel</title>
+      <link>https://rsshub.app</link>
+      <description>Sample upstream feed</description>
+      <item>
+        <title>最新科技视频演示</title>
+        <link>https://www.youtube.com/watch?v=dQw4w9WgXcQ</link>
+        <description><![CDATA[<p>欢迎观看本期评测视频</p>]]></description>
+      </item>
+      <item>
+        <title>直链MP4播客分享</title>
+        <link>https://example.com/podcast/1</link>
+        <description><![CDATA[<p>音频与视频录像：<video src="https://example.com/media/ep1.mp4"></video></p>]]></description>
+      </item>
+    </channel>
+  </rss>`;
+
+  const enhanced = transformFeed(upstreamRssHubXml, {
+    baseUrl: 'https://gateway.example.com',
+    secret: 'test-secret',
+    signedTargetMetadata: { egressScope: 'public' },
+  });
+
+  // 1. YouTube item: 自动注入响应式 iframe 播放器
+  assert.ok(enhanced.includes('youtube-nocookie.com/embed/dQw4w9WgXcQ'));
+  // 2. MP4 item: 自动补充 <enclosure type="video/mp4" ...>
+  assert.ok(enhanced.includes('<enclosure url="https://example.com/media/ep1.mp4" type="video/mp4" length="0"/>') || enhanced.includes('type="video/mp4"'));
+});
