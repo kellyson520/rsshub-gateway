@@ -1415,6 +1415,13 @@ export const ALLOWED_HOSTS = Object.freeze([
   'api.mangadex.org',
   'uploads.mangadex.org',
   'pics.dmm.co.jp',
+  'epicgames.com',
+  'steampowered.com',
+  'steamstatic.com',
+  'zhihu.com',
+  'zhimg.com',
+  'github.com',
+  'githubusercontent.com',
 ]);
 
 export function routeMetadata(metadata = {}) {

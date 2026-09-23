@@ -40,6 +40,11 @@ const ROUTES = [
   { name: 'Bangumi 放送日历', path: '/bangumi/calendar/today' },
   { name: 'Steam 游戏特惠', path: '/steam/specials' },
   { name: 'MangaDex 漫画更新', path: '/mangadex/latest' },
+  { name: 'Epic 限免游戏', path: '/epic/free' },
+  { name: 'Bilibili 热门', path: '/bilibili/ranking' },
+  { name: '微博实时热搜', path: '/weibo/search/hot' },
+  { name: '知乎全站热榜', path: '/zhihu/hot' },
+  { name: 'GitHub Trending', path: '/github/trending' },
 ];
 
 async function checkRoute({ name, path }) {

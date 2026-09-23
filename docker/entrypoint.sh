@@ -122,6 +122,21 @@ case "${1:-}" in
     if [ "${GATEWAY_SIDECAR_MANGADEX:-true}" = "true" ]; then
       start_sidecar fetcher-mangadex
     fi
+    if [ "${GATEWAY_SIDECAR_EPIC:-true}" = "true" ]; then
+      start_sidecar fetcher-epic
+    fi
+    if [ "${GATEWAY_SIDECAR_BILIBILI:-true}" = "true" ]; then
+      start_sidecar fetcher-bilibili
+    fi
+    if [ "${GATEWAY_SIDECAR_WEIBO:-true}" = "true" ]; then
+      start_sidecar fetcher-weibo
+    fi
+    if [ "${GATEWAY_SIDECAR_ZHIHU:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-zhihu
+    fi
+    if [ "${GATEWAY_SIDECAR_GITHUB:-true}" = "true" ]; then
+      GATEWAY_BROWSER_RENDER_URL=http://127.0.0.1:8004 start_sidecar fetcher-github
+    fi
     exec node src/server.js
     ;;
 esac
