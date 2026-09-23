@@ -198,8 +198,21 @@ export function enhanceFeedItemWithVideo($, itemNode, options = {}) {
 
   if (!playerHtml) return;
 
-  // 避免重复注入
+  // 避免重复注入，同时为已有媒体标签自动补齐 controls、playsinline 等原生阅读器渲染属性
   if (bodyHtml.includes(media.src) && (bodyHtml.includes('<iframe') || bodyHtml.includes('<video') || bodyHtml.includes('<audio') || bodyHtml.includes('rss-media-card'))) {
+    const normalizedBody = stripOuterCdata(bodyHtml)
+      .replace(/<video(?![^>]*\bcontrols\b)([^>]*)>/gi, '<video controls playsinline preload="metadata"$1>')
+      .replace(/<audio(?![^>]*\bcontrols\b)([^>]*)>/gi, '<audio controls preload="metadata"$1>');
+
+    if (normalizedBody !== bodyHtml) {
+      if (isAtom) {
+        if (contentNode.length > 0) setCdata($, contentNode, normalizedBody);
+        if (descNode.length > 0) setCdata($, descNode, normalizedBody);
+      } else {
+        if (contentNode.length > 0) setCdata($, contentNode, normalizedBody);
+        if (descNode.length > 0) setCdata($, descNode, normalizedBody);
+      }
+    }
     return;
   }
 

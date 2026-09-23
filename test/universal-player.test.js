@@ -218,14 +218,16 @@ test('RSS reader compatibility: HTML5 video and audio native controls with poste
   });
 
   // 1. 原生 video controls 与 poster 校验
-  assert.match(output, /<video src="[^"]+" controls playsinline/);
+  assert.match(output, /<video[^>]*controls/);
+  assert.match(output, /<video[^>]*src="[^"]+"/);
   assert.match(output, /poster="[^"]+"/);
   assert.match(output, /<enclosure url="[^"]+" type="video\/mp4" length="0"\/>/);
   assert.match(output, /<media:content url="[^"]+" type="video\/mp4" medium="video"\/>/);
   assert.match(output, /<media:thumbnail url="[^"]+"/);
 
   // 2. 原生 audio controls 与封面校验
-  assert.match(output, /<audio src="[^"]+" controls/);
+  assert.match(output, /<audio[^>]*controls/);
+  assert.match(output, /<audio[^>]*src="[^"]+"/);
   assert.match(output, /<enclosure url="[^"]+" type="audio\/mpeg" length="0"\/>/);
   assert.match(output, /<media:content url="[^"]+" type="audio\/mpeg" medium="audio"\/>/);
 
