@@ -1,15 +1,35 @@
 import { compilePattern, matchSegments } from '../dispatcher.js';
 import { createEnhancerContext } from './context.js';
 
-export function createRouteRegistry({ fetchClient, browserRenderClient, logger = console } = {}) {
+export function createRouteRegistry({
+  fetchClient,
+  browserRenderClient,
+  browserFetchClient,
+  logger = console,
+} = {}) {
   const routes = [];
   const routeMap = new Map();
 
   function register(routeDef) {
     if (!routeDef || typeof routeDef !== 'object') return false;
-    const routeId = String(routeDef.routeId || '').trim();
+
+    // 支持数组批量注册
+    if (Array.isArray(routeDef)) {
+      let allOk = true;
+      for (const item of routeDef) {
+        if (!register(item)) allOk = false;
+      }
+      return allOk;
+    }
+
+    // 支持 RSSHub 风格解包: { route: { path, handler, ... } }
+    const actual = routeDef.route && typeof routeDef.route === 'object' ? routeDef.route : routeDef;
+
+    // 兼容 path 与 routeId
+    const routeId = String(actual.routeId || actual.path || '').trim();
     if (!routeId) return false;
-    if (typeof routeDef.handler !== 'function') {
+
+    if (typeof actual.handler !== 'function') {
       throw new TypeError(`Route ${routeId} must have a handler function`);
     }
 
@@ -23,10 +43,14 @@ export function createRouteRegistry({ fetchClient, browserRenderClient, logger =
 
     const compiled = {
       routeId,
-      name: routeDef.name || routeId,
-      cacheTtl: routeDef.cacheTtl || 900,
+      path: routeId,
+      name: actual.name || routeId,
+      maintainers: actual.maintainers || [],
+      example: actual.example || routeId,
+      parameters: actual.parameters || {},
+      cacheTtl: actual.cacheTtl || 900,
       pattern,
-      handler: routeDef.handler,
+      handler: actual.handler,
     };
 
     if (routeMap.has(routeId)) {
@@ -54,6 +78,18 @@ export function createRouteRegistry({ fetchClient, browserRenderClient, logger =
     return null;
   }
 
+  function listRoutes() {
+    return routes.map((r) => ({
+      routeId: r.routeId,
+      path: r.path,
+      name: r.name,
+      example: r.example,
+      parameters: r.parameters,
+      cacheTtl: r.cacheTtl,
+      maintainers: r.maintainers,
+    }));
+  }
+
   async function execute(requestPath, { cookies = '', egressLane = 'public', requestId } = {}) {
     const url = new URL(requestPath || '/', 'http://gateway.internal');
     const matched = match(url.pathname);
@@ -68,6 +104,8 @@ export function createRouteRegistry({ fetchClient, browserRenderClient, logger =
       cacheTtl: matched.route.cacheTtl,
       fetchClient,
       browserRenderClient,
+      browserFetchClient,
+      logger,
       requestId,
     });
 
@@ -84,10 +122,13 @@ export function createRouteRegistry({ fetchClient, browserRenderClient, logger =
   }
 
   return {
-    routes,
     register,
     hasRoute,
     match,
+    listRoutes,
     execute,
+    get routes() {
+      return [...routes];
+    },
   };
 }

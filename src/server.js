@@ -723,6 +723,7 @@ export function createGatewayServer(options = {}) {
   const universalEnhancer = options.universalEnhancer || createUniversalEnhancer({
     fetchClient: { fetch: fetchExternal },
     browserRenderClient: browserRender,
+    browserFetchClient: browserFetch,
     logger,
   });
   const dispatcher = options.dispatcher || createDispatcher({ routesFile, logger, universalEnhancer });

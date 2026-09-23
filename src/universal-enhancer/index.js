@@ -1,7 +1,7 @@
 import { createRouteRegistry } from './registry.js';
 import { createEnhancerContext } from './context.js';
 import { renderStandardFeed, escapeXml, formatRfc822Date } from './feed-builder.js';
-import { registerBuiltinRoutes } from './routes.js';
+import { registerBuiltinRoutes, allModularRoutes, registerAllRoutes } from './routes.js';
 
 export function createUniversalEnhancer(options = {}) {
   const registry = createRouteRegistry(options);
@@ -19,6 +19,8 @@ export {
   createEnhancerContext,
   createRouteRegistry,
   registerBuiltinRoutes,
+  registerAllRoutes,
+  allModularRoutes,
   escapeXml,
   formatRfc822Date,
 };

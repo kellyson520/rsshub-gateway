@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderStandardFeed } from '../src/universal-enhancer/feed-builder.js';
 import { createEnhancerContext } from '../src/universal-enhancer/context.js';
-import { createUniversalEnhancer } from '../src/universal-enhancer/index.js';
+import { createUniversalEnhancer, allModularRoutes } from '../src/universal-enhancer/index.js';
 import { createDispatcher } from '../src/dispatcher.js';
 
 test('renderStandardFeed creates valid RSS 2.0 with items and enclosures', () => {
@@ -35,13 +35,21 @@ test('renderStandardFeed creates valid RSS 2.0 with items and enclosures', () =>
   assert.match(xml, /<author>张三<\/author>/);
 });
 
-test('createEnhancerContext provides fetch, fetchJson, fetchRendered, and render', async () => {
+test('createEnhancerContext provides fetch, fetchJson, fetchHtml, fetchRendered, fetchImpersonate, parseDom, and render', async () => {
   const mockFetch = async (url) => {
     return {
       status: 200,
       ok: true,
-      text: async () => JSON.stringify({ hello: 'world' }),
+      text: async () => '<html><body><div class="target">Hello Cheerio</div></body></html>',
       json: async () => ({ hello: 'world' }),
+    };
+  };
+
+  const mockImpersonate = async (url) => {
+    return {
+      status: 200,
+      ok: true,
+      text: async () => 'impersonated content',
     };
   };
 
@@ -51,6 +59,7 @@ test('createEnhancerContext provides fetch, fetchJson, fetchRendered, and render
     query: { filter: 'hot' },
     fetchClient: { fetch: mockFetch },
     browserRenderClient: { fetchRenderedHtml: async () => ({ status: 200, html: '<html><body>Rendered</body></html>' }) },
+    browserFetchClient: { fetch: mockImpersonate },
   });
 
   assert.equal(ctx.params.id, '42');
@@ -59,8 +68,19 @@ test('createEnhancerContext provides fetch, fetchJson, fetchRendered, and render
   const json = await ctx.fetchJson('https://api.example.com/data');
   assert.deepEqual(json, { hello: 'world' });
 
+  const html = await ctx.fetchHtml('https://example.com/page');
+  assert.match(html, /Hello Cheerio/);
+
+  // 测试 DOM 解析器
+  const $ = ctx.parseDom(html);
+  assert.equal($('.target').text(), 'Hello Cheerio');
+
   const rendered = await ctx.fetchRendered('https://protected.example.com');
   assert.equal(rendered.html, '<html><body>Rendered</body></html>');
+
+  const impersonated = await ctx.fetchImpersonate('https://cf.example.com');
+  const impText = await impersonated.text();
+  assert.equal(impText, 'impersonated content');
 
   const result = ctx.render({
     title: '上下文渲染测试',
@@ -72,6 +92,41 @@ test('createEnhancerContext provides fetch, fetchJson, fetchRendered, and render
   assert.ok(result.rssXml);
   assert.match(result.rssXml, /<title>上下文渲染测试<\/title>/);
   assert.deepEqual(result.cacheHint, { ttl: 900 });
+});
+
+test('createUniversalEnhancer supports RSSHub route declaration style', async () => {
+  const enhancer = createUniversalEnhancer();
+
+  // RSSHub 规范风格
+  enhancer.register({
+    route: {
+      path: '/rsshub-style/:user',
+      name: 'RSSHub 风格声明测试',
+      maintainers: ['kellyson'],
+      example: '/rsshub-style/alice',
+      parameters: { user: '用户名' },
+      cacheTtl: 600,
+      handler: async (ctx) => {
+        return ctx.render({
+          title: `用户 ${ctx.params.user} 动态`,
+          link: `https://example.com/${ctx.params.user}`,
+          items: [{ title: '动态 1', link: 'https://example.com/1' }],
+        });
+      },
+    },
+  });
+
+  assert.ok(enhancer.hasRoute('/rsshub-style/:user'));
+  const list = enhancer.listRoutes();
+  const found = list.find((r) => r.path === '/rsshub-style/:user');
+  assert.ok(found);
+  assert.equal(found.name, 'RSSHub 风格声明测试');
+  assert.deepEqual(found.maintainers, ['kellyson']);
+  assert.equal(found.cacheTtl, 600);
+
+  const res = await enhancer.execute('/rsshub-style/bob');
+  assert.ok(res);
+  assert.match(res.rssXml, /用户 bob 动态/);
 });
 
 test('createUniversalEnhancer registers, matches and executes routes in-process', async () => {
@@ -109,13 +164,15 @@ test('createUniversalEnhancer registers, matches and executes routes in-process'
   assert.equal(executionResult.cacheHint.ttl, 300);
 });
 
-test('createUniversalEnhancer initializes built-in routes for common sites', () => {
+test('createUniversalEnhancer initializes modular routes from routes/ directory', () => {
   const enhancer = createUniversalEnhancer();
+  assert.ok(allModularRoutes.length >= 9);
+
   assert.ok(enhancer.hasRoute('/epic/free'));
   assert.ok(enhancer.hasRoute('/bilibili/ranking'));
   assert.ok(enhancer.hasRoute('/weibo/search/hot'));
   assert.ok(enhancer.hasRoute('/zhihu/hot'));
-  assert.ok(enhancer.hasRoute('/github/trending'));
+  assert.ok(enhancer.hasRoute('/github/trending/:since?/:language?'));
   assert.ok(enhancer.hasRoute('/dmhy/latest'));
   assert.ok(enhancer.hasRoute('/bangumi/calendar/today'));
   assert.ok(enhancer.hasRoute('/steam/specials'));
